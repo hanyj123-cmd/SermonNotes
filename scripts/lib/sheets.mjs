@@ -28,6 +28,7 @@ export const SERMON_HEADERS = [
   'title_override', // 앱에서 직접 고친 설교 제목 (비어 있으면 자동)
   'preacher_override', // 앱에서 직접 고친 설교자 (비어 있으면 자동)
   'scripture_override', // 앱에서 직접 고친 성경 본문 (비어 있으면 자동)
+  'date_override', // 앱에서 직접 고친 설교 날짜 YYYY-MM-DD (비어 있으면 자동)
 ];
 
 const CATEGORY_ALIASES = {

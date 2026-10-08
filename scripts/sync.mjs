@@ -81,7 +81,8 @@ export function toExport(s) {
   const result = parseJson(s.result_json);
   if (!result || result.schema !== 3 || !result.review?.outline?.length) return null;
   const p = parseAnyTitle(s.category, s.title); // 사용자 영상은 자유로운 제목 형식도 읽습니다
-  const date = p.date || String(s.published_at || '').slice(0, 10);
+  const dateFixed = /^\d{4}-\d{2}-\d{2}$/.test(String(s.date_override || '').trim()) ? String(s.date_override).trim() : '';
+  const date = dateFixed || p.date || String(s.published_at || '').slice(0, 10);
   const scriptureFixed = String(s.scripture_override || '').trim();
   const scripture = scriptureFixed || String(s.scripture || '').trim() || p.scripture || (result.scripture || []).join(', ');
   // 앱에서 직접 고친 값(title_override · preacher_override)이 있으면 그것이 가장 우선입니다

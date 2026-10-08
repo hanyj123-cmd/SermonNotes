@@ -648,7 +648,7 @@ function settingsSet(body) {
 
 const SERMONS_SHEET = 'Sermons';
 // Sermons 탭 열 번호 (scripts/lib/sheets.mjs 의 SERMON_HEADERS 와 같은 순서)
-const COL = { video_id: 1, category: 2, title: 3, published_at: 4, url: 5, status: 6, transcript_manual: 7, result_json: 8, updated_at: 9, note: 10, preacher: 11, scripture: 12, mode_qt: 13, mode_study: 14, mode_group: 15, bible_json: 16, owner: 17, title_override: 18, preacher_override: 19, scripture_override: 20 };
+const COL = { video_id: 1, category: 2, title: 3, published_at: 4, url: 5, status: 6, transcript_manual: 7, result_json: 8, updated_at: 9, note: 10, preacher: 11, scripture: 12, mode_qt: 13, mode_study: 14, mode_group: 15, bible_json: 16, owner: 17, title_override: 18, preacher_override: 19, scripture_override: 20, date_override: 21 };
 const MARKABLE = { redo: '앱에서 다시 정리를 요청했습니다', skip: '자동 정리에서 제외했습니다', pending: '', listed: '' };
 
 function getSermonsSheet() {
@@ -710,9 +710,9 @@ function videosMark(body) {
   return { ok: true, changed: changed };
 }
 
-// 설교 제목·설교자·성경 본문 직접 고치기. 영상 제목(title)이나 AI 결과는 건드리지 않고 별도 "수정값" 칸에만 씁니다.
+// 설교 제목·설교자·성경 본문·날짜 직접 고치기. 영상 제목(title)이나 AI 결과는 건드리지 않고 별도 "수정값" 칸에만 씁니다.
 // 그래서 나중에 AI로 다시 정리해도 고친 값이 그대로 남습니다. 빈 값을 보내면 수정값을 지우고 자동 값으로 돌아갑니다.
-// body.title / body.preacher / body.scripture 중 보낸 것만 바뀝니다 (보내지 않은 칸은 그대로).
+// body.title / body.preacher / body.scripture / body.date 중 보낸 것만 바뀝니다 (보내지 않은 칸은 그대로).
 const EDIT_TITLE_MAX = 120;
 const EDIT_PREACHER_MAX = 60;
 const EDIT_SCRIPTURE_MAX = 80;
@@ -724,9 +724,18 @@ function cleanEditText(raw, max) {
 function sermonEdit(body) {
   const id = checkVideoId(String(body.video_id || '').trim());
   const has = function (k) { return Object.prototype.hasOwnProperty.call(body, k); };
-  if (!has('title') && !has('preacher') && !has('scripture')) return { ok: false, error: '바꿀 내용이 없습니다.' };
+  if (!has('title') && !has('preacher') && !has('scripture') && !has('date')) return { ok: false, error: '바꿀 내용이 없습니다.' };
+  let date = '';
+  if (has('date')) {
+    date = cleanEditText(body.date, 10);
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: '날짜는 2026-10-08 처럼 입력해 주세요.' };
+    if (date) {
+      const t = new Date(date + 'T00:00:00Z');
+      if (isNaN(t.getTime()) || t.toISOString().slice(0, 10) !== date) return { ok: false, error: '없는 날짜입니다. 다시 확인해 주세요.' };
+    }
+  }
   const sh = getSermonsSheet();
-  if (sh.getLastColumn() < COL.scripture_override) {
+  if (sh.getLastColumn() < COL.date_override) {
     const have = sh.getRange(1, 1, 1, Math.max(1, sh.getLastColumn())).getValues()[0];
     const same = have.every(function (h, i) { return !h || h === SERMON_SHEET_HEADERS[i]; });
     if (!same) return { ok: false, error: 'Sermons 탭의 열 이름이 예상과 달라 저장하지 못했습니다. "지금 동기화"를 한 번 실행한 뒤 다시 시도하세요.' };
@@ -753,6 +762,10 @@ function sermonEdit(body) {
     saved.scripture = cleanEditText(body.scripture, EDIT_SCRIPTURE_MAX);
     sh.getRange(row, COL.scripture_override).setNumberFormat('@').setValues([[saved.scripture]]);
   }
+  if (has('date')) {
+    saved.date = date;
+    sh.getRange(row, COL.date_override).setNumberFormat('@').setValues([[date]]);
+  }
   return { ok: true, saved: saved };
 }
 
@@ -761,7 +774,7 @@ function sermonEdit(body) {
 
 const SERMON_SHEET_HEADERS = [
   'video_id', 'category', 'title', 'published_at', 'url', 'status', 'transcript_manual', 'result_json', 'updated_at', 'note',
-  'preacher', 'scripture', 'mode_qt', 'mode_study', 'mode_group', 'bible_json', 'owner', 'title_override', 'preacher_override', 'scripture_override',
+  'preacher', 'scripture', 'mode_qt', 'mode_study', 'mode_group', 'bible_json', 'owner', 'title_override', 'preacher_override', 'scripture_override', 'date_override',
 ];
 const USER_MAX_PENDING = 10;
 

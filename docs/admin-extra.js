@@ -278,16 +278,16 @@ function writeLocalEdits(all) {
     /* 저장 불가 환경: 이 기기 임시 표시만 건너뜁니다 */
   }
 }
-/** edit: { title?, preacher?, scripture? } (직접 입력한 원래 문구). 빈 문자열은 "자동으로 되돌림"이라 임시 표시에서는 뺍니다. */
+/** edit: { title?, preacher?, scripture?, date? } (직접 입력한 원래 문구). 빈 문자열은 "자동으로 되돌림"이라 임시 표시에서는 뺍니다. */
 function saveLocalEdit(id, edit) {
   const all = readLocalEdits();
   const cur = { ...(all[id] || {}), at: Date.now() };
-  for (const k of ['title', 'preacher', 'scripture']) {
+  for (const k of ['title', 'preacher', 'scripture', 'date']) {
     if (!(k in edit)) continue;
     if (edit[k]) cur[k] = edit[k];
     else delete cur[k];
   }
-  if (cur.title || cur.preacher || cur.scripture) all[id] = cur;
+  if (cur.title || cur.preacher || cur.scripture || cur.date) all[id] = cur;
   else delete all[id];
   writeLocalEdits(all);
 }
@@ -310,6 +310,7 @@ function applyLocalEdit(item, dataUpdated) {
   }
   if (e.title) out.title = displayTitle({ category: item.category, title: e.title, scripture: out.scripture });
   if (e.preacher) out.preacher = normalizePreacher(e.preacher);
+  if (e.date) out.date = e.date;
   return out;
 }
 
@@ -329,10 +330,12 @@ function renderSermonEditor(d, onSaved) {
   let initTitle = titleOf();
   let initPreacher = d.preacher || '';
   let initScripture = d.scripture || '';
+  let initDate = String(d.date || '').slice(0, 10);
 
   const titleIn = h('input', { class: 'search', value: initTitle, maxlength: '120', 'aria-label': '설교 제목', placeholder: '설교 제목' });
   const preacherIn = h('input', { class: 'search', value: initPreacher, maxlength: '60', 'aria-label': '설교자', placeholder: '예: 전대혁 목사 (이름만 써도 "목사"가 붙습니다)' });
   const scriptureIn = h('input', { class: 'search', value: initScripture, maxlength: '80', 'aria-label': '성경 본문', placeholder: '예: 요한복음 3:16-21 · 열왕기상 4, 5장 · 시편 23편' });
+  const dateIn = h('input', { class: 'search', type: 'date', value: initDate, 'aria-label': '설교 날짜' });
   const pwIn = h('input', { class: 'search', type: 'password', autocomplete: 'current-password', 'aria-label': '관리 비밀번호', placeholder: '관리 비밀번호' });
   const pwRow = h('label', { class: 'edit-field' }, h('span', { class: 'edit-label', text: '비밀번호' }), pwIn);
   const showPw = () => (pwRow.hidden = !!storedPassword());
@@ -362,7 +365,7 @@ function renderSermonEditor(d, onSaved) {
       if (rejected(r)) return;
       if (!r.ok) throw new Error(r.error || '요청하지 못했습니다.');
       publishBtn.hidden = true;
-      status.textContent = ('scripture' in lastPayload ? '저장했습니다. 성경 본문(4역본)을 새로 가져오느라 다른 화면에는 2~4분 뒤에 반영됩니다.' : '저장했습니다. 다른 화면에는 1~2분 뒤에 반영됩니다.') + ' (이 기기에서는 제목·설교자·본문 표기가 이미 바뀌어 보입니다)';
+      status.textContent = ('scripture' in lastPayload ? '저장했습니다. 성경 본문(4역본)을 새로 가져오느라 다른 화면에는 2~4분 뒤에 반영됩니다.' : '저장했습니다. 다른 화면에는 1~2분 뒤에 반영됩니다.') + ' (이 기기에서는 이미 바뀌어 보입니다)';
     } catch (e) {
       publishBtn.hidden = false;
       status.textContent = `저장은 되었지만 사이트 반영을 시작하지 못했습니다: ${e.message || e} — 잠시 뒤 "사이트에 반영"을 누르거나, 다음 정기 동기화 때 자동으로 반영됩니다.`;
@@ -380,7 +383,9 @@ function renderSermonEditor(d, onSaved) {
     if (preacher !== initPreacher) payload.preacher = preacher;
     const scripture = scriptureIn.value.trim();
     if (scripture !== initScripture) payload.scripture = scripture;
-    if (!('title' in payload) && !('preacher' in payload) && !('scripture' in payload)) return (status.textContent = '바뀐 내용이 없습니다.');
+    const date = dateIn.value;
+    if (date !== initDate) payload.date = date;
+    if (!('title' in payload) && !('preacher' in payload) && !('scripture' in payload) && !('date' in payload)) return (status.textContent = '바뀐 내용이 없습니다.');
     if (!payload.password) return (status.textContent = '관리 비밀번호를 입력해 주세요.');
     saveBtn.disabled = true;
     status.textContent = '저장 중…';
@@ -394,7 +399,7 @@ function renderSermonEditor(d, onSaved) {
       showPw();
       const saved = r.saved || {};
       saveLocalEdit(d.id, saved);
-      Object.assign(d, applyLocalEdit({ id: d.id, category: d.category, scripture: d.scripture, title: d.title, preacher: d.preacher }, null));
+      Object.assign(d, applyLocalEdit({ id: d.id, category: d.category, scripture: d.scripture, title: d.title, preacher: d.preacher, date: d.date }, null));
       if ('title' in payload) {
         initTitle = saved.title ? titleOf() : ''; // 비웠다면 자동 값으로 돌아가는 중 (사이트에 반영되면 채워집니다)
         if (saved.title) titleIn.value = initTitle;
@@ -406,6 +411,10 @@ function renderSermonEditor(d, onSaved) {
       if ('scripture' in payload) {
         initScripture = saved.scripture ? d.scripture : '';
         if (saved.scripture) scriptureIn.value = d.scripture;
+      }
+      if ('date' in payload) {
+        initDate = saved.date ? String(d.date || '').slice(0, 10) : '';
+        if (saved.date) dateIn.value = initDate;
       }
       if (onSaved) onSaved(d);
       await publish();
@@ -420,11 +429,12 @@ function renderSermonEditor(d, onSaved) {
   return h(
     'details',
     { class: 'sermon-edit' },
-    h('summary', { text: '제목·설교자·성경 본문 고치기 (관리자)' }),
-    h('p', { class: 'meta', text: '영상 제목에서 잘못 읽은 것을 직접 고칩니다. 구분 이름("주일예배 - ")은 자동으로 붙습니다. 성경 본문을 고치면 성경 본문(4역본)과 낭독도 새로 가져옵니다. 칸을 비우고 저장하면 자동 값으로 돌아가고, AI로 다시 정리해도 고친 값은 유지됩니다.' }),
+    h('summary', { text: '제목·설교자·본문·날짜 고치기 (관리자)' }),
+    h('p', { class: 'meta', text: '영상 제목에서 잘못 읽은 것을 직접 고칩니다. 구분 이름("주일예배 - ")은 자동으로 붙습니다. 성경 본문을 고치면 성경 본문(4역본)과 낭독도 새로 가져옵니다. 날짜를 지우고 저장하면 자동 값(제목의 날짜 → 유튜브 게시일)으로 돌아가고, 다른 칸도 비우고 저장하면 자동 값으로 돌아가고, AI로 다시 정리해도 고친 값은 유지됩니다.' }),
     h('label', { class: 'edit-field' }, h('span', { class: 'edit-label', text: '제목' }), h('span', { class: 'edit-title-row' }, prefix ? h('span', { class: 'edit-prefix', text: prefix.trim() }) : null, titleIn)),
     h('label', { class: 'edit-field' }, h('span', { class: 'edit-label', text: '설교자' }), preacherIn),
     h('label', { class: 'edit-field' }, h('span', { class: 'edit-label', text: '성경 본문' }), scriptureIn),
+    h('label', { class: 'edit-field' }, h('span', { class: 'edit-label', text: '설교 날짜' }), dateIn),
     pwRow,
     h('div', { class: 'admin-row' }, saveBtn, publishBtn),
     status,

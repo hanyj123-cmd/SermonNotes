@@ -27,7 +27,7 @@ async function loadDetail(id) {
   const d = await res.json();
   d.title = displayTitle({ category: d.category, title: tidyTitle(d.title), aiTitle: tidyTitle((d.result && d.result.title) || ''), scripture: d.scripture }); // "주일예배 - 설교제목"
   d.preacher = normalizePreacher(d.preacher || (d.result && d.result.preacher) || '');
-  Object.assign(d, applyLocalEdit({ id: d.id, category: d.category, scripture: d.scripture, title: d.title, preacher: d.preacher }, state.updated)); // 이 기기에서 방금 고친 값
+  Object.assign(d, applyLocalEdit({ id: d.id, category: d.category, scripture: d.scripture, title: d.title, preacher: d.preacher, date: d.date }, state.updated)); // 이 기기에서 방금 고친 값
   state.details.set(id, d);
   return d;
 }
@@ -366,7 +366,7 @@ async function renderDetail(id, modeArg) {
   const edited = () => {
     drawHead();
     const row = state.sermons.find((x) => x.id === d.id);
-    if (row) Object.assign(row, { title: d.title, preacher: d.preacher, scripture: d.scripture });
+    if (row) Object.assign(row, { title: d.title, preacher: d.preacher, scripture: d.scripture, date: d.date });
     document.title = `${d.title} · ${modeLabel(mode)} · 말씀결`;
   };
   const editor = ADMIN_URL && !state.demo ? renderSermonEditor(d, edited) : null;

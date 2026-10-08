@@ -33,11 +33,13 @@ export function readExisting(row) {
   return out;
 }
 
+const validDate = (x) => (/^\d{4}-\d{2}-\d{2}$/.test(String(x || '').trim()) ? String(x).trim() : '');
+
 /** 영상 제목 · 사용자가 직접 입력한 값으로 이미 알고 있는 정보 (날짜·제목·본문·설교자) */
 export function knownInfo(row) {
   const p = row.category === 'user' ? parseAnyTitle('user', row.title) : parseTitle(row.title); // 사용자 영상은 자유로운 제목 형식도 읽습니다
   return {
-    date: p.date || String(row.published_at || '').slice(0, 10),
+    date: validDate(row.date_override) || p.date || String(row.published_at || '').slice(0, 10),
     title: String(row.title_override || '').trim() || p.title || row.title,
     scripture: String(row.scripture_override || '').trim() || String(row.scripture || '').trim() || p.scripture,
     preacher: normalizePreacher(String(row.preacher_override || '').trim() || String(row.preacher || '').trim() || p.preacher),

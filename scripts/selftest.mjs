@@ -429,6 +429,11 @@ await t('수정값: 앱에서 고친 제목·설교자가 자동 값보다 우�
   assert.equal(again.patch.preacher, '전대혁 목사');
   assert.ok(!('title_override' in again.patch) && !('preacher_override' in again.patch));
   assert.equal(knownInfo(sermonRow({ title_override: '고친 제목' })).title, '고친 제목');
+  // 날짜: 고친 날짜가 우선, 형식이 틀린 값은 무시
+  assert.equal(auto.date, '2026-10-04');
+  assert.equal(toExport(sermonRow({ ...done.patch, date_override: '2026-09-27' })).index.date, '2026-09-27');
+  assert.equal(toExport(sermonRow({ ...done.patch, date_override: '어제' })).index.date, '2026-10-04');
+  assert.equal(knownInfo(sermonRow({ date_override: '2026-09-27' })).date, '2026-09-27');
 });
 await t('수정값: 고친 성경 본문이 우선하고, 새 본문 것이 아닌 성경 본문은 화면 데이터에서 뺌', async () => {
   const done = await run(sermonRow(), { ai: fakeAi(), fetchBible: async (p) => ({ signature: bibleSignature(p), versions: [{ id: 'GAE' }] }) });
