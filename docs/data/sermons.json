@@ -1,6 +1,6 @@
 {
- "updated": "2026-10-08T15:10:02.012Z",
- "count": 15,
+ "updated": "2026-10-08T15:30:49.061Z",
+ "count": 16,
  "sermons": [
   {
    "id": "dAtaD-X_yFE",
@@ -260,6 +260,25 @@
    "book": "시편",
    "bookIdx": 19,
    "summary_short": "성도는 자신이 먼저 체험한 하나님의 은혜와 구원의 역사를 다음 세대와 이웃에게 입술로 전하여, 오직 하나님께 소망을 두고 영적 회복을 누려야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "9q4pWa2xUTc",
+   "category": "user",
+   "title": "예배이름",
+   "date": "2026-06-21",
+   "url": "https://www.youtube.com/watch?v=9q4pWa2xUTc",
+   "preacher": "송태근 목사",
+   "scripture": "부르심(02) - 이제 가라!",
+   "book": "",
+   "bookIdx": 0,
+   "summary_short": "모세의 80년 인생과 호렙산 떨기나무 사건을 통해, 하나님은 우리의 인간적 조건이 아니라 오직 하나님의 부르심과 임재로 우리를 일꾼 삼으십니다.",
    "modes": [
     "review",
     "qt",
