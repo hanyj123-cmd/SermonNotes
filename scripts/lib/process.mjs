@@ -39,7 +39,7 @@ export function knownInfo(row) {
   return {
     date: p.date || String(row.published_at || '').slice(0, 10),
     title: String(row.title_override || '').trim() || p.title || row.title,
-    scripture: String(row.scripture || '').trim() || p.scripture,
+    scripture: String(row.scripture_override || '').trim() || String(row.scripture || '').trim() || p.scripture,
     preacher: normalizePreacher(String(row.preacher_override || '').trim() || String(row.preacher || '').trim() || p.preacher),
   };
 }

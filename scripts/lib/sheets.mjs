@@ -27,6 +27,7 @@ export const SERMON_HEADERS = [
   'owner', // 사용자 영상을 올린 사람의 이메일
   'title_override', // 앱에서 직접 고친 설교 제목 (비어 있으면 자동)
   'preacher_override', // 앱에서 직접 고친 설교자 (비어 있으면 자동)
+  'scripture_override', // 앱에서 직접 고친 성경 본문 (비어 있으면 자동)
 ];
 
 const CATEGORY_ALIASES = {

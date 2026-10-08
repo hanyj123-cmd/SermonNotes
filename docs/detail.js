@@ -276,7 +276,6 @@ async function renderDetail(id, modeArg) {
 
   const ytUrl = safeYoutube(d.url, d.id);
   const vid = ytId(d.id);
-  const scripture = d.scripture || (d.result.scripture || []).join(', ');
 
   // 영상 보기: 이 화면 안에서 재생하고, YouTube에서 열기 링크를 함께 둡니다
   const playerBox = h('div', { class: 'player-box', hidden: true });
@@ -354,7 +353,11 @@ async function renderDetail(id, modeArg) {
 
   const metaEl = h('div', { class: 'meta' });
   const titleEl = h('h1', { text: d.title });
+  const scriptureEl = h('p', { class: 'scripture' });
   const drawHead = () => {
+    const scripture = d.scripture || (d.result.scripture || []).join(', ');
+    scriptureEl.textContent = scripture ? `본문  ${scripture}` : '';
+    scriptureEl.hidden = !scripture;
     metaEl.replaceChildren(h('span', { class: 'chip', text: catLabel(d.category) }), formatDate(d.date), d.preacher ? ` · ${d.preacher}` : '');
     titleEl.textContent = d.title;
   };
@@ -363,7 +366,7 @@ async function renderDetail(id, modeArg) {
   const edited = () => {
     drawHead();
     const row = state.sermons.find((x) => x.id === d.id);
-    if (row) Object.assign(row, { title: d.title, preacher: d.preacher });
+    if (row) Object.assign(row, { title: d.title, preacher: d.preacher, scripture: d.scripture });
     document.title = `${d.title} · ${modeLabel(mode)} · 말씀결`;
   };
   const editor = ADMIN_URL && !state.demo ? renderSermonEditor(d, edited) : null;
@@ -375,7 +378,7 @@ async function renderDetail(id, modeArg) {
       { class: 'detail-head' },
       metaEl,
       titleEl,
-      scripture ? h('p', { class: 'scripture', text: `본문  ${scripture}` }) : null,
+      scriptureEl,
       d.result.summary_short || d.result.theme ? h('div', { class: 'detail-theme' }, h('strong', { class: 'theme-label', text: '한 줄 정리' }), h('p', { text: d.result.summary_short || d.result.theme })) : null,
       h('div', { class: 'actions' }, watchBtn, handoutBtn, h('a', { class: 'btn', href: ytUrl, target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기')),
       playerBox,

@@ -341,6 +341,8 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
   check('수정: 너무 긴 제목은 120자로, 줄바꿈 제거', r.ok && sh.rows[1][17].length === 120 && !/[\n\t]/.test(sh.rows[1][17]));
   check('수정: 없는 영상은 거부', e.post({ action: 'sermon_edit', password: 'pw', video_id: 'vidZZZZZZZZ', title: 'x' }).ok === false);
   check('수정: 이상한 영상 ID 거부', e.post({ action: 'sermon_edit', password: 'pw', video_id: '../x', title: 'x' }).ok === false);
+  r = e.post({ action: 'sermon_edit', password: 'pw', video_id: 'vidAAAAAAAA', scripture: ' 열왕기상  4, 5장 ' });
+  check('수정: 성경 본문이 수정값 칸(T열)에 저장됨, 다른 칸은 그대로', r.ok && sh.rows[1][19] === '열왕기상 4, 5장' && sh.rows[1][17].length === 120 && sh.rows[1][11] === undefined, JSON.stringify(sh.rows[1].slice(10)));
   check('수정: 바꿀 내용이 없으면 거부', e.post({ action: 'sermon_edit', password: 'pw', video_id: 'vidAAAAAAAA' }).ok === false);
 }
 
@@ -398,7 +400,7 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
   check('사용자 영상: 수동 입력으로 추가', r.ok === true && r.video_id === 'abcdefghijk' && r.dispatched === true, JSON.stringify(r));
   const row = sh().rows[1];
   check('시트 행: category=user, pending, 입력값·소유자', row[0] === 'abcdefghijk' && row[1] === 'user' && row[2] === '내가 정한 제목' && row[3] === '2026-10-04' && row[5] === 'pending' && row[10] === '김목사' && row[11] === '요한복음 3:16-21' && row[16] === 'a@x.com', JSON.stringify(row));
-  check('시트 헤더가 19열', sh().rows[0].length === 19 && sh().rows[0][16] === 'owner' && sh().rows[0][17] === 'title_override' && sh().rows[0][18] === 'preacher_override');
+  check('시트 헤더가 20열', sh().rows[0].length === 20 && sh().rows[0][16] === 'owner' && sh().rows[0][17] === 'title_override' && sh().rows[0][18] === 'preacher_override' && sh().rows[0][19] === 'scripture_override');
   const d = e.ghCalls.find((c) => c.opts.method === 'post');
   check('GitHub 실행 요청: categories=user', d && JSON.parse(d.opts.payload).inputs.categories === 'user', d && d.opts.payload);
   check('제목을 직접 넣으면 유튜브 제목 조회 안 함', e.oembed.length === 0);

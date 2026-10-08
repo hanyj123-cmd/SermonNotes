@@ -82,14 +82,20 @@ export function toExport(s) {
   if (!result || result.schema !== 3 || !result.review?.outline?.length) return null;
   const p = parseTitle(s.title);
   const date = p.date || String(s.published_at || '').slice(0, 10);
-  const scripture = String(s.scripture || '').trim() || p.scripture || (result.scripture || []).join(', ');
+  const scriptureFixed = String(s.scripture_override || '').trim();
+  const scripture = scriptureFixed || String(s.scripture || '').trim() || p.scripture || (result.scripture || []).join(', ');
   // 앱에서 직접 고친 값(title_override · preacher_override)이 있으면 그것이 가장 우선입니다
   const preacher = normalizePreacher(String(s.preacher_override || '').trim() || String(s.preacher || '').trim() || p.preacher || result.preacher || '');
   const first = bookOf(scripture);
   const qt = parseJson(s.mode_qt);
   const study = parseJson(s.mode_study);
   const group = parseJson(s.mode_group);
-  const bible = parseJson(s.bible_json);
+  let bible = parseJson(s.bible_json);
+  // 본문을 직접 고쳤는데 성경 본문(4역본)이 아직 새 본문 것이 아니면, 틀린 본문이 보이지 않도록 뺍니다 (동기화 때 새로 가져옵니다)
+  if (scriptureFixed && bible) {
+    const want = parseScripture(scriptureFixed);
+    if (!want.length || !bibleIsCurrent(bible, want)) bible = null;
+  }
   const modes = ['review', ...(qt ? ['qt'] : []), ...(study ? ['study'] : []), ...(group ? ['group'] : [])];
   const titleFixed = String(s.title_override || '').trim();
   const title = displayTitle({ category: s.category, title: titleFixed || (p.date ? p.title : ''), aiTitle: tidyTitle(result.title), scripture }) || p.title || s.title; // "주일예배 - 설교제목" (제목이 없으면 성경 본문)
@@ -150,7 +156,7 @@ async function backfillBible(sheets, spreadsheetId, sermons, youtubeKey, limit =
     if (n >= limit) break;
     if (row.status !== 'done' || !row.result_json) continue;
     const info = parseTitle(row.title);
-    const scripture = String(row.scripture || '').trim() || info.scripture;
+    const scripture = String(row.scripture_override || '').trim() || String(row.scripture || '').trim() || info.scripture;
     const passages = scripture ? parseScripture(scripture) : [];
     if (!passages.length) continue;
     const current = parseJson(row.bible_json);
@@ -207,6 +213,13 @@ async function main() {
   let sermons = await readSermons(sheets, spreadsheetId);
 
   if (exportOnly) {
+    // 본문을 고친 설교의 성경 본문만 새로 가져옵니다 (새로 정리하지는 않습니다)
+    try {
+      await backfillBible(sheets, spreadsheetId, sermons, process.env.YOUTUBE_API_KEY || '', 12, {});
+      sermons = await readSermons(sheets, spreadsheetId);
+    } catch (e) {
+      console.warn(`⚠️  성경 본문 갱신을 건너뜁니다: ${e.message || e}`);
+    }
     await exportJson(sermons);
     return;
   }

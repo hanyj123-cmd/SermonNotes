@@ -384,6 +384,24 @@ await t('수정값: 앱에서 고친 제목·설교자가 자동 값보다 우�
   assert.ok(!('title_override' in again.patch) && !('preacher_override' in again.patch));
   assert.equal(knownInfo(sermonRow({ title_override: '고친 제목' })).title, '고친 제목');
 });
+await t('수정값: 고친 성경 본문이 우선하고, 새 본문 것이 아닌 성경 본문은 화면 데이터에서 뺌', async () => {
+  const done = await run(sermonRow(), { ai: fakeAi(), fetchBible: async (p) => ({ signature: bibleSignature(p), versions: [{ id: 'GAE' }] }) });
+  const row = sermonRow({ ...done.patch });
+  const auto = toExport(row);
+  assert.equal(auto.index.scripture, '창세기 12:1-9');
+  assert.ok(auto.detail.bible);
+  const fixed = toExport({ ...row, scripture_override: '요한복음 3:16-21' });
+  assert.equal(fixed.index.scripture, '요한복음 3:16-21');
+  assert.equal(fixed.index.book, '요한복음');
+  assert.equal(fixed.detail.bible, null); // 아직 이전 본문(창세기)의 성경 본문이므로 뺌
+  const bad = toExport({ ...row, scripture_override: '알 수 없는 표기' });
+  assert.equal(bad.detail.bible, null);
+  const same = toExport({ ...row, scripture_override: '창세기 12:1-9' });
+  assert.ok(same.detail.bible); // 같은 본문이면 그대로
+  const dawn = toExport({ ...row, category: 'dawn', title: '새벽', scripture_override: '시편 23편' });
+  assert.equal(dawn.index.title.startsWith('새벽기도 - '), true);
+  assert.equal(knownInfo(sermonRow({ scripture: '창세기 1장', scripture_override: '시편 23편' })).scripture, '시편 23편');
+});
 
 await t('내보내기: 새 형식만 화면용 JSON 으로, 예전 형식은 건너뛰고 경고 대상', async () => {
   const done = await run(sermonRow(), { ai: fakeAi() });
