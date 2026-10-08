@@ -392,3 +392,15 @@ ol.q li > span { display: block; }
 
 .yt-open { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; cursor: pointer; }
 .yt-open input { width: 18px; height: 18px; accent-color: var(--blue); }
+
+/* 제목·설교자 고치기 (관리자) */
+.sermon-edit { margin-top: 18px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.sermon-edit summary { cursor: pointer; font-size: 0.9rem; }
+.sermon-edit .edit-field { display: grid; grid-template-columns: 5em 1fr; gap: 8px; align-items: center; margin-top: 10px; }
+.sermon-edit .edit-label { font-size: 0.9rem; }
+.sermon-edit .edit-title-row { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.sermon-edit .edit-prefix { white-space: nowrap; color: var(--muted); }
+.sermon-edit .edit-title-row .search { flex: 1; min-width: 0; }
+@media print { .sermon-edit { display: none; } }
+@media (max-width: 560px) { .sermon-edit .edit-field { grid-template-columns: 1fr; gap: 4px; } }
+.sermon-edit [hidden] { display: none !important; }

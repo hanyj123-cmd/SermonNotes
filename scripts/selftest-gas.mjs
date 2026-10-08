@@ -329,6 +329,19 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
   check('영상 선택: 제외(skip) 처리', sh.rows[3][5] === 'skip');
   e.post({ action: 'videos_mark', password: 'pw', ids: ['vidCCCCCCCC'], status: 'pending' });
   check('영상 선택: 대기(pending)로 복원, 메모 비움', sh.rows[3][5] === 'pending' && sh.rows[3][9] === '');
+
+  // 제목·설교자 직접 고치기
+  check('수정: 비밀번호 없으면 거부', e.post({ action: 'sermon_edit', video_id: 'vidAAAAAAAA', title: '가짜' }).ok === false);
+  r = e.post({ action: 'sermon_edit', password: 'pw', video_id: 'vidAAAAAAAA', title: '  진리를   분별하는 삶 ', preacher: '전대혁 목사' });
+  check('수정: 제목·설교자가 수정값 칸(R,S열)에 저장됨 (공백 정리)', r.ok && r.saved.title === '진리를 분별하는 삶' && sh.rows[1][17] === '진리를 분별하는 삶' && sh.rows[1][18] === '전대혁 목사', JSON.stringify([r, sh.rows[1].slice(15)]));
+  check('수정: 영상 제목·AI 결과·상태는 그대로', sh.rows[1][2] === '새벽 A' && sh.rows[1][7] === big && sh.rows[1][5] === 'done' && sh.rows[1][10] === undefined);
+  r = e.post({ action: 'sermon_edit', password: 'pw', video_id: 'vidAAAAAAAA', preacher: '' });
+  check('수정: 보낸 칸만 바뀜 (제목은 유지, 설교자는 비움)', r.ok && sh.rows[1][17] === '진리를 분별하는 삶' && sh.rows[1][18] === '', JSON.stringify(sh.rows[1].slice(15)));
+  r = e.post({ action: 'sermon_edit', password: 'pw', video_id: 'vidAAAAAAAA', title: 'a'.repeat(500) + '\n\t줄바꿈' });
+  check('수정: 너무 긴 제목은 120자로, 줄바꿈 제거', r.ok && sh.rows[1][17].length === 120 && !/[\n\t]/.test(sh.rows[1][17]));
+  check('수정: 없는 영상은 거부', e.post({ action: 'sermon_edit', password: 'pw', video_id: 'vidZZZZZZZZ', title: 'x' }).ok === false);
+  check('수정: 이상한 영상 ID 거부', e.post({ action: 'sermon_edit', password: 'pw', video_id: '../x', title: 'x' }).ok === false);
+  check('수정: 바꿀 내용이 없으면 거부', e.post({ action: 'sermon_edit', password: 'pw', video_id: 'vidAAAAAAAA' }).ok === false);
 }
 
 
@@ -385,7 +398,7 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
   check('사용자 영상: 수동 입력으로 추가', r.ok === true && r.video_id === 'abcdefghijk' && r.dispatched === true, JSON.stringify(r));
   const row = sh().rows[1];
   check('시트 행: category=user, pending, 입력값·소유자', row[0] === 'abcdefghijk' && row[1] === 'user' && row[2] === '내가 정한 제목' && row[3] === '2026-10-04' && row[5] === 'pending' && row[10] === '김목사' && row[11] === '요한복음 3:16-21' && row[16] === 'a@x.com', JSON.stringify(row));
-  check('시트 헤더가 17열', sh().rows[0].length === 17 && sh().rows[0][16] === 'owner');
+  check('시트 헤더가 19열', sh().rows[0].length === 19 && sh().rows[0][16] === 'owner' && sh().rows[0][17] === 'title_override' && sh().rows[0][18] === 'preacher_override');
   const d = e.ghCalls.find((c) => c.opts.method === 'post');
   check('GitHub 실행 요청: categories=user', d && JSON.parse(d.opts.payload).inputs.categories === 'user', d && d.opts.payload);
   check('제목을 직접 넣으면 유튜브 제목 조회 안 함', e.oembed.length === 0);
@@ -451,6 +464,10 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
   check('구분 선택: 안 보내면 categories 입력 없음(기본 구분)', sent().categories === undefined);
   g.post({ action: 'sync_run', password: 'pw', categories: 'all' });
   check('구분 선택: all', sent().categories === 'all');
+  g.post({ action: 'sync_run', password: 'pw', categories: ['none'], export_only: true });
+  check('사이트 반영만: export_only 전달', sent().export_only === 'true' && sent().categories === 'none', JSON.stringify(sent()));
+  g.post({ action: 'sync_run', password: 'pw' });
+  check('사이트 반영만: 안 보내면 export_only 없음', sent().export_only === undefined);
   const pl = g.post({ action: 'add', password: 'pw', category: '청년부', playlist_url: 'https://www.youtube.com/playlist?list=PLabcdefghijk' });
   check('재생목록: 청년부예배 구분을 추가할 수 있음', pl.ok && g.sheets.get('Playlists').rows[1][0] === '청년부예배', JSON.stringify(pl));
 }

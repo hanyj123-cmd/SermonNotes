@@ -38,9 +38,9 @@ export function knownInfo(row) {
   const p = parseTitle(row.title);
   return {
     date: p.date || String(row.published_at || '').slice(0, 10),
-    title: p.title || row.title,
+    title: String(row.title_override || '').trim() || p.title || row.title,
     scripture: String(row.scripture || '').trim() || p.scripture,
-    preacher: normalizePreacher(String(row.preacher || '').trim() || p.preacher),
+    preacher: normalizePreacher(String(row.preacher_override || '').trim() || String(row.preacher || '').trim() || p.preacher),
   };
 }
 

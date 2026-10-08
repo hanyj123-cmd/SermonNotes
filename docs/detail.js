@@ -27,6 +27,7 @@ async function loadDetail(id) {
   const d = await res.json();
   d.title = displayTitle({ category: d.category, title: tidyTitle(d.title), aiTitle: tidyTitle((d.result && d.result.title) || ''), scripture: d.scripture }); // "주일예배 - 설교제목"
   d.preacher = normalizePreacher(d.preacher || (d.result && d.result.preacher) || '');
+  Object.assign(d, applyLocalEdit({ id: d.id, category: d.category, scripture: d.scripture, title: d.title, preacher: d.preacher }, state.updated)); // 이 기기에서 방금 고친 값
   state.details.set(id, d);
   return d;
 }
@@ -276,7 +277,6 @@ async function renderDetail(id, modeArg) {
   const ytUrl = safeYoutube(d.url, d.id);
   const vid = ytId(d.id);
   const scripture = d.scripture || (d.result.scripture || []).join(', ');
-  const preacher = d.preacher || d.result.preacher || '';
 
   // 영상 보기: 이 화면 안에서 재생하고, YouTube에서 열기 링크를 함께 둡니다
   const playerBox = h('div', { class: 'player-box', hidden: true });
@@ -352,13 +352,29 @@ async function renderDetail(id, modeArg) {
     tabs.append(b);
   });
 
+  const metaEl = h('div', { class: 'meta' });
+  const titleEl = h('h1', { text: d.title });
+  const drawHead = () => {
+    metaEl.replaceChildren(h('span', { class: 'chip', text: catLabel(d.category) }), formatDate(d.date), d.preacher ? ` · ${d.preacher}` : '');
+    titleEl.textContent = d.title;
+  };
+  drawHead();
+  // 관리자가 제목·설교자를 고쳤을 때: 이 화면, 목록, 탭 제목에 바로 반영합니다
+  const edited = () => {
+    drawHead();
+    const row = state.sermons.find((x) => x.id === d.id);
+    if (row) Object.assign(row, { title: d.title, preacher: d.preacher });
+    document.title = `${d.title} · ${modeLabel(mode)} · 말씀결`;
+  };
+  const editor = ADMIN_URL && !state.demo ? renderSermonEditor(d, edited) : null;
+
   app.replaceChildren(
     back(d.category),
     h(
       'div',
       { class: 'detail-head' },
-      h('div', { class: 'meta' }, h('span', { class: 'chip', text: catLabel(d.category) }), formatDate(d.date), preacher ? ` · ${preacher}` : ''),
-      h('h1', { text: d.title }),
+      metaEl,
+      titleEl,
       scripture ? h('p', { class: 'scripture', text: `본문  ${scripture}` }) : null,
       d.result.summary_short || d.result.theme ? h('div', { class: 'detail-theme' }, h('strong', { class: 'theme-label', text: '한 줄 정리' }), h('p', { text: d.result.summary_short || d.result.theme })) : null,
       h('div', { class: 'actions' }, watchBtn, handoutBtn, h('a', { class: 'btn', href: ytUrl, target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기')),
@@ -367,7 +383,7 @@ async function renderDetail(id, modeArg) {
     h('div', { class: 'mode-bar' }, tabs, notes ? notes.status : null),
     nav,
     body,
-    h('footer', { class: 'sermon-foot' }, h('p', { text: `참고: ${footnoteText(d.category)}` }), d.result.caveats ? h('p', { class: 'caveats', text: `유의: ${d.result.caveats}` }) : null),
+    h('footer', { class: 'sermon-foot' }, h('p', { text: `참고: ${footnoteText(d.category)}` }), d.result.caveats ? h('p', { class: 'caveats', text: `유의: ${d.result.caveats}` }) : null, editor),
   );
   drawMode();
   if (notes) {

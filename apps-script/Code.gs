@@ -82,6 +82,7 @@ function doPost(e) {
     if (action === 'delete') return json(deleteRow(body));
     if (action === 'settings_set') return json(settingsSet(body));
     if (action === 'videos_mark') return json(videosMark(body));
+    if (action === 'sermon_edit') return json(sermonEdit(body));
     return json({ ok: false, error: '알 수 없는 작업입니다.' });
   } catch (err) {
     return json({ ok: false, error: String(err && err.message ? err.message : err) });
@@ -564,9 +565,10 @@ function cleanCategories(raw) {
   return out.join(',');
 }
 
-function dispatchSync(maxNew, categories) {
+function dispatchSync(maxNew, categories, exportOnly) {
   const inputs = { max_new: String(maxNew) };
   if (categories) inputs.categories = categories;
+  if (exportOnly) inputs.export_only = 'true'; // 새로 정리하지 않고 시트 내용을 사이트에 반영만 합니다
   ghRequest('post', '/actions/workflows/' + GH_WORKFLOW + '/dispatches', {
     ref: prop('GITHUB_REF') || 'main',
     inputs: inputs,
@@ -581,8 +583,9 @@ function syncRun(body) {
     return { ok: false, error: '이미 실행 중입니다. 끝난 뒤에 다시 눌러 주세요.' };
   }
   const categories = cleanCategories(body.categories);
-  dispatchSync(n, categories);
-  return { ok: true, max_new: n, categories: categories };
+  const exportOnly = body.export_only === true || body.export_only === 'true';
+  dispatchSync(n, categories, exportOnly);
+  return { ok: true, max_new: n, categories: categories, export_only: exportOnly };
 }
 
 /* ---------- 설정 (AI 모델) — Settings 탭 ---------- */
@@ -645,7 +648,7 @@ function settingsSet(body) {
 
 const SERMONS_SHEET = 'Sermons';
 // Sermons 탭 열 번호 (scripts/lib/sheets.mjs 의 SERMON_HEADERS 와 같은 순서)
-const COL = { video_id: 1, category: 2, title: 3, published_at: 4, url: 5, status: 6, transcript_manual: 7, result_json: 8, updated_at: 9, note: 10, preacher: 11, scripture: 12, mode_qt: 13, mode_study: 14, mode_group: 15, bible_json: 16, owner: 17 };
+const COL = { video_id: 1, category: 2, title: 3, published_at: 4, url: 5, status: 6, transcript_manual: 7, result_json: 8, updated_at: 9, note: 10, preacher: 11, scripture: 12, mode_qt: 13, mode_study: 14, mode_group: 15, bible_json: 16, owner: 17, title_override: 18, preacher_override: 19 };
 const MARKABLE = { redo: '앱에서 다시 정리를 요청했습니다', skip: '자동 정리에서 제외했습니다', pending: '', listed: '' };
 
 function getSermonsSheet() {
@@ -707,12 +710,53 @@ function videosMark(body) {
   return { ok: true, changed: changed };
 }
 
+// 설교 제목·설교자 직접 고치기. 영상 제목(title)이나 AI 결과는 건드리지 않고 별도 "수정값" 칸에만 씁니다.
+// 그래서 나중에 AI로 다시 정리해도 고친 값이 그대로 남습니다. 빈 값을 보내면 수정값을 지우고 자동 값으로 돌아갑니다.
+// body.title / body.preacher 중 보낸 것만 바뀝니다 (보내지 않은 칸은 그대로).
+const EDIT_TITLE_MAX = 120;
+const EDIT_PREACHER_MAX = 60;
+
+function cleanEditText(raw, max) {
+  return String(raw == null ? '' : raw).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function sermonEdit(body) {
+  const id = checkVideoId(String(body.video_id || '').trim());
+  const has = function (k) { return Object.prototype.hasOwnProperty.call(body, k); };
+  if (!has('title') && !has('preacher')) return { ok: false, error: '바꿀 내용이 없습니다.' };
+  const sh = getSermonsSheet();
+  if (sh.getLastColumn() < COL.preacher_override) {
+    const have = sh.getRange(1, 1, 1, Math.max(1, sh.getLastColumn())).getValues()[0];
+    const same = have.every(function (h, i) { return !h || h === SERMON_SHEET_HEADERS[i]; });
+    if (!same) return { ok: false, error: 'Sermons 탭의 열 이름이 예상과 달라 저장하지 못했습니다. "지금 동기화"를 한 번 실행한 뒤 다시 시도하세요.' };
+    sh.getRange(1, 1, 1, SERMON_SHEET_HEADERS.length).setValues([SERMON_SHEET_HEADERS]);
+  }
+  const last = sh.getLastRow();
+  if (last < 2) return { ok: false, error: '시트에 설교가 없습니다.' };
+  const ids = sh.getRange(2, COL.video_id, last - 1, 1).getValues();
+  let row = 0;
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i][0] || '').trim() === id) { row = i + 2; break; }
+  }
+  if (!row) return { ok: false, error: '시트에서 이 설교를 찾지 못했습니다.' };
+  const saved = {};
+  if (has('title')) {
+    saved.title = cleanEditText(body.title, EDIT_TITLE_MAX);
+    sh.getRange(row, COL.title_override).setNumberFormat('@').setValues([[saved.title]]);
+  }
+  if (has('preacher')) {
+    saved.preacher = cleanEditText(body.preacher, EDIT_PREACHER_MAX);
+    sh.getRange(row, COL.preacher_override).setNumberFormat('@').setValues([[saved.preacher]]);
+  }
+  return { ok: true, saved: saved };
+}
+
 /* ---------- 사용자 영상 — 구글 로그인한 가족이 직접 유튜브 링크를 넣는 영상 ---------- */
 // 교회 재생목록과 별개로, Sermons 탭에 category = user 인 행으로 들어갑니다. 정리 방식은 같습니다.
 
 const SERMON_SHEET_HEADERS = [
   'video_id', 'category', 'title', 'published_at', 'url', 'status', 'transcript_manual', 'result_json', 'updated_at', 'note',
-  'preacher', 'scripture', 'mode_qt', 'mode_study', 'mode_group', 'bible_json', 'owner',
+  'preacher', 'scripture', 'mode_qt', 'mode_study', 'mode_group', 'bible_json', 'owner', 'title_override', 'preacher_override',
 ];
 const USER_MAX_PENDING = 10;
 

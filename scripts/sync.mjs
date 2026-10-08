@@ -83,14 +83,16 @@ export function toExport(s) {
   const p = parseTitle(s.title);
   const date = p.date || String(s.published_at || '').slice(0, 10);
   const scripture = String(s.scripture || '').trim() || p.scripture || (result.scripture || []).join(', ');
-  const preacher = normalizePreacher(String(s.preacher || '').trim() || p.preacher || result.preacher || '');
+  // 앱에서 직접 고친 값(title_override · preacher_override)이 있으면 그것이 가장 우선입니다
+  const preacher = normalizePreacher(String(s.preacher_override || '').trim() || String(s.preacher || '').trim() || p.preacher || result.preacher || '');
   const first = bookOf(scripture);
   const qt = parseJson(s.mode_qt);
   const study = parseJson(s.mode_study);
   const group = parseJson(s.mode_group);
   const bible = parseJson(s.bible_json);
   const modes = ['review', ...(qt ? ['qt'] : []), ...(study ? ['study'] : []), ...(group ? ['group'] : [])];
-  const title = displayTitle({ category: s.category, title: p.date ? p.title : '', aiTitle: tidyTitle(result.title), scripture }) || p.title || s.title; // "주일예배 - 설교제목" (제목이 없으면 성경 본문)
+  const titleFixed = String(s.title_override || '').trim();
+  const title = displayTitle({ category: s.category, title: titleFixed || (p.date ? p.title : ''), aiTitle: tidyTitle(result.title), scripture }) || p.title || s.title; // "주일예배 - 설교제목" (제목이 없으면 성경 본문)
   const index = {
     id: s.video_id,
     category: s.category,

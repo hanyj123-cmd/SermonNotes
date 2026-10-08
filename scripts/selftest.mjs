@@ -363,6 +363,28 @@ await t('처리: 시트에서 기존 모드 읽기', async () => {
 });
 
 /* ===== 내보내기 ===== */
+await t('수정값: 앱에서 고친 제목·설교자가 자동 값보다 우선하고, 비우면 자동 값으로 돌아감', async () => {
+  const done = await run(sermonRow(), { ai: fakeAi() });
+  const auto = toExport(sermonRow({ ...done.patch })).index;
+  assert.equal(auto.title, '주일예배 - 믿음으로 걷는 길');
+  assert.equal(auto.preacher, '홍길동 목사');
+  const fixed = toExport(sermonRow({ ...done.patch, title_override: '진리를 분별하는 삶', preacher_override: '전대혁 담임목사' })).index;
+  assert.equal(fixed.title, '주일예배 - 진리를 분별하는 삶');
+  assert.equal(fixed.preacher, '전대혁 목사');
+  const onlyPreacher = toExport(sermonRow({ ...done.patch, preacher_override: '전대혁' })).index;
+  assert.equal(onlyPreacher.title, auto.title);
+  assert.equal(onlyPreacher.preacher, '전대혁 목사');
+  const dawn = toExport(sermonRow({ ...done.patch, category: 'dawn', title: '[2026.10.01] 새벽기도회 (열왕기상 4, 5장) - 윤정환 목사', title_override: '솔로몬의 지혜' })).index;
+  assert.equal(dawn.title, '새벽기도 - 솔로몬의 지혜');
+  const blank = toExport(sermonRow({ ...done.patch, title_override: '   ', preacher_override: '' })).index;
+  assert.equal(blank.title, auto.title);
+  // 다시 정리해도 수정값은 시트에 그대로 남고(별도 칸), AI 결과의 설교자도 수정값을 따라감
+  const again = await run(sermonRow({ status: 'redo', ...done.patch, preacher_override: '전대혁 목사' }), { ai: fakeAi() });
+  assert.equal(again.patch.preacher, '전대혁 목사');
+  assert.ok(!('title_override' in again.patch) && !('preacher_override' in again.patch));
+  assert.equal(knownInfo(sermonRow({ title_override: '고친 제목' })).title, '고친 제목');
+});
+
 await t('내보내기: 새 형식만 화면용 JSON 으로, 예전 형식은 건너뛰고 경고 대상', async () => {
   const done = await run(sermonRow(), { ai: fakeAi() });
   const rowDone = sermonRow({ ...done.patch });

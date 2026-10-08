@@ -25,6 +25,8 @@ export const SERMON_HEADERS = [
   'mode_group', // 소그룹 나눔 모드 결과 (JSON)
   'bible_json', // 성경 본문 4역본 (JSON)
   'owner', // 사용자 영상을 올린 사람의 이메일
+  'title_override', // 앱에서 직접 고친 설교 제목 (비어 있으면 자동)
+  'preacher_override', // 앱에서 직접 고친 설교자 (비어 있으면 자동)
 ];
 
 const CATEGORY_ALIASES = {

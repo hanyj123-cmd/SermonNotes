@@ -255,3 +255,162 @@ function renderVideoManager(password, onPasswordRejected, requestSync) {
     status,
   );
 }
+
+/* ---------- 설교 제목·설교자 직접 고치기 ---------- */
+// 상세 화면 맨 아래의 "제목·설교자 고치기"에서 관리 비밀번호로 저장합니다. 저장하면 시트의 "수정값" 칸에 기록되고
+// (AI로 다시 정리해도 유지됩니다) 사이트 반영을 요청합니다. 반영되기 전까지는 이 기기에서 먼저 고친 값으로 보여 줍니다.
+const EDITS_KEY = 'sn-edits';
+const EDIT_KEEP_MS = 3 * 24 * 3600 * 1000; // 오래된 임시 기록은 버립니다
+const EDIT_GRACE_MS = 3 * 60 * 1000; // 수정 후 이 시간이 지나 다시 만들어진 데이터면 그 안에 수정이 들어 있다고 봅니다
+
+function readLocalEdits() {
+  try {
+    const o = JSON.parse(localStorage.getItem(EDITS_KEY) || '{}');
+    return o && typeof o === 'object' ? o : {};
+  } catch {
+    return {};
+  }
+}
+function writeLocalEdits(all) {
+  try {
+    localStorage.setItem(EDITS_KEY, JSON.stringify(all));
+  } catch {
+    /* 저장 불가 환경: 이 기기 임시 표시만 건너뜁니다 */
+  }
+}
+/** edit: { title?, preacher? } (직접 입력한 원래 문구). 빈 문자열은 "자동으로 되돌림"이라 임시 표시에서는 뺍니다. */
+function saveLocalEdit(id, edit) {
+  const all = readLocalEdits();
+  const cur = { ...(all[id] || {}), at: Date.now() };
+  for (const k of ['title', 'preacher']) {
+    if (!(k in edit)) continue;
+    if (edit[k]) cur[k] = edit[k];
+    else delete cur[k];
+  }
+  if (cur.title || cur.preacher) all[id] = cur;
+  else delete all[id];
+  writeLocalEdits(all);
+}
+/** 목록·상세 항목에 이 기기에서 방금 고친 값을 덧씌웁니다. dataUpdated: 사이트 데이터가 만들어진 시각 */
+function applyLocalEdit(item, dataUpdated) {
+  const all = readLocalEdits();
+  const e = all[item.id];
+  if (!e) return item;
+  const built = Date.parse(dataUpdated || '');
+  if (Date.now() - (e.at || 0) > EDIT_KEEP_MS || (built && built > (e.at || 0) + EDIT_GRACE_MS)) {
+    delete all[item.id];
+    writeLocalEdits(all);
+    return item;
+  }
+  const out = { ...item };
+  if (e.title) out.title = displayTitle({ category: item.category, title: e.title, scripture: item.scripture });
+  if (e.preacher) out.preacher = normalizePreacher(e.preacher);
+  return out;
+}
+
+/** 구분 이름 머리말 ("주일예배 - "). 사용자 영상처럼 머리말이 없으면 '' */
+function titlePrefixOf(category) {
+  const probe = displayTitle({ category, title: '가' });
+  return probe.endsWith('가') ? probe.slice(0, -1) : '';
+}
+
+/**
+ * @param d        상세 데이터 (id, category, title, preacher)
+ * @param onSaved  (d) => void  저장되어 d.title / d.preacher 가 바뀐 뒤 화면을 갱신하는 함수
+ */
+function renderSermonEditor(d, onSaved) {
+  const prefix = titlePrefixOf(d.category);
+  const titleOf = () => (prefix && d.title.startsWith(prefix) ? d.title.slice(prefix.length) : d.title);
+  let initTitle = titleOf();
+  let initPreacher = d.preacher || '';
+
+  const titleIn = h('input', { class: 'search', value: initTitle, maxlength: '120', 'aria-label': '설교 제목', placeholder: '설교 제목' });
+  const preacherIn = h('input', { class: 'search', value: initPreacher, maxlength: '60', 'aria-label': '설교자', placeholder: '예: 전대혁 목사 (이름만 써도 "목사"가 붙습니다)' });
+  const pwIn = h('input', { class: 'search', type: 'password', autocomplete: 'current-password', 'aria-label': '관리 비밀번호', placeholder: '관리 비밀번호' });
+  const pwRow = h('label', { class: 'edit-field' }, h('span', { class: 'edit-label', text: '비밀번호' }), pwIn);
+  const showPw = () => (pwRow.hidden = !!storedPassword());
+  showPw();
+  const status = h('p', { class: 'meta', role: 'status' });
+  const saveBtn = h('button', { class: 'btn primary', type: 'button' }, '저장');
+  const publishBtn = h('button', { class: 'btn', type: 'button', hidden: true }, '사이트에 반영');
+  publishBtn.hidden = true;
+  const password = () => storedPassword() || pwIn.value;
+
+  const rejected = (r) => {
+    if (r && r.ok === false && /비밀번호/.test(r.error || '')) {
+      forgetPassword();
+      showPw();
+      status.textContent = '비밀번호가 맞지 않습니다. 다시 입력해 주세요.';
+      return true;
+    }
+    return false;
+  };
+
+  async function publish() {
+    publishBtn.disabled = true;
+    status.textContent = '사이트에 반영을 요청하는 중…';
+    try {
+      const r = await adminPost({ action: 'sync_run', password: password(), max_new: '1', categories: ['none'], export_only: true });
+      if (rejected(r)) return;
+      if (!r.ok) throw new Error(r.error || '요청하지 못했습니다.');
+      publishBtn.hidden = true;
+      status.textContent = '저장했습니다. 다른 화면에는 1~2분 뒤에 반영됩니다. (이 기기에서는 이미 바뀌어 보입니다)';
+    } catch (e) {
+      publishBtn.hidden = false;
+      status.textContent = `저장은 되었지만 사이트 반영을 시작하지 못했습니다: ${e.message || e} — 잠시 뒤 "사이트에 반영"을 누르거나, 다음 정기 동기화 때 자동으로 반영됩니다.`;
+    } finally {
+      publishBtn.disabled = false;
+    }
+  }
+
+  saveBtn.addEventListener('click', async () => {
+    const payload = { action: 'sermon_edit', password: password(), video_id: d.id };
+    const title = titleIn.value.trim();
+    const preacher = preacherIn.value.trim();
+    // 바꾼 칸만 보냅니다 (건드리지 않은 칸은 자동 값이 계속 따라갑니다)
+    if (title !== initTitle) payload.title = title;
+    if (preacher !== initPreacher) payload.preacher = preacher;
+    if (!('title' in payload) && !('preacher' in payload)) return (status.textContent = '바뀐 내용이 없습니다.');
+    if (!payload.password) return (status.textContent = '관리 비밀번호를 입력해 주세요.');
+    saveBtn.disabled = true;
+    status.textContent = '저장 중…';
+    try {
+      const r = await adminPost(payload);
+      if (rejected(r)) return;
+      if (!r.ok) throw new Error(r.error || '저장하지 못했습니다.');
+      rememberPassword(payload.password);
+      pwIn.value = '';
+      showPw();
+      const saved = r.saved || {};
+      saveLocalEdit(d.id, saved);
+      Object.assign(d, applyLocalEdit({ id: d.id, category: d.category, scripture: d.scripture, title: d.title, preacher: d.preacher }, null));
+      if ('title' in payload) {
+        initTitle = saved.title ? titleOf() : ''; // 비웠다면 자동 값으로 돌아가는 중 (사이트에 반영되면 채워집니다)
+        if (saved.title) titleIn.value = initTitle;
+      }
+      if ('preacher' in payload) {
+        initPreacher = saved.preacher ? d.preacher : '';
+        if (saved.preacher) preacherIn.value = d.preacher;
+      }
+      if (onSaved) onSaved(d);
+      await publish();
+    } catch (e) {
+      status.textContent = `오류: ${e.message || e}`;
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+  publishBtn.addEventListener('click', publish);
+
+  return h(
+    'details',
+    { class: 'sermon-edit' },
+    h('summary', { text: '제목·설교자 고치기 (관리자)' }),
+    h('p', { class: 'meta', text: '영상 제목에서 제목이나 설교자를 잘못 읽었을 때 직접 고칩니다. 구분 이름("주일예배 - ")은 자동으로 붙습니다. 칸을 비우고 저장하면 자동으로 정한 값으로 돌아가고, AI로 다시 정리해도 고친 값은 유지됩니다.' }),
+    h('label', { class: 'edit-field' }, h('span', { class: 'edit-label', text: '제목' }), h('span', { class: 'edit-title-row' }, prefix ? h('span', { class: 'edit-prefix', text: prefix.trim() }) : null, titleIn)),
+    h('label', { class: 'edit-field' }, h('span', { class: 'edit-label', text: '설교자' }), preacherIn),
+    pwRow,
+    h('div', { class: 'admin-row' }, saveBtn, publishBtn),
+    status,
+  );
+}
