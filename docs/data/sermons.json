@@ -1,7 +1,26 @@
 {
- "updated": "2026-10-08T16:28:03.815Z",
- "count": 17,
+ "updated": "2026-10-08T17:13:13.457Z",
+ "count": 18,
  "sermons": [
+  {
+   "id": "IybCmH6A3eQ",
+   "category": "user",
+   "title": "설교",
+   "date": "2026-10-08",
+   "url": "https://www.youtube.com/watch?v=IybCmH6A3eQ",
+   "preacher": "송태근 목사",
+   "scripture": "예레미야 1:4-10",
+   "book": "예레미야",
+   "bookIdx": 24,
+   "summary_short": "하나님은 세상의 기준이 아닌 주권적인 예정과 부르심으로 우리를 택하시며, 연약한 우리와 동행하심으로 당신의 뜻을 이루어 가십니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
   {
    "id": "dAtaD-X_yFE",
    "category": "dawn",
