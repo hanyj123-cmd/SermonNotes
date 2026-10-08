@@ -67,6 +67,14 @@ async function copyText(text) {
 }
 
 /* ---------- 데이터 ---------- */
+// 설교 목록은 늘 날짜 최신순 (날짜가 없는 것은 맨 뒤). 같은 날짜는 원래 순서를 유지합니다.
+function sermonDateKey(s) {
+  const m = String((s && s.date) || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+  return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : '';
+}
+function sortSermons() {
+  state.sermons.sort((a, b) => sermonDateKey(b).localeCompare(sermonDateKey(a)));
+}
 async function load() {
   const res = await fetch(`${dataBase()}sermons.json?t=${Date.now()}`);
   if (!res.ok) throw new Error(`데이터를 불러오지 못했습니다 (${res.status})`);
@@ -74,6 +82,7 @@ async function load() {
   state.sermons = (Array.isArray(data.sermons) ? data.sermons : []).map((x) =>
     applyLocalEdit({ ...x, title: displayTitle({ category: x.category, title: tidyTitle(x.title), scripture: x.scripture }), preacher: normalizePreacher(x.preacher) }, data.updated), // 이 기기에서 방금 고친 값이 있으면 먼저 보여 줍니다
   );
+  sortSermons();
   state.updated = data.updated || null;
   state.details = new Map(); // 새로 불러왔으니 설교별 내용도 다시 받습니다
   // 묵상 음악 목록 (없어도 괜찮습니다)

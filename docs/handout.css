@@ -14,16 +14,17 @@
   print-color-adjust: exact;
 }
 .ho-doc * { box-sizing: border-box; }
-.ho-doc p, .ho-doc h1, .ho-doc h2, .ho-doc h3, .ho-doc ul, .ho-doc ol, .ho-doc table { margin: 0; padding: 0; }
+/* 간격 초기화는 우선순위를 가장 낮게(:where) 둡니다. 그래야 .ho-title · .ho-scripture · .ho-summary 같은 개별 간격 설정이 항상 이깁니다. */
+:where(.ho-doc) :where(p, h1, h2, h3, ul, ol, table) { margin: 0; padding: 0; }
 .ho-doc strong { font-weight: 700; }
 
 /* 머리말 */
 .ho-head { padding: 0 0 14pt; margin-bottom: 6pt; border-bottom: 3pt solid #1b5fc4; position: relative; }
 .ho-head::after { content: ''; position: absolute; left: 0; right: 0; bottom: -3pt; border-bottom: 3pt solid #8fcf5a; width: 30%; }
 .ho-kicker { display: flex; justify-content: space-between; align-items: baseline; font-family: 'Noto Sans KR', sans-serif; font-size: 10pt; letter-spacing: 0.03em; color: #12408a; padding-bottom: 8pt; border-bottom: 0.75pt solid #cddcec; }
-.ho-title { font-size: 25pt; line-height: 1.38; font-weight: 700; color: #12408a; margin: 16pt 0 8pt; letter-spacing: -0.01em; }
-.ho-scripture { font-family: 'Noto Sans KR', sans-serif; font-size: 11.5pt; font-weight: 500; color: #3d4f66; margin-bottom: 10pt; }
-.ho-summary { font-size: 13.5pt; line-height: 1.7; padding: 3pt 0 3pt 13pt; border-left: 3.5pt solid #8fcf5a; color: #0f1b2b; }
+.ho-title { font-size: 25pt; line-height: 1.38; font-weight: 700; color: #12408a; margin: 18pt 0 12pt; letter-spacing: -0.01em; }
+.ho-scripture { font-family: 'Noto Sans KR', sans-serif; font-size: 11.5pt; font-weight: 500; color: #3d4f66; margin-bottom: 18pt; }
+.ho-summary { font-size: 13.5pt; line-height: 1.7; padding: 5pt 6pt 5pt 16pt; border-left: 3.5pt solid #8fcf5a; color: #0f1b2b; }
 
 /* 소제목 */
 .ho-sec { margin-top: 22pt; }

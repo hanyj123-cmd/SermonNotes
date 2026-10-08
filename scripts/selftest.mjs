@@ -474,6 +474,17 @@ await t('내보내기: 새 형식만 화면용 JSON 으로, 예전 형식은 건
   await fs.rm(dir, { recursive: true, force: true });
 });
 
+await t('내보내기: 설교는 날짜 최신순으로 정렬 (같은 날은 제목 순, 날짜 없는 것은 맨 뒤)', async () => {
+  const done = await run(sermonRow(), { ai: fakeAi() });
+  const mk = (id, date, title) => sermonRow({ ...done.patch, video_id: id, date_override: date, title_override: title });
+  const rows = [mk('aaa00000001', '2026-09-01', '나'), mk('aaa00000002', '2026-10-11', '다'), mk('aaa00000003', '2026-10-11', '가'), mk('aaa00000004', '2025-12-25', '라')];
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sn-'));
+  await exportJson(rows, { dataDir: dir, quiet: true });
+  const idx = JSON.parse(await fs.readFile(path.join(dir, 'sermons.json'), 'utf8'));
+  assert.deepEqual(idx.sermons.map((x) => x.id), ['aaa00000003', 'aaa00000002', 'aaa00000001', 'aaa00000004']);
+  await fs.rm(dir, { recursive: true, force: true });
+});
+
 await t('내보내기 제목: AI가 유튜브 제목을 그대로 베껴도 깔끔한 제목으로', () => {
   const raw = '[2026.10.04] 믿음으로 걷는 길 (창세기 12:1-9) - 홍길동 목사';
   const r = { ...normalizeReview(rawReview()), title: raw };

@@ -619,14 +619,26 @@ function cleanCategories(raw) {
   return out.join(',');
 }
 
+// 실행을 요청합니다. 반환: true = GitHub 의 sync.yml 이 옛 버전이라 "반영만" 입력 없이 일반 실행으로 요청했음
 function dispatchSync(maxNew, categories, exportOnly) {
   const inputs = { max_new: String(maxNew) };
   if (categories) inputs.categories = categories;
+  const url = '/actions/workflows/' + GH_WORKFLOW + '/dispatches';
+  const ref = prop('GITHUB_REF') || 'main';
   if (exportOnly) inputs.export_only = 'true'; // 새로 정리하지 않고 시트 내용을 사이트에 반영만 합니다
-  ghRequest('post', '/actions/workflows/' + GH_WORKFLOW + '/dispatches', {
-    ref: prop('GITHUB_REF') || 'main',
-    inputs: inputs,
-  });
+  try {
+    ghRequest('post', url, { ref: ref, inputs: inputs });
+    return false;
+  } catch (err) {
+    // GitHub 에 올라간 sync.yml 에 export_only 입력이 아직 없으면 422 "Unexpected inputs" 로 거절됩니다.
+    // 그때는 그 입력만 빼고 다시 요청합니다 (구분 'none' 이라 재생목록은 확인하지 않고, 시트 내용을 내보내는 일반 실행이 됩니다).
+    if (exportOnly && /export_only/.test(String(err && err.message))) {
+      delete inputs.export_only;
+      ghRequest('post', url, { ref: ref, inputs: inputs });
+      return true;
+    }
+    throw err;
+  }
 }
 
 function syncRun(body) {
@@ -638,8 +650,8 @@ function syncRun(body) {
   }
   const categories = cleanCategories(body.categories);
   const exportOnly = body.export_only === true || body.export_only === 'true';
-  dispatchSync(n, categories, exportOnly);
-  return { ok: true, max_new: n, categories: categories, export_only: exportOnly };
+  const oldWorkflow = dispatchSync(n, categories, exportOnly);
+  return { ok: true, max_new: n, categories: categories, export_only: exportOnly && !oldWorkflow, workflow_old: oldWorkflow };
 }
 
 /* ---------- 설정 (AI 모델) — Settings 탭 ---------- */

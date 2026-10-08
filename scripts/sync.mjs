@@ -130,7 +130,12 @@ export async function exportJson(sermons, { dataDir = DATA_DIR, quiet = false } 
     }
     items.push(e);
   }
-  items.sort((a, b) => String(b.index.date).localeCompare(String(a.index.date)) || String(a.index.title).localeCompare(String(b.index.title), 'ko'));
+  // 날짜 최신순 (날짜가 없거나 형식이 이상한 것은 맨 뒤), 같은 날은 제목 가나다순
+  const dateKey = (x) => {
+    const m = String(x.index.date || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+    return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : '';
+  };
+  items.sort((a, b) => dateKey(b).localeCompare(dateKey(a)) || String(a.index.title || '').localeCompare(String(b.index.title || ''), 'ko'));
 
   const detailDir = path.join(dataDir, 's');
   await fs.mkdir(detailDir, { recursive: true });

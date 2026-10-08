@@ -146,6 +146,16 @@ scripts/
 .github/workflows/sync.yml
 ```
 
+## 설교 목록 순서
+
+- 모든 목록(주일예배·새벽기도·수요예배·청년부·사용자 영상)은 **날짜 최신순**입니다. 같은 날짜는 제목 가나다순, 날짜가 없는 것은 맨 뒤입니다. 날짜를 고치면 목록에서 바로 제자리로 옮겨 갑니다.
+
+## "사이트 반영을 시작하지 못했습니다 … Unexpected inputs: export_only" 가 뜰 때
+
+GitHub 에 올라간 `.github/workflows/sync.yml` 이 옛 버전이라는 뜻입니다. 이 폴더는 이름이 점(`.`)으로 시작해서 Mac 에서는 숨김 폴더라, `docs` 만 올리면 같이 올라가지 않습니다.
+GitHub 저장소 화면에서 `.github/workflows/sync.yml` 을 열고 연필(Edit) 버튼 → 내용을 모두 지우고 새 `sync.yml` 내용을 붙여 넣은 뒤 Commit 하면 됩니다.
+(Apps Script 를 이번 버전으로 다시 배포해 두면, 옛 sync.yml 이어도 일반 방식으로 반영은 시작합니다. 다만 새 sync.yml 이 더 빠르고 정확합니다.)
+
 ## 핸드아웃 PDF 만들기 · 내려받기
 
 설교 화면의 **핸드아웃 PDF** 버튼 → 옵션을 고르고 **미리보기 새로고침** → **PDF 다운로드**.

@@ -500,6 +500,20 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
   check('사이트 반영만: export_only 전달', sent().export_only === 'true' && sent().categories === 'none', JSON.stringify(sent()));
   g.post({ action: 'sync_run', password: 'pw' });
   check('사이트 반영만: 안 보내면 export_only 없음', sent().export_only === undefined);
+  // GitHub 의 sync.yml 이 옛 버전(export_only 입력 없음)이면: 그 입력만 빼고 다시 요청
+  {
+    const o = makeEnv({ ADMIN_PASSWORD: 'pw', GITHUB_TOKEN: 't', GITHUB_REPO: 'me/Repo' });
+    o.setGh((url, opts) => {
+      if (opts.method === 'get') return { code: 200, body: { workflow_runs: [] } };
+      const inputs = JSON.parse(opts.payload).inputs;
+      return 'export_only' in inputs ? { code: 422, body: { message: 'Unexpected inputs provided: ["export_only"]' } } : { code: 204, body: {} };
+    });
+    const r = o.post({ action: 'sync_run', password: 'pw', max_new: '1', categories: ['none'], export_only: true });
+    const posts = o.ghCalls.filter((c) => c.opts.method === 'post');
+    check('옛 sync.yml: export_only 없이 다시 요청해 성공', r.ok === true && r.workflow_old === true && posts.length === 2 && !('export_only' in JSON.parse(posts[1].opts.payload).inputs), JSON.stringify(r));
+    const r2 = o.post({ action: 'sync_run', password: 'pw', max_new: '1' });
+    check('옛 sync.yml: 평소 실행은 그대로 성공', r2.ok === true && r2.workflow_old === false, JSON.stringify(r2));
+  }
   const pl = g.post({ action: 'add', password: 'pw', category: '청년부', playlist_url: 'https://www.youtube.com/playlist?list=PLabcdefghijk' });
   check('재생목록: 청년부예배 구분을 추가할 수 있음', pl.ok && g.sheets.get('Playlists').rows[1][0] === '청년부예배', JSON.stringify(pl));
 }

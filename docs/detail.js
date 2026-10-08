@@ -353,6 +353,7 @@ async function renderDetail(id, modeArg) {
     drawHead();
     const row = state.sermons.find((x) => x.id === d.id);
     if (row) Object.assign(row, { title: d.title, preacher: d.preacher, scripture: d.scripture, date: d.date });
+    sortSermons(); // 날짜를 고쳤다면 목록에서 제자리로
     document.title = `${d.title} · ${modeLabel(mode)} · 말씀결`;
   };
   const editor = ADMIN_URL && !state.demo ? renderSermonEditor(d, edited) : null;

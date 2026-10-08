@@ -365,6 +365,10 @@ function renderSermonEditor(d, onSaved) {
       if (rejected(r)) return;
       if (!r.ok) throw new Error(r.error || '요청하지 못했습니다.');
       publishBtn.hidden = true;
+      if (r.workflow_old) {
+        status.textContent = '저장했습니다. 사이트 반영을 시작했어요(2~5분 걸립니다). 참고: GitHub의 sync.yml 이 옛 버전이라 일반 방식으로 실행했습니다. 새 sync.yml 로 바꾸면 더 빠르고 정확하게 반영됩니다.';
+        return;
+      }
       status.textContent = ('scripture' in lastPayload ? '저장했습니다. 성경 본문(4역본)을 새로 가져오느라 다른 화면에는 2~4분 뒤에 반영됩니다.' : '저장했습니다. 다른 화면에는 1~2분 뒤에 반영됩니다.') + ' (이 기기에서는 이미 바뀌어 보입니다)';
     } catch (e) {
       publishBtn.hidden = false;
