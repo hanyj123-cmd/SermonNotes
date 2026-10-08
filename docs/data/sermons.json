@@ -1,11 +1,11 @@
 {
- "updated": "2026-10-08T15:03:44.561Z",
+ "updated": "2026-10-08T15:10:02.012Z",
  "count": 15,
  "sermons": [
   {
    "id": "dAtaD-X_yFE",
    "category": "dawn",
-   "title": "새벽기도회",
+   "title": "새벽기도 - 열왕기상 10장",
    "date": "2026-10-07",
    "url": "https://www.youtube.com/watch?v=dAtaD-X_yFE",
    "preacher": "최형종 목사",
@@ -24,7 +24,7 @@
   {
    "id": "DfnbwbrAsZ8",
    "category": "dawn",
-   "title": "새벽기도회",
+   "title": "새벽기도 - 열왕기상 9장",
    "date": "2026-10-06",
    "url": "https://www.youtube.com/watch?v=DfnbwbrAsZ8",
    "preacher": "강삼엘 목사",
@@ -43,7 +43,7 @@
   {
    "id": "ntN600KgfJ0",
    "category": "dawn",
-   "title": "새벽기도회",
+   "title": "새벽기도 - 열왕기상 8장",
    "date": "2026-10-05",
    "url": "https://www.youtube.com/watch?v=ntN600KgfJ0",
    "preacher": "심홍섭 목사",
@@ -62,7 +62,7 @@
   {
    "id": "SgQ6EvDdYR4",
    "category": "dawn",
-   "title": "새벽기도회",
+   "title": "새벽기도 - 열왕기상 6장",
    "date": "2026-10-03",
    "url": "https://www.youtube.com/watch?v=SgQ6EvDdYR4",
    "preacher": "전대혁 목사",
@@ -81,7 +81,7 @@
   {
    "id": "Lywujb0IpUw",
    "category": "dawn",
-   "title": "새벽기도회",
+   "title": "새벽기도 - 열왕기상 4, 5장",
    "date": "2026-10-01",
    "url": "https://www.youtube.com/watch?v=Lywujb0IpUw",
    "preacher": "윤정환 목사",
@@ -100,7 +100,7 @@
   {
    "id": "IoV6J25v3qE",
    "category": "wednesday",
-   "title": "말씀 앞에 설 때 (느혜미야 8:1-12)",
+   "title": "수요예배 - 말씀 앞에 설 때 (느혜미야 8:1-12)",
    "date": "2026-09-30",
    "url": "https://www.youtube.com/watch?v=IoV6J25v3qE",
    "preacher": "정은희 목사",
@@ -119,7 +119,7 @@
   {
    "id": "6-HiR1JZHAc",
    "category": "sunday",
-   "title": "진리를 분별하는 삶",
+   "title": "주일예배 - 진리를 분별하는 삶",
    "date": "2026-09-27",
    "url": "https://www.youtube.com/watch?v=6-HiR1JZHAc",
    "preacher": "전대혁 목사",
@@ -138,7 +138,7 @@
   {
    "id": "52Tu3Dkf3Ng",
    "category": "wednesday",
-   "title": "죄에서 자유를 얻게 함은",
+   "title": "수요예배 - 죄에서 자유를 얻게 함은",
    "date": "2026-09-23",
    "url": "https://www.youtube.com/watch?v=52Tu3Dkf3Ng",
    "preacher": "윤정환 목사",
@@ -157,7 +157,7 @@
   {
    "id": "9vD6ZcrrzYU",
    "category": "sunday",
-   "title": "고난을 두려워하지 않는 믿음",
+   "title": "주일예배 - 고난을 두려워하지 않는 믿음",
    "date": "2026-09-20",
    "url": "https://www.youtube.com/watch?v=9vD6ZcrrzYU",
    "preacher": "전대혁 목사",
@@ -176,7 +176,7 @@
   {
    "id": "9c221eiafuk",
    "category": "wednesday",
-   "title": "내가 누구인지 이제 알았습니다",
+   "title": "수요예배 - 내가 누구인지 이제 알았습니다",
    "date": "2026-09-16",
    "url": "https://www.youtube.com/watch?v=9c221eiafuk",
    "preacher": "최형종 목사",
@@ -195,10 +195,10 @@
   {
    "id": "-pkBZt1QUgE",
    "category": "sunday",
-   "title": "첫 사랑을 되살리다",
+   "title": "주일예배 - 첫 사랑을 되살리다",
    "date": "2026-09-13",
    "url": "https://www.youtube.com/watch?v=-pkBZt1QUgE",
-   "preacher": "토론토영락교회 전대혁 목사",
+   "preacher": "전대혁 목사",
    "scripture": "계 2:1-7",
    "book": "요한계시록",
    "bookIdx": 66,
@@ -214,10 +214,10 @@
   {
    "id": "jSpz_J5O9_s",
    "category": "sunday",
-   "title": "우리보다 우리를 잘 아시는 예수 그리스도",
+   "title": "주일예배 - 우리보다 우리를 잘 아시는 예수 그리스도",
    "date": "2026-09-06",
    "url": "https://www.youtube.com/watch?v=jSpz_J5O9_s",
-   "preacher": "토론토영락교회 전대혁 목사",
+   "preacher": "전대혁 목사",
    "scripture": "계 1:9-20",
    "book": "요한계시록",
    "bookIdx": 66,
@@ -233,10 +233,10 @@
   {
    "id": "_oTtkG7fWEo",
    "category": "sunday",
-   "title": "함께함의 능력",
+   "title": "주일예배 - 함께함의 능력",
    "date": "2026-08-30",
    "url": "https://www.youtube.com/watch?v=_oTtkG7fWEo",
-   "preacher": "전대혁 담임목사",
+   "preacher": "전대혁 목사",
    "scripture": "살전 5:14",
    "book": "데살로니가전서",
    "bookIdx": 52,
@@ -252,10 +252,10 @@
   {
    "id": "PZJYS19qA7U",
    "category": "sunday",
-   "title": "하나님께서 행하신 일을 알고 전하는 교회",
+   "title": "주일예배 - 하나님께서 행하신 일을 알고 전하는 교회",
    "date": "2026-08-23",
    "url": "https://www.youtube.com/watch?v=PZJYS19qA7U",
-   "preacher": "전대혁 담임목사",
+   "preacher": "전대혁 목사",
    "scripture": "시 78:1-8",
    "book": "시편",
    "bookIdx": 19,
@@ -278,7 +278,7 @@
    "scripture": "창세기 12:1-4",
    "book": "창세기",
    "bookIdx": 1,
-   "summary_short": "아브라함의 부르심은 인간의 완벽함이 아니라, 하나님의 끈질긴 설득과 은혜의 레일 위로 우리를 이끄시는 구속사의 시작입니다.",
+   "summary_short": "아브라함의 부르심은 인간의 탁월한 믿음의 결과가 아니라, 방황하는 인생을 말씀의 레일 위에 끊임없이 올려놓으시는 하나님의 끈질긴 은혜와 설득의 역사입니다.",
    "modes": [
     "review",
     "qt",
