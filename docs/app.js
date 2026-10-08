@@ -523,6 +523,16 @@ function renderAdminPanel(password) {
   const syncMax = h('select', { class: 'search admin-max', 'aria-label': '정리할 영상 수' }, [1, 3, 5, 10, 20].map((n) => h('option', { value: String(n), text: `${n}편`, selected: n === 5 })));
   const syncBtn = h('button', { class: 'btn primary', type: 'button' }, '지금 동기화');
   let syncTimer = null;
+  // 비밀번호가 바뀌었거나 틀리면 저장된 비밀번호를 지우고 입력 화면으로 돌아갑니다.
+  const passwordRejected = (r) => {
+    if (r && r.ok === false && /비밀번호/.test(r.error || '')) {
+      clearTimeout(syncTimer);
+      forgetPassword();
+      renderAdminGate('비밀번호가 맞지 않습니다. 다시 입력해 주세요.');
+      return true;
+    }
+    return false;
+  };
   const syncText = (run) => {
     const when = formatDateTime(run.started_at);
     if (run.state === 'running') return `⏳ 실행 중입니다${when ? ` (시작 ${when})` : ''}. 보통 몇 분 걸립니다.`;
@@ -541,6 +551,7 @@ function renderAdminPanel(password) {
     clearTimeout(syncTimer);
     try {
       const r = await adminPost({ action: 'sync_status', password });
+      if (passwordRejected(r)) return;
       if (!r.ok) throw new Error(r.error || '상태를 확인하지 못했습니다.');
       renderSync(r.run || { state: 'none' });
       // 이 화면을 보고 있고 실행 중일 때만 10초마다 다시 확인합니다.
@@ -558,6 +569,7 @@ function renderAdminPanel(password) {
     syncInfo.textContent = '실행을 요청하는 중…';
     try {
       const r = await adminPost({ action: 'sync_run', password, max_new: syncMax.value });
+      if (passwordRejected(r)) return;
       if (!r.ok) throw new Error(r.error || '실행하지 못했습니다.');
       syncInfo.textContent = '⏳ 실행을 요청했습니다. 잠시 뒤 상태가 표시됩니다…';
       // GitHub가 실행을 등록하기까지 몇 초 걸립니다. 그 사이 이전 기록이 보이지 않게 잠시 기다립니다.
