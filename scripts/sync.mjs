@@ -24,12 +24,12 @@ import {
   SERMONS_TAB,
   SERMON_HEADERS,
 } from './lib/sheets.mjs';
-import { extractPlaylistId, fetchPlaylistVideos, fetchTranscript } from './lib/youtube.mjs';
+import { extractPlaylistId, fetchPlaylistVideos } from './lib/youtube.mjs';
+import { processRow } from './lib/process.mjs';
 import { createGemini, DEFAULT_MODEL } from './lib/gemini.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUTPUT_PATH = path.resolve(__dirname, '../docs/data/sermons.json');
-const CELL_LIMIT = 49_000; // Google Sheets 셀 하나의 최대 글자 수는 50,000
 
 const args = new Set(process.argv.slice(2));
 const exportOnly = args.has('--export-only');
@@ -87,6 +87,12 @@ async function main() {
   const youtubeKey = need('YOUTUBE_API_KEY');
   const ai = createGemini(need('GEMINI_API_KEY'), process.env.GEMINI_MODEL || DEFAULT_MODEL);
   const maxPerRun = Math.max(1, parseInt(process.env.MAX_NEW_PER_RUN || '5', 10) || 5);
+  // 자막이 없는 영상 처리 방식 (선택): Supadata 키가 있으면 먼저 쓰고, 그래도 안 되면 Gemini가 영상을 직접 듣습니다.
+  const supadataKey = process.env.SUPADATA_API_KEY || '';
+  const geminiVideo = String(process.env.GEMINI_VIDEO || '').trim().toLowerCase() !== 'off';
+  console.log(
+    `자막이 없는 영상: ${supadataKey ? 'Supadata → ' : ''}${geminiVideo ? 'Gemini 영상 직접 분석' : '건너뜀(no_transcript 표시)'}`,
+  );
 
   // 1) 재생목록 → 새 영상 등록
   const playlists = await readPlaylists(sheets, spreadsheetId);
@@ -132,50 +138,12 @@ async function main() {
 
   for (const row of queue) {
     console.log(`\n▶ [${row.category}] ${row.title} (${row.video_id})`);
-    let transcript = String(row.transcript_manual || '').trim();
-    let source = '직접 입력한 자막';
-    if (!transcript) {
-      const t = await fetchTranscript(row.video_id);
-      transcript = t.text;
-      source = 'YouTube 자막';
-      if (!transcript) {
-        console.warn(`   자막 없음: ${t.error}`);
-        await updateSermonRow(sheets, spreadsheetId, row.rowNumber, {
-          status: 'no_transcript',
-          note: `자막을 가져오지 못했습니다 (${t.error}). transcript_manual 칸에 자막을 붙여넣고 status를 redo로 바꾸세요.`,
-          updated_at: now(),
-        });
-        continue;
-      }
-    }
-    console.log(`   ${source} ${transcript.length.toLocaleString()}자 → Gemini 정리 중…`);
-
-    try {
-      const result = await ai.summarize({
-        category: row.category,
-        title: row.title,
-        publishedAt: row.published_at,
-        transcript,
-      });
-      const json = JSON.stringify(result);
-      if (json.length > CELL_LIMIT) throw new Error(`결과가 너무 깁니다 (${json.length}자)`);
-      await updateSermonRow(sheets, spreadsheetId, row.rowNumber, {
-        status: 'done',
-        result_json: json,
-        note: `${source} · ${ai.model}`,
-        updated_at: now(),
-      });
-      row.status = 'done';
-      row.result_json = json;
-      console.log('   ✅ 완료');
-    } catch (e) {
-      console.error(`   ❌ 실패: ${e.message}`);
-      await updateSermonRow(sheets, spreadsheetId, row.rowNumber, {
-        status: 'error',
-        note: String(e.message).slice(0, 300) + ' — status를 redo로 바꾸면 다시 시도합니다.',
-        updated_at: now(),
-      });
-    }
+    await processRow(row, {
+      ai,
+      update: (patch) => updateSermonRow(sheets, spreadsheetId, row.rowNumber, patch),
+      supadataKey,
+      geminiVideo,
+    });
   }
 
   // 3) 내보내기

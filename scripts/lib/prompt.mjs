@@ -79,3 +79,19 @@ export function buildUserMessage({ category, title, publishedAt, transcript }) {
 ${transcript}
 [자막 끝]`;
 }
+
+// 자막이 없는 영상: 영상의 음성을 직접 듣고 같은 형식으로 정리하도록 요청합니다.
+export function buildVideoMessage({ category, title, publishedAt }) {
+  const label = CATEGORY_LABELS[category] || category;
+  return `첨부한 유튜브 영상에는 자막이 없어, 영상의 음성을 직접 듣고 정리해야 합니다.
+위 지침에 따라 JSON으로 정리해 주세요.
+
+- 영상에는 찬양, 기도, 광고, 예배 순서 안내가 함께 들어 있을 수 있습니다. 설교 부분만 골라 정리하고, 그 외는 제외합니다.
+- 음성이 불분명한 성경 장·절, 인명, 숫자는 추측하지 말고 "(음성 불분명)"이라고 표시하거나 생략합니다.
+- 화면의 자막이나 슬라이드에 보이는 성경 구절은 참고할 수 있지만, 설교자가 말하지 않은 내용을 덧붙이지 않습니다.
+- 음성 인식의 한계로 누락이나 오류가 있을 수 있으면 caveats에 짧게 적습니다.
+
+[예배 구분] ${label}
+[영상 제목] ${title}
+[게시일] ${publishedAt || '알 수 없음'}`;
+}

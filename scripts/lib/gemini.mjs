@@ -1,6 +1,6 @@
 // Gemini API 호출 + 결과 검증
 import { GoogleGenAI } from '@google/genai';
-import { SYSTEM_PROMPT, buildUserMessage } from './prompt.mjs';
+import { SYSTEM_PROMPT, buildUserMessage, buildVideoMessage } from './prompt.mjs';
 
 export const DEFAULT_MODEL = 'gemini-3.8-flash';
 const MAX_TRANSCRIPT_CHARS = 150_000;
@@ -74,39 +74,63 @@ export function readResponseText(response) {
   return text;
 }
 
-export function createGemini(apiKey, model = DEFAULT_MODEL) {
-  const ai = new GoogleGenAI({ apiKey });
+// options.client / options.sleep 은 테스트에서 가짜로 바꿔 끼우기 위한 것입니다.
+export function createGemini(apiKey, model = DEFAULT_MODEL, options = {}) {
+  const ai = options.client || new GoogleGenAI({ apiKey });
+  const wait = options.sleep || sleep;
+
+  async function generate(contents, extraConfig = {}) {
+    let lastError;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents,
+          config: {
+            systemInstruction: SYSTEM_PROMPT,
+            responseMimeType: 'application/json',
+            maxOutputTokens: 32_768, // 사고(thinking) 토큰이 포함될 수 있어 넉넉하게
+            temperature: 0.4,
+            ...extraConfig,
+          },
+        });
+        return normalizeResult(extractJson(readResponseText(response)));
+      } catch (e) {
+        lastError = e;
+        console.warn(`   ↻ 시도 ${attempt}/${MAX_ATTEMPTS} 실패: ${String(e?.message || e).slice(0, 160)}`);
+        if (attempt === MAX_ATTEMPTS) break;
+        // 일시적 오류(429/5xx)는 잠시 기다렸다 재시도, 그 외는 바로 재시도
+        await wait(RETRYABLE_STATUS.has(e?.status) ? 8000 * attempt : 1000);
+      }
+    }
+    throw lastError;
+  }
+
   return {
     model,
-    async summarize({ category, title, publishedAt, transcript }) {
+
+    /** 자막 텍스트를 정리합니다. */
+    summarize({ category, title, publishedAt, transcript }) {
       const clipped =
         transcript.length > MAX_TRANSCRIPT_CHARS ? transcript.slice(0, MAX_TRANSCRIPT_CHARS) : transcript;
-      const contents = buildUserMessage({ category, title, publishedAt, transcript: clipped });
+      return generate(buildUserMessage({ category, title, publishedAt, transcript: clipped }));
+    },
 
-      let lastError;
-      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        try {
-          const response = await ai.models.generateContent({
-            model,
-            contents,
-            config: {
-              systemInstruction: SYSTEM_PROMPT,
-              responseMimeType: 'application/json',
-              maxOutputTokens: 32_768, // 사고(thinking) 토큰이 포함될 수 있어 넉넉하게
-              temperature: 0.4,
-            },
-          });
-          return normalizeResult(extractJson(readResponseText(response)));
-        } catch (e) {
-          lastError = e;
-          console.warn(`   ↻ 시도 ${attempt}/${MAX_ATTEMPTS} 실패: ${String(e?.message || e).slice(0, 160)}`);
-          if (attempt === MAX_ATTEMPTS) break;
-          // 일시적 오류(429/5xx)는 잠시 기다렸다 재시도, 그 외는 바로 재시도
-          const wait = RETRYABLE_STATUS.has(e?.status) ? 8000 * attempt : 1000;
-          await sleep(wait);
-        }
-      }
-      throw lastError;
+    /**
+     * 자막이 없는 영상: 유튜브 영상(공개 영상만)을 Gemini가 직접 듣고 정리합니다.
+     * 화면 영상은 중요하지 않으므로 해상도를 낮춰 토큰(=사용량)을 줄입니다.
+     */
+    summarizeVideo({ category, title, publishedAt, videoUrl }) {
+      const contents = [
+        {
+          role: 'user',
+          parts: [{ fileData: { fileUri: videoUrl } }, { text: buildVideoMessage({ category, title, publishedAt }) }],
+        },
+      ];
+      return generate(contents, {
+        mediaResolution: 'MEDIA_RESOLUTION_LOW',
+        httpOptions: { timeout: 15 * 60 * 1000 }, // 긴 영상은 처리에 몇 분 걸릴 수 있음
+      });
     },
   };
 }
