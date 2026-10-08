@@ -1,7 +1,26 @@
 {
- "updated": "2026-10-08T23:36:44.242Z",
- "count": 26,
+ "updated": "2026-10-08T23:39:27.580Z",
+ "count": 27,
  "sermons": [
+  {
+   "id": "dAtaD-X_yFE",
+   "category": "dawn",
+   "title": "새벽기도 - 열왕기상 10장",
+   "date": "2026-10-07",
+   "url": "https://www.youtube.com/watch?v=dAtaD-X_yFE",
+   "preacher": "최형종 목사",
+   "scripture": "열왕기상 10장",
+   "book": "열왕기상",
+   "bookIdx": 11,
+   "summary_short": "솔로몬이 누린 전무후무한 지혜와 부귀영화의 역설을 통해, 세상의 헛된 성공을 구하기보다 창조주 하나님을 경외하며 일상에서 주님의 영광을 찬양하는 것이 참된 지혜임을 깨닫게 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
   {
    "id": "WpOZRTv1hvg",
    "category": "dawn",
