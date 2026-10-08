@@ -1,6 +1,6 @@
 {
- "updated": "2026-10-08T21:38:34.082Z",
- "count": 25,
+ "updated": "2026-10-08T21:42:32.326Z",
+ "count": 28,
  "sermons": [
   {
    "id": "dAtaD-X_yFE",
@@ -60,6 +60,25 @@
    "complete": true
   },
   {
+   "id": "W9nZ00WbeXs",
+   "category": "user",
+   "title": "설교",
+   "date": "2026-10-04",
+   "url": "https://www.youtube.com/watch?v=W9nZ00WbeXs",
+   "preacher": "송태근 목사",
+   "scripture": "디모데후서 4:1-8",
+   "book": "디모데후서",
+   "bookIdx": 55,
+   "summary_short": "사도 바울이 순교를 앞두고 디모데와 다음 세대에게 당부한 것처럼, 우리도 환경과 내면의 어려움을 넘어 언제나 말씀을 전파하며 하나님을 찬양하는 삶을 살아야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
    "id": "SgQ6EvDdYR4",
    "category": "dawn",
    "title": "새벽기도 - 열왕기상 6장",
@@ -108,6 +127,25 @@
    "book": "느헤미야",
    "bookIdx": 16,
    "summary_short": "이스라엘 백성이 성벽 재건 이후 하나님의 말씀을 간절히 사모하며 모였듯이, 우리도 겸손한 마음과 아멘의 고백으로 말씀 앞에 서서 영적으로 회복되어야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "DAe51ICH8-8",
+   "category": "user",
+   "title": "설교",
+   "date": "2026-09-27",
+   "url": "https://www.youtube.com/watch?v=DAe51ICH8-8",
+   "preacher": "송태근 목사",
+   "scripture": "열왕기하2:9-15",
+   "book": "열왕기하",
+   "bookIdx": 12,
+   "summary_short": "불안정한 미래와 세상의 비관적 전망 속에서, 성도들은 끝까지 동행하는 믿음과 신명기적 말씀의 전통, 그리고 하나님의 임재를 기억하는 영적 유산을 다음 세대에 물려주어야 합니다.",
    "modes": [
     "review",
     "qt",
@@ -193,6 +231,25 @@
    "complete": true
   },
   {
+   "id": "QZzM-ZWyU4s",
+   "category": "user",
+   "title": "다음세대(02)//‘붙드심’/",
+   "date": "2026-09-13",
+   "url": "https://www.youtube.com/watch?v=QZzM-ZWyU4s",
+   "preacher": "송태근 목사",
+   "scripture": "유다서1:24-25",
+   "book": "유다서",
+   "bookIdx": 65,
+   "summary_short": "하나님은 혼란과 흔들림 속에서도 단번에 주신 믿음과 서로를 향한 세움, 그리고 신실한 보호하심으로 우리의 인생을 끝까지 붙들어 주십니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
    "id": "-pkBZt1QUgE",
    "category": "sunday",
    "title": "주일예배 - 첫 사랑을 되살리다",
@@ -214,7 +271,7 @@
   {
    "id": "jKV5un_0iXs",
    "category": "user",
-   "title": "다음세대(01)//‘느보산을 바라보며’",
+   "title": "다음세대(01) - 느보산을 바라보며",
    "date": "2026-09-06",
    "url": "https://www.youtube.com/watch?v=jKV5un_0iXs",
    "preacher": "송태근 목사",
