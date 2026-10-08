@@ -1,6 +1,6 @@
 {
- "updated": "2026-10-08T21:07:09.376Z",
- "count": 22,
+ "updated": "2026-10-08T21:10:46.948Z",
+ "count": 23,
  "sermons": [
   {
    "id": "dAtaD-X_yFE",
@@ -241,6 +241,25 @@
    "book": "데살로니가전서",
    "bookIdx": 52,
    "summary_short": "교회 공동체는 하나님이 허락하신 믿음의 동역자들과 함께 말씀, 격려, 도움, 인내의 교제를 나누며 영적으로 성장해 가는 은혜의 통로입니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "xQyYPXObKWk",
+   "category": "user",
+   "title": "설교",
+   "date": "2026-08-23",
+   "url": "https://www.youtube.com/watch?v=xQyYPXObKWk",
+   "preacher": "송태근 목사",
+   "scripture": "고린도후서4:7-18",
+   "book": "고린도후서",
+   "bookIdx": 47,
+   "summary_short": "우리는 연약한 질그릇 같으나 그 안에 그리스도의 빛을 가졌기에, 하나님의 붙드심을 믿으며 어떤 환난 중에도 낙심하지 않고 주님의 증인으로 살아갈 수 있습니다.",
    "modes": [
     "review",
     "qt",
