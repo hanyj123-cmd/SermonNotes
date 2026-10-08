@@ -408,3 +408,20 @@ ol.q li > span { display: block; }
 /* 사용자 영상: 영상 추가 화면 */
 .user-extra { margin: 4px 0 14px; }
 .user-extra summary { cursor: pointer; color: var(--blue-deep); font-weight: 600; margin-bottom: 10px; }
+
+/* 떠 있는 재생 창 */
+.float-player { position: fixed; z-index: 60; background: #0f1b2d; color: #fff; border-radius: 12px; box-shadow: 0 10px 34px rgba(8, 20, 40, 0.45); overflow: hidden; display: flex; flex-direction: column; border: 1px solid rgba(255, 255, 255, 0.18); }
+.float-player.is-dragging { opacity: 0.92; user-select: none; }
+.fp-bar { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 6px 0 8px; background: #16294a; cursor: grab; touch-action: none; user-select: none; flex: none; }
+.is-dragging .fp-bar { cursor: grabbing; }
+.fp-grip { opacity: 0.6; font-size: 1rem; line-height: 1; }
+.fp-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem; font-weight: 600; }
+.fp-btn { flex: none; color: #fff; background: rgba(255, 255, 255, 0.14); border: 0; border-radius: 6px; padding: 4px 9px; font-size: 0.78rem; line-height: 1.2; text-decoration: none; cursor: pointer; }
+.fp-btn:hover, .fp-btn:focus-visible { background: rgba(255, 255, 255, 0.28); outline: none; }
+.fp-body { aspect-ratio: 16 / 9; background: #000; flex: none; }
+.fp-body iframe { width: 100%; height: 100%; border: 0; display: block; }
+.fp-foot { flex: none; padding: 6px 10px; min-height: 34px; display: flex; align-items: center; }
+.fp-ad { background: none; border: 0; color: #cfe0ff; font: inherit; font-size: 0.74rem; text-decoration: underline; cursor: pointer; padding: 0; text-align: left; }
+.fp-resize { position: absolute; right: 0; bottom: 0; width: 22px; height: 22px; cursor: nwse-resize; touch-action: none; background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0.55) 58%, transparent 58%, transparent 68%, rgba(255, 255, 255, 0.55) 68%, rgba(255, 255, 255, 0.55) 76%, transparent 76%); }
+body.handout-mode .float-player { display: none; }
+@media print { .float-player { display: none !important; } }

@@ -277,27 +277,11 @@ async function renderDetail(id, modeArg) {
   const ytUrl = safeYoutube(d.url, d.id);
   const vid = ytId(d.id);
 
-  // 영상 보기: 이 화면 안에서 재생하고, YouTube에서 열기 링크를 함께 둡니다
-  const playerBox = h('div', { class: 'player-box', hidden: true });
-  playerBox.hidden = true;
-  const watchBtn = h('button', { class: 'btn primary', type: 'button', 'aria-expanded': 'false' }, '▶ 영상 보기');
+  // 영상 보기: 화면 위에 떠 있는 작은 창에서 재생합니다 (끌어서 옮길 수 있고, 다른 화면으로 가도 계속 재생)
+  const watchBtn = h('button', { class: 'btn primary', type: 'button' }, '▶ 영상 보기');
   watchBtn.addEventListener('click', () => {
-    if (vid && playerBox.hidden && ytOpenPref()) {
-      window.open(ytUrl, '_blank', 'noopener'); // 이 기기에서는 항상 YouTube에서 열기 (프리미엄 광고 없이)
-      return;
-    }
-    const open = playerBox.hidden;
-    playerBox.hidden = !open;
-    watchBtn.setAttribute('aria-expanded', String(open));
-    watchBtn.textContent = open ? '영상 닫기' : '▶ 영상 보기';
-    if (open) {
-      if (vid) {
-        startPlayback(vid, d.title, playerBox);
-        playerBox.append(h('a', { class: 'btn small', href: ytUrl, target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기'));
-      } else playerBox.replaceChildren(h('a', { class: 'btn', href: ytUrl, target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기'));
-    } else {
-      playerBox.replaceChildren();
-    }
+    if (vid) startPlayback(vid, d.title);
+    else window.open(ytUrl, '_blank', 'noopener');
   });
 
   const handoutBtn = h('a', { class: 'btn', href: `#/h/${encodeURIComponent(d.id)}/${mode}` }, '핸드아웃 PDF');
@@ -381,7 +365,6 @@ async function renderDetail(id, modeArg) {
       scriptureEl,
       d.result.summary_short || d.result.theme ? h('div', { class: 'detail-theme' }, h('strong', { class: 'theme-label', text: '한 줄 정리' }), h('p', { text: d.result.summary_short || d.result.theme })) : null,
       h('div', { class: 'actions' }, watchBtn, handoutBtn, h('a', { class: 'btn', href: ytUrl, target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기')),
-      playerBox,
     ),
     h('div', { class: 'mode-bar' }, tabs, notes ? notes.status : null),
     nav,

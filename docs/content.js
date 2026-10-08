@@ -180,17 +180,11 @@ function setYtOpenPref(on) {
     el.checked = on;
   });
 }
-/** 재생 시작: 선택에 따라 YouTube를 새 탭으로 열거나, 이 화면 안에서 재생합니다. 새 탭을 열었으면 true */
-function startPlayback(id, title, stage) {
-  if (ytOpenPref()) {
-    window.open(ytWatch(id), '_blank', 'noopener');
-    return true;
-  }
-  stage.replaceChildren(embedPlayer(id, title), h('p', { class: 'meta', text: PLAYER_HELP }), h('button', { class: 'btn small', type: 'button', onclick: () => { setYtOpenPref(true); toast('앞으로 재생 버튼은 YouTube를 바로 엽니다 (화면 맨 아래에서 바꿀 수 있어요)'); } }, '광고가 나와요 → 앞으로 항상 YouTube에서 열기'));
-  return false;
+/** 재생 시작: 선택에 따라 YouTube(앱)를 열거나, 화면 위에 떠 있는 작은 창(float.js)에서 재생합니다. */
+function startPlayback(id, title) {
+  if (ytOpenPref()) openYoutubeApp(id);
+  else openFloatPlayer(id, title);
 }
-
-const PLAYER_HELP = '광고가 나오거나 프리미엄 로그인이 적용되지 않으면 "YouTube에서 열기"를 눌러 주세요. 이 화면의 영상은 이 브라우저에서 로그인한 유튜브 계정을 따릅니다.';
 
 /* ---------- 성경 본문: 4역본 전환 보기 ---------- */
 const BIBLE_VERSIONS = [
@@ -241,9 +235,8 @@ function renderBibleAudio(bible, gae) {
   const items = ((bible && bible.audio) || []).filter((a) => ytId(a.video_id));
   const wrap = h('div', { class: 'bible-audio' }, h('p', { class: 'meta', text: '개역개정 낭독을 들어 보세요. 유튜브에 올라온 음원(예: 드라마바이블)으로 연결합니다.' }));
   items.forEach((a) => {
-    const stage = h('div', { class: 'audio-stage' });
-    const play = h('button', { class: 'btn primary', type: 'button', onclick: (e) => { if (!startPlayback(a.video_id, `${a.reference} 낭독`, stage)) e.currentTarget.hidden = true; } }, `🎧 ${a.reference} 듣기`);
-    wrap.append(h('div', { class: 'audio-item' }, h('div', { class: 'actions' }, play, h('a', { class: 'btn', href: ytWatch(a.video_id), target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기')), a.title ? h('p', { class: 'meta', text: `${a.title}${a.channel ? ` · ${a.channel}` : ''}` }) : null, stage));
+    const play = h('button', { class: 'btn primary', type: 'button', onclick: () => startPlayback(a.video_id, `${a.reference} 낭독`) }, `🎧 ${a.reference} 듣기`);
+    wrap.append(h('div', { class: 'audio-item' }, h('div', { class: 'actions' }, play, h('a', { class: 'btn', href: ytWatch(a.video_id), target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기')), a.title ? h('p', { class: 'meta', text: `${a.title}${a.channel ? ` · ${a.channel}` : ''}` }) : null));
   });
   if (!items.length && chapterRef) wrap.append(h('div', { class: 'actions' }, h('a', { class: 'btn', href: ytSearch(`드라마바이블 ${chapterRef}`), target: '_blank', rel: 'noopener noreferrer' }, `🎧 ${chapterRef} 듣기 (YouTube에서 찾기)`)));
   return wrap;
@@ -298,14 +291,11 @@ function renderWorshipSection(songs, { title = '찬양', intro = '말씀을 묵�
       { class: 'songs' },
       songs.map((s) => {
         const vid = ytId(s.video_id);
-        const stage = h('div', { class: 'song-stage' });
         const play = vid
           ? h('button', {
               class: 'btn primary',
               type: 'button',
-              onclick: (e) => {
-                if (!startPlayback(vid, `${s.title} 찬양`, stage)) e.currentTarget.hidden = true;
-              },
+              onclick: () => startPlayback(vid, `${s.title} 찬양`),
             }, '▶ 듣기')
           : null;
         const link = h('a', { class: 'btn', href: vid ? ytWatch(vid) : ytSearch(`${s.title} ${s.artist || ''}`.trim()), target: '_blank', rel: 'noopener noreferrer' }, vid ? 'YouTube에서 열기' : 'YouTube에서 찾기');
@@ -316,7 +306,6 @@ function renderWorshipSection(songs, { title = '찬양', intro = '말씀을 묵�
           s.artist ? h('p', { class: 'meta', text: s.artist }) : null,
           s.reason ? h('p', { class: 'song-reason', text: s.reason }) : null,
           h('div', { class: 'actions' }, play, link),
-          stage,
         );
       }),
     ),
@@ -333,20 +322,17 @@ function renderMusicSection(music, seed) {
   const tracks = ((music && music.tracks) || []).filter((t) => ytId(t.id));
   if (!tracks.length) return null;
   const t = pickBySeed(tracks, seed);
-  const stage = h('div', { class: 'music-stage' });
   const play = h('button', {
     class: 'btn primary',
     type: 'button',
-    onclick: (e) => {
-      if (!startPlayback(t.id, t.title, stage)) e.currentTarget.hidden = true;
-    },
+    onclick: () => startPlayback(t.id, t.title),
   }, '▶ 듣기');
   return h(
     'section',
     { class: 'block', id: 'music' },
     h('h2', { text: '묵상 음악' }),
-    h('p', { class: 'meta', text: '조용히 말씀을 묵상하거나 기도할 때 틀어 두세요. 잔잔한 MR·연주 음악입니다. 다른 곳으로 이동하면 음악이 멈춥니다.' }),
-    h('article', { class: 'song' }, h('div', { class: 'song-head' }, h('h3', { text: t.title })), h('p', { class: 'meta', text: `${t.channel || ''}${t.minutes ? ` · ${t.minutes}분` : ''}` }), h('div', { class: 'actions' }, play, h('a', { class: 'btn', href: ytWatch(t.id), target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기')), stage),
+    h('p', { class: 'meta', text: '조용히 말씀을 묵상하거나 기도할 때 틀어 두세요. 잔잔한 MR·연주 음악입니다. 재생 창은 끌어서 옮길 수 있고, 다른 화면으로 이동해도 계속 재생됩니다.' }),
+    h('article', { class: 'song' }, h('div', { class: 'song-head' }, h('h3', { text: t.title })), h('p', { class: 'meta', text: `${t.channel || ''}${t.minutes ? ` · ${t.minutes}분` : ''}` }), h('div', { class: 'actions' }, play, h('a', { class: 'btn', href: ytWatch(t.id), target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기'))),
   );
 }
 
