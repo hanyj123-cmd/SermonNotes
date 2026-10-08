@@ -1,6 +1,6 @@
 {
- "updated": "2026-10-08T21:36:23.590Z",
- "count": 24,
+ "updated": "2026-10-08T21:38:34.082Z",
+ "count": 25,
  "sermons": [
   {
    "id": "dAtaD-X_yFE",
@@ -203,6 +203,25 @@
    "book": "요한계시록",
    "bookIdx": 66,
    "summary_short": "오랜 신앙생활과 수많은 사역 속에서 잃어버리기 쉬운 예수 그리스도를 향한 첫사랑을 기억하고, 회개함으로 처음 행위를 회복해야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "jKV5un_0iXs",
+   "category": "user",
+   "title": "다음세대(01)//‘느보산을 바라보며’",
+   "date": "2026-09-06",
+   "url": "https://www.youtube.com/watch?v=jKV5un_0iXs",
+   "preacher": "송태근 목사",
+   "scripture": "신명기31:1-8",
+   "book": "신명기",
+   "bookIdx": 5,
+   "summary_short": "모세의 한계 앞에서 하나님은 친히 앞서 가시며 약속을 이루시고, 우리는 오직 하나님의 말씀에 순종하며 다음 세대를 믿음으로 세워야 합니다.",
    "modes": [
     "review",
     "qt",
