@@ -1,56 +1,18 @@
 {
- "updated": "2026-10-08T21:45:49.662Z",
- "count": 28,
+ "updated": "2026-10-08T23:36:44.242Z",
+ "count": 26,
  "sermons": [
   {
-   "id": "dAtaD-X_yFE",
+   "id": "WpOZRTv1hvg",
    "category": "dawn",
-   "title": "새벽기도 - 열왕기상 10장",
+   "title": "새벽기도 - 열왕기상 11장",
    "date": "2026-10-07",
-   "url": "https://www.youtube.com/watch?v=dAtaD-X_yFE",
-   "preacher": "최형종 목사",
-   "scripture": "열왕기상 10장",
+   "url": "https://www.youtube.com/watch?v=WpOZRTv1hvg",
+   "preacher": "김승헌 목사",
+   "scripture": "열왕기상 11장",
    "book": "열왕기상",
    "bookIdx": 11,
-   "summary_short": "솔로몬의 엄청난 지혜와 부귀영화는 그 자체로 완성된 것이 아니라, 여호와를 경외하는 믿음이 떠날 때 무너질 수밖에 없음을 기억하고 오직 주님만을 경외합시다.",
-   "modes": [
-    "review",
-    "qt",
-    "study",
-    "group"
-   ],
-   "complete": true
-  },
-  {
-   "id": "DfnbwbrAsZ8",
-   "category": "dawn",
-   "title": "새벽기도 - 열왕기상 9장",
-   "date": "2026-10-06",
-   "url": "https://www.youtube.com/watch?v=DfnbwbrAsZ8",
-   "preacher": "강삼엘 목사",
-   "scripture": "열왕기상 9장",
-   "book": "열왕기상",
-   "bookIdx": 11,
-   "summary_short": "솔로몬의 성전 건축과 외적 성취 속에서도 하나님은 처음의 겸손한 마음과 지속적인 순종을 요구하시며, 하나님을 떠날 때 임할 엄중한 경고를 주십니다.",
-   "modes": [
-    "review",
-    "qt",
-    "study",
-    "group"
-   ],
-   "complete": true
-  },
-  {
-   "id": "ntN600KgfJ0",
-   "category": "dawn",
-   "title": "새벽기도 - 열왕기상 8장",
-   "date": "2026-10-05",
-   "url": "https://www.youtube.com/watch?v=ntN600KgfJ0",
-   "preacher": "심홍섭 목사",
-   "scripture": "열왕기상 8장",
-   "book": "열왕기상",
-   "bookIdx": 11,
-   "summary_short": "솔로몬의 성전 봉헌 기도를 통해 건물이나 형식보다 성전의 주인 되신 하나님을 바라보고, 온전한 헌신과 기도로 나아가야 합니다.",
+   "summary_short": "솔로몬과 여로보암의 실패를 통해 우리의 연약함을 깨닫고, 오직 참된 왕이신 예수 그리스도의 은혜만을 의지하며 말씀에 순종하는 삶을 살아야 합니다.",
    "modes": [
     "review",
     "qt",
@@ -89,6 +51,25 @@
    "book": "열왕기상",
    "bookIdx": 11,
    "summary_short": "하나님은 화려한 성전 건축이나 외적인 봉사보다 그분의 말씀에 귀 기울이고 기쁨으로 순종하는 인격적인 관계를 가장 기뻐하십니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "ZprDt6qieLk",
+   "category": "dawn",
+   "title": "새벽기도 - 열왕기상 3장",
+   "date": "2026-10-01",
+   "url": "https://www.youtube.com/watch?v=ZprDt6qieLk",
+   "preacher": "강삼엘 목사",
+   "scripture": "열왕기상 3장",
+   "book": "열왕기상",
+   "bookIdx": 11,
+   "summary_short": "솔로몬이 하나님 앞에서 자신의 부족함을 인정하고 백성을 바르게 섬기기 위한 '듣는 마음'을 구하였듯, 우리도 내 뜻을 구하기보다 하나님의 마음에 합한 지혜를 구해야 합니다.",
    "modes": [
     "review",
     "qt",
@@ -155,16 +136,35 @@
    "complete": true
   },
   {
-   "id": "6-HiR1JZHAc",
-   "category": "sunday",
-   "title": "주일예배 - 진리를 분별하는 삶",
-   "date": "2026-09-27",
-   "url": "https://www.youtube.com/watch?v=6-HiR1JZHAc",
-   "preacher": "전대혁 목사",
-   "scripture": "계 2:12-17",
-   "book": "요한계시록",
-   "bookIdx": 66,
-   "summary_short": "버가모 교회를 향한 경고와 칭찬을 통해, 우리는 외부의 핍박보다 교묘하게 진리를 왜곡하는 내부의 잘못된 가르침을 경계하고 평생 말씀을 배우며 영적 분별력을 세워가야 합니다.",
+   "id": "B9zf_uUXUBU",
+   "category": "dawn",
+   "title": "새벽기도 - 사무엘하21장",
+   "date": "2026-09-25",
+   "url": "https://www.youtube.com/watch?v=B9zf_uUXUBU",
+   "preacher": "심홍섭 목사",
+   "scripture": "사무엘하21장",
+   "book": "사무엘하",
+   "bookIdx": 10,
+   "summary_short": "하나님의 이름으로 맺은 언약을 가벼이 여기고 자신의 열심으로 죄를 범한 사울의 역사적 사건을 통해, 죄의 무게와 공의로우신 하나님의 심판을 깨닫고 오직 주님의 뜻에 순종하는 성도로 살아가야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "uuMTvxW8NL0",
+   "category": "dawn",
+   "title": "새벽기도 - 사무엘하20장",
+   "date": "2026-09-24",
+   "url": "https://www.youtube.com/watch?v=uuMTvxW8NL0",
+   "preacher": "김승헌 목사",
+   "scripture": "사무엘하20장",
+   "book": "사무엘하",
+   "bookIdx": 10,
+   "summary_short": "다윗 왕국을 흔든 반역자 세바의 위기 속에서, 무명의 지혜로운 여인이 성읍을 구원한 것처럼 성도는 죄에 민감하게 대처하고 교회의 평화를 지켜야 합니다.",
    "modes": [
     "review",
     "qt",
@@ -184,25 +184,6 @@
    "book": "사무엘하",
    "bookIdx": 10,
    "summary_short": "하나님 앞에서 자신의 죄를 변명하지 않고 정직하게 인정하며, 오직 예수 그리스도의 보혈을 의지하여 십자가 앞으로 나아가는 것이 진정한 회개와 죄에서 자유를 얻는 길입니다.",
-   "modes": [
-    "review",
-    "qt",
-    "study",
-    "group"
-   ],
-   "complete": true
-  },
-  {
-   "id": "9vD6ZcrrzYU",
-   "category": "sunday",
-   "title": "주일예배 - 고난을 두려워하지 않는 믿음",
-   "date": "2026-09-20",
-   "url": "https://www.youtube.com/watch?v=9vD6ZcrrzYU",
-   "preacher": "전대혁 목사",
-   "scripture": "계 2:8:11",
-   "book": "요한계시록",
-   "bookIdx": 66,
-   "summary_short": "세상의 세속적 부유함과 우상숭배적 구조 속에서도 그리스도를 향한 믿음과 순수함을 지키며, 다가오는 고난을 두려워하지 않고 주님께 충성할 때 주께서 생명의 면류관을 허락하십니다.",
    "modes": [
     "review",
     "qt",
@@ -241,25 +222,6 @@
    "book": "유다서",
    "bookIdx": 65,
    "summary_short": "하나님은 혼란과 흔들림 속에서도 단번에 주신 믿음과 서로를 향한 세움, 그리고 신실한 보호하심으로 우리의 인생을 끝까지 붙들어 주십니다.",
-   "modes": [
-    "review",
-    "qt",
-    "study",
-    "group"
-   ],
-   "complete": true
-  },
-  {
-   "id": "-pkBZt1QUgE",
-   "category": "sunday",
-   "title": "주일예배 - 첫 사랑을 되살리다",
-   "date": "2026-09-13",
-   "url": "https://www.youtube.com/watch?v=-pkBZt1QUgE",
-   "preacher": "전대혁 목사",
-   "scripture": "계 2:1-7",
-   "book": "요한계시록",
-   "bookIdx": 66,
-   "summary_short": "오랜 신앙생활과 수많은 사역 속에서 잃어버리기 쉬운 예수 그리스도를 향한 첫사랑을 기억하고, 회개함으로 처음 행위를 회복해야 합니다.",
    "modes": [
     "review",
     "qt",
