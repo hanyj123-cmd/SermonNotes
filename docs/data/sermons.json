@@ -1,7 +1,102 @@
 {
- "updated": "2026-10-08T14:19:20.292Z",
- "count": 6,
+ "updated": "2026-10-08T14:36:29.238Z",
+ "count": 11,
  "sermons": [
+  {
+   "id": "dAtaD-X_yFE",
+   "category": "dawn",
+   "title": "[2026.10.07] 새벽기도회 (열왕기상 10장) - 최형종 목사",
+   "date": "2026-10-07",
+   "url": "https://www.youtube.com/watch?v=dAtaD-X_yFE",
+   "preacher": "최형종 목사",
+   "scripture": "열왕기상 10장",
+   "book": "열왕기상",
+   "bookIdx": 11,
+   "summary_short": "솔로몬의 엄청난 지혜와 부귀영화는 그 자체로 완성된 것이 아니라, 여호와를 경외하는 믿음이 떠날 때 무너질 수밖에 없음을 기억하고 오직 주님만을 경외합시다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "DfnbwbrAsZ8",
+   "category": "dawn",
+   "title": "[2026.10.06] 새벽기도회 (열왕기상 9:1-9) - 강삼엘 목사",
+   "date": "2026-10-06",
+   "url": "https://www.youtube.com/watch?v=DfnbwbrAsZ8",
+   "preacher": "강삼엘 목사",
+   "scripture": "열왕기상 9장",
+   "book": "열왕기상",
+   "bookIdx": 11,
+   "summary_short": "솔로몬의 성전 건축과 외적 성취 속에서도 하나님은 처음의 겸손한 마음과 지속적인 순종을 요구하시며, 하나님을 떠날 때 임할 엄중한 경고를 주십니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "ntN600KgfJ0",
+   "category": "dawn",
+   "title": "[2026.10.05] 새벽기도회 (열왕기상 8:41-43) - 심홍섭 목사",
+   "date": "2026-10-05",
+   "url": "https://www.youtube.com/watch?v=ntN600KgfJ0",
+   "preacher": "심홍섭 목사",
+   "scripture": "열왕기상 8장",
+   "book": "열왕기상",
+   "bookIdx": 11,
+   "summary_short": "솔로몬의 성전 봉헌 기도를 통해 건물이나 형식보다 성전의 주인 되신 하나님을 바라보고, 온전한 헌신과 기도로 나아가야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "SgQ6EvDdYR4",
+   "category": "dawn",
+   "title": "[2026.10.03] 새벽기도회 (열왕기상 6장) - 전대혁 목사",
+   "date": "2026-10-03",
+   "url": "https://www.youtube.com/watch?v=SgQ6EvDdYR4",
+   "preacher": "전대혁 목사",
+   "scripture": "열왕기상 6장",
+   "book": "열왕기상",
+   "bookIdx": 11,
+   "summary_short": "하나님은 화려한 성전 건축이나 외적인 봉사보다 그분의 말씀에 귀 기울이고 기쁨으로 순종하는 인격적인 관계를 가장 기뻐하십니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "Lywujb0IpUw",
+   "category": "dawn",
+   "title": "[2026.10.01] 새벽기도회 (열왕기상 5:1-12) - 윤정환 목사",
+   "date": "2026-10-01",
+   "url": "https://www.youtube.com/watch?v=Lywujb0IpUw",
+   "preacher": "윤정환 목사",
+   "scripture": "열왕기상 4, 5장",
+   "book": "열왕기상",
+   "bookIdx": 11,
+   "summary_short": "참된 지혜는 혼자서 모든 것을 해내는 것이 아니라, 자신의 부족함을 솔직히 인정하고 타인의 은사를 존중하며 함께 하나님의 일을 이루어 가는 것입니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
   {
    "id": "6-HiR1JZHAc",
    "category": "sunday",
