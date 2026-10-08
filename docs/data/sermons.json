@@ -1,6 +1,6 @@
 {
- "updated": "2026-10-08T21:10:46.948Z",
- "count": 23,
+ "updated": "2026-10-08T21:14:42.313Z",
+ "count": 24,
  "sermons": [
   {
    "id": "dAtaD-X_yFE",
@@ -222,6 +222,25 @@
    "book": "요한계시록",
    "bookIdx": 66,
    "summary_short": "우리의 신앙적 문제와 영적 무기력함을 극복하고 참된 회복에 이르기 위해서는, 우리를 가장 잘 아시는 예수 그리스도의 말씀 앞에 겸손히 엎드려 그분의 음성을 들어야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "qx-5N38oOis",
+   "category": "user",
+   "title": "설교",
+   "date": "2026-08-30",
+   "url": "https://www.youtube.com/watch?v=qx-5N38oOis",
+   "preacher": "송태근 목사",
+   "scripture": "누가복음24:13-35",
+   "book": "누가복음",
+   "bookIdx": 42,
+   "summary_short": "낙심하여 예루살렘을 떠나던 제자들은 부활하신 예수님과 동행하며 말씀을 깨달을 때 눈이 열려 다시 부활의 증인으로 돌아설 수 있었습니다.",
    "modes": [
     "review",
     "qt",
