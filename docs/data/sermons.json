@@ -1,6 +1,6 @@
 {
- "updated": "2026-10-08T19:38:11.710Z",
- "count": 20,
+ "updated": "2026-10-08T20:15:24.130Z",
+ "count": 21,
  "sermons": [
   {
    "id": "dAtaD-X_yFE",
@@ -269,22 +269,42 @@
    "complete": true
   },
   {
-   "id": "N9zyca0R2YI",
+   "id": "OTG2qWv7NDk",
    "category": "user",
    "title": "설교",
+   "date": "2026-08-02",
+   "url": "https://www.youtube.com/watch?v=OTG2qWv7NDk",
+   "preacher": "송태근 목사",
+   "scripture": "여호수아1:1-9",
+   "book": "여호수아",
+   "bookIdx": 6,
+   "summary_short": "사람은 지나가고 시대는 변할지라도 하나님의 약속의 말씀은 영원하며, 성도는 주님의 약속을 의지하여 담대히 순종의 길을 걸어가야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "N9zyca0R2YI",
+   "category": "user",
+   "title": "동행(01) - 사망의 골짜기를 지나며 얻는 유익",
    "date": "2026-07-26",
    "url": "https://www.youtube.com/watch?v=N9zyca0R2YI",
    "preacher": "송태근 목사",
-   "scripture": "시편23:1-6",
+   "scripture": "시편23:1-6/",
    "book": "시편",
    "bookIdx": 19,
    "summary_short": "우리의 선한 목자 되신 하나님께서는 사망의 음침한 골짜기를 지날지라도 우리를 홀로 두지 않으시며, 그분의 선하심과 인자하심으로 끝까지 인도하여 영원한 아버지의 집에 거하게 하십니다.",
    "modes": [
     "review",
     "qt",
+    "study",
     "group"
    ],
-   "complete": false
+   "complete": true
   },
   {
    "id": "MMwmRhIyQNA",
