@@ -79,6 +79,7 @@ async function load() {
 function route() {
   const [, kind, arg] = location.hash.split('/');
   window.scrollTo(0, 0);
+  if (kind === 'admin') return renderAdminRoute();
   if (kind === 'v' && arg) return renderDetail(decodeURIComponent(arg));
   const firstWithData = CATEGORIES.find((c) => state.sermons.some((s) => s.category === c.key));
   const cat = CATEGORIES.some((c) => c.key === arg) ? arg : (firstWithData || CATEGORIES[0]).key;
@@ -329,16 +330,229 @@ function renderDetail(id) {
   );
 }
 
+/* ---------- 관리: 재생목록 추가·수정·삭제 (Apps Script 웹앱 경유) ---------- */
+const ADMIN_URL = (window.APP_CONFIG && window.APP_CONFIG.ADMIN_API_URL) || '';
+const PW_KEY = 'sn-admin-pw';
+
+// 비밀번호는 이 브라우저 탭 안에서만 기억합니다 (탭을 닫으면 사라짐). 저장 실패해도 동작은 계속됩니다.
+const storedPassword = () => {
+  try {
+    return sessionStorage.getItem(PW_KEY) || '';
+  } catch {
+    return '';
+  }
+};
+const rememberPassword = (pw) => {
+  try {
+    sessionStorage.setItem(PW_KEY, pw);
+  } catch {
+    /* 저장 불가 환경: 무시 */
+  }
+};
+const forgetPassword = () => {
+  try {
+    sessionStorage.removeItem(PW_KEY);
+  } catch {
+    /* 무시 */
+  }
+};
+
+async function adminGet(params) {
+  const res = await fetch(`${ADMIN_URL}?${new URLSearchParams(params)}`);
+  if (!res.ok) throw new Error(`서버 응답 오류 (${res.status})`);
+  return res.json();
+}
+
+// Apps Script는 text/plain 으로 보내야 브라우저가 사전 요청(preflight) 없이 바로 보낼 수 있습니다.
+async function adminPost(payload) {
+  const res = await fetch(ADMIN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`서버 응답 오류 (${res.status})`);
+  return res.json();
+}
+
+function backToHome() {
+  return h('a', { class: 'back', href: '#/', text: '← 목록으로' });
+}
+
+function renderAdminRoute() {
+  document.title = '관리 · 말씀 노트';
+  if (!ADMIN_URL) {
+    app.replaceChildren(
+      backToHome(),
+      h(
+        'div',
+        { class: 'empty' },
+        h('p', {}, h('strong', { text: '관리 기능을 아직 연결하지 않았습니다.' })),
+        h('p', { text: 'docs/config.js 의 ADMIN_API_URL 에 Apps Script 웹앱 주소를 넣어 주세요.' }),
+      ),
+    );
+    return;
+  }
+  const pw = storedPassword();
+  if (pw) renderAdminPanel(pw);
+  else renderAdminGate();
+}
+
+function renderAdminGate(message = '') {
+  const input = h('input', {
+    class: 'search',
+    type: 'password',
+    placeholder: '관리 비밀번호',
+    'aria-label': '관리 비밀번호',
+    autocomplete: 'current-password',
+  });
+  const msg = h('p', { class: 'meta', role: 'status', text: message });
+  const btn = h('button', { class: 'btn primary', type: 'button' }, '들어가기');
+
+  const submit = async () => {
+    const password = input.value;
+    if (!password) return;
+    btn.disabled = true;
+    msg.textContent = '확인 중…';
+    try {
+      const r = await adminPost({ action: 'check', password });
+      if (!r.ok) throw new Error(r.error || '확인에 실패했습니다.');
+      rememberPassword(password);
+      renderAdminPanel(password);
+    } catch (e) {
+      msg.textContent = e.message || String(e);
+      btn.disabled = false;
+    }
+  };
+  btn.addEventListener('click', submit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submit();
+  });
+
+  app.replaceChildren(
+    backToHome(),
+    h('div', { class: 'point' }, h('h2', { text: '관리' }), h('p', { class: 'meta', text: '재생목록을 추가하거나 수정하려면 비밀번호를 입력하세요.' }), input, h('div', { class: 'admin-row' }, btn), msg),
+  );
+  input.focus();
+}
+
+function categoryOptions(selected) {
+  return CATEGORIES.map((c) => h('option', { value: c.label, text: c.label, selected: c.label === selected }));
+}
+
+function renderAdminPanel(password) {
+  const status = h('p', { class: 'meta', role: 'status' });
+  const list = h('ul', { class: 'admin-list' });
+
+  const flash = (msg) => {
+    status.textContent = msg;
+  };
+
+  const runAction = async (payload, okMsg) => {
+    flash('저장 중…');
+    try {
+      const r = await adminPost({ ...payload, password });
+      if (r.ok === false && /비밀번호/.test(r.error || '')) {
+        forgetPassword();
+        renderAdminGate('비밀번호가 맞지 않습니다. 다시 입력해 주세요.');
+        return false;
+      }
+      if (!r.ok) throw new Error(r.error || '저장하지 못했습니다.');
+      flash(okMsg);
+      await reload();
+      return true;
+    } catch (e) {
+      flash(`오류: ${e.message || e}`);
+      return false;
+    }
+  };
+
+  // 추가 입력란
+  const addCat = h('select', { class: 'search admin-cat', 'aria-label': '구분' }, categoryOptions(CATEGORIES[0].label));
+  const addUrl = h('input', { class: 'search', placeholder: 'https://www.youtube.com/playlist?list=…', 'aria-label': '재생목록 주소' });
+  const addMax = h('input', { class: 'search admin-max', type: 'number', min: '1', max: '100', value: '30', 'aria-label': '최대 개수' });
+  const addBtn = h('button', { class: 'btn primary', type: 'button' }, '추가');
+  addBtn.addEventListener('click', async () => {
+    if (!addUrl.value.trim()) return flash('재생목록 주소를 입력해 주세요.');
+    const ok = await runAction({ action: 'add', category: addCat.value, playlist_url: addUrl.value.trim(), max_videos: addMax.value }, '재생목록을 추가했습니다.');
+    if (ok) addUrl.value = '';
+  });
+
+  const rowFor = (p) => {
+    const cat = h('select', { class: 'search admin-cat', 'aria-label': '구분' }, categoryOptions(p.category));
+    const url = h('input', { class: 'search', value: p.playlist_url, 'aria-label': '재생목록 주소' });
+    const max = h('input', { class: 'search admin-max', type: 'number', min: '1', max: '100', value: String(p.max_videos), 'aria-label': '최대 개수' });
+    const save = h('button', { class: 'btn', type: 'button' }, '저장');
+    const del = h('button', { class: 'btn danger', type: 'button' }, '삭제');
+    save.addEventListener('click', () =>
+      runAction({ action: 'update', row: p.row, category: cat.value, playlist_url: url.value.trim(), max_videos: max.value }, '수정했습니다.'),
+    );
+    del.addEventListener('click', () => {
+      if (!confirm(`이 재생목록을 삭제할까요?\n${p.playlist_url}`)) return;
+      runAction({ action: 'delete', row: p.row }, '삭제했습니다.');
+    });
+    return h('li', { class: 'admin-item' }, h('div', { class: 'admin-fields' }, cat, url, max), h('div', { class: 'admin-row' }, save, del));
+  };
+
+  async function reload() {
+    list.replaceChildren(h('li', { class: 'meta', text: '불러오는 중…' }));
+    try {
+      const r = await adminGet({ action: 'list' });
+      if (!r.ok) throw new Error(r.error || '목록을 불러오지 못했습니다.');
+      if (!r.playlists.length) {
+        list.replaceChildren(h('li', { class: 'meta', text: '등록된 재생목록이 없습니다.' }));
+        return;
+      }
+      list.replaceChildren(...r.playlists.map(rowFor));
+    } catch (e) {
+      list.replaceChildren(h('li', { class: 'meta', text: `오류: ${e.message || e}` }));
+    }
+  }
+
+  const logout = h('button', { class: 'btn', type: 'button' }, '로그아웃');
+  logout.addEventListener('click', () => {
+    forgetPassword();
+    location.hash = '#/admin';
+    renderAdminGate();
+  });
+
+  app.replaceChildren(
+    backToHome(),
+    h(
+      'div',
+      { class: 'admin-head' },
+      h('h1', { text: '재생목록 관리' }),
+      logout,
+    ),
+    h(
+      'section',
+      { class: 'point admin-add' },
+      h('h2', { text: '재생목록 추가' }),
+      h('div', { class: 'admin-fields' }, addCat, addUrl, addMax),
+      h('div', { class: 'admin-row' }, addBtn),
+      h('p', { class: 'meta', text: '추가하거나 바꾼 재생목록은 다음 자동 정리 때 반영됩니다. 바로 반영하려면 GitHub Actions에서 Run workflow를 실행하세요.' }),
+    ),
+    status,
+    h('h2', { class: 'admin-sub', text: '등록된 재생목록' }),
+    list,
+  );
+  reload();
+}
+
 /* ---------- 시작 ---------- */
 (async function init() {
+  let loadError = null;
   try {
     await load();
   } catch (e) {
-    app.replaceChildren(h('div', { class: 'empty' }, h('p', {}, h('strong', { text: '데이터를 불러오지 못했습니다.' })), h('p', { text: String(e.message || e) })));
-    return;
+    loadError = e;
   }
   const upd = document.getElementById('updated');
   if (upd && state.updated) upd.textContent = `최근 갱신: ${state.updated.slice(0, 10)}${state.demo ? ' (샘플 데이터)' : ''}`;
   window.addEventListener('hashchange', route);
+  // 관리 화면은 정리 데이터가 없어도 열 수 있어야 합니다.
+  if (loadError && !location.hash.startsWith('#/admin')) {
+    app.replaceChildren(h('div', { class: 'empty' }, h('p', {}, h('strong', { text: '데이터를 불러오지 못했습니다.' })), h('p', { text: String(loadError.message || loadError) })));
+    return;
+  }
   route();
 })();
