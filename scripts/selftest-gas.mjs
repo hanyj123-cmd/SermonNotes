@@ -410,7 +410,7 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
 
   // 제목 비우면 유튜브에서 가져옴 / 날짜 비우면 오늘
   r = e.post({ action: 'user_video_add', id_token: B, url: 'https://youtu.be/ZZZZZZZZZZZ?si=abc' });
-  check('제목을 비우면 유튜브 제목을 가져옴, 날짜는 오늘', r.ok && sh().rows[2][2].startsWith('[2026.10.04]') && /^\d{4}-\d{2}-\d{2}$/.test(sh().rows[2][3]) && sh().rows[2][16] === 'b@x.com', JSON.stringify(sh().rows[2]));
+  check('제목을 비우면 유튜브 제목을 가져옴, 날짜는 비워 둠(동기화가 채움)', r.ok && sh().rows[2][2].startsWith('[2026.10.04]') && sh().rows[2][3] === '' && sh().rows[2][16] === 'b@x.com', JSON.stringify(sh().rows[2]));
   e.setOembed('');
   r = e.post({ action: 'user_video_add', id_token: B, url: 'https://www.youtube.com/shorts/QQQQQQQQQQQ' });
   check('제목을 가져오지 못하면 직접 입력 안내', r.ok === false && /제목/.test(r.error));

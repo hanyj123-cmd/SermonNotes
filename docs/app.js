@@ -88,7 +88,7 @@ async function load() {
   }
 }
 
-/* ---------- 라우팅: #/c/<구분>  #/u  #/v/<영상ID>[/<모드>]  #/h/<영상ID>[/<모드>]  #/admin ---------- */
+/* ---------- 라우팅: #/c/<구분>  #/u  #/u/add  #/v/<영상ID>[/<모드>]  #/h/<영상ID>[/<모드>]  #/admin ---------- */
 function route() {
   const [, kind, arg, arg2] = location.hash.split('/');
   window.scrollTo(0, 0);
@@ -103,7 +103,7 @@ function route() {
   if (kind === 'admin') return renderAdminRoute();
   if (kind === 'h' && arg) return renderHandout(decodeURIComponent(arg), arg2);
   if (kind === 'v' && arg) return renderDetail(decodeURIComponent(arg), arg2);
-  if (kind === 'u') return renderUserRoute();
+  if (kind === 'u') return renderUserRoute(arg);
   const cat = CATEGORIES.some((c) => c.key === arg) ? arg : CATEGORIES[0].key;
   renderList(cat);
 }
@@ -262,30 +262,47 @@ const USER_STATUS = {
   no_transcript: ['자막 없음', 'bad'],
 };
 
-function renderUserRoute() {
-  document.title = '사용자 영상 · 말씀결';
+function renderUserRoute(sub) {
+  const adding = sub === 'add';
+  document.title = `${adding ? '영상 추가 · ' : ''}사용자 영상 · 말씀결`;
   const items = state.sermons.filter((s) => s.category === 'user');
-  const sections = [h('div', { class: 'page-head' }, h('h1', { text: '사용자 영상' }), h('p', { class: 'meta', text: '설교 영상의 유튜브 링크를 넣으면 AI가 같은 형식(설교리뷰 · QT 묵상 · 성경공부 · 소그룹 나눔)으로 정리해 줍니다. 여기 올린 영상과 정리는 로그인한 가족 모두가 볼 수 있습니다.' }))];
+  const subTab = (key, label, count) =>
+    h(
+      'button',
+      { class: 'tab', role: 'tab', 'aria-selected': String((key === 'add') === adding), onclick: () => (location.hash = key === 'add' ? '#/u/add' : '#/u') },
+      label,
+      count == null ? null : h('span', { class: 'count', text: String(count) }),
+    );
+  const sections = [
+    h('div', { class: 'page-head' }, h('h1', { text: '사용자 영상' }), h('p', { class: 'meta', text: '설교 영상의 유튜브 링크를 넣으면 AI가 같은 형식(설교리뷰 · QT 묵상 · 성경공부 · 소그룹 나눔)으로 정리해 줍니다. 여기 올린 영상과 정리는 로그인한 가족 모두가 볼 수 있습니다.' })),
+    h('div', { class: 'tabs', role: 'tablist', 'aria-label': '사용자 영상 메뉴' }, subTab('list', '정리된 영상', items.length), subTab('add', '영상 추가')),
+  ];
 
-  if (!NOTES_ENABLED) {
-    sections.push(h('div', { class: 'empty' }, h('p', { text: '로그인 기능이 아직 연결되지 않아 영상을 추가할 수 없습니다. (config.js 설정 필요)' })));
-  } else if (!auth.user) {
-    sections.push(h('p', { class: 'note-hint', text: '영상을 추가하려면 화면 위쪽에서 구글 로그인을 해 주세요.' }));
+  if (adding) {
+    if (!NOTES_ENABLED) {
+      sections.push(h('div', { class: 'empty' }, h('p', { text: '로그인 기능이 아직 연결되지 않아 영상을 추가할 수 없습니다. (config.js 설정 필요)' })));
+    } else if (!auth.user) {
+      sections.push(h('p', { class: 'note-hint', text: '영상을 추가하려면 화면 위쪽에서 구글 로그인을 해 주세요.' }));
+    } else {
+      sections.push(buildUserForm());
+    }
   } else {
-    sections.push(buildUserForm());
+    const empty = h(
+      'div',
+      { class: 'empty' },
+      h('p', {}, h('strong', { text: '아직 정리된 사용자 영상이 없습니다.' })),
+      h('p', {}, h('a', { href: '#/u/add', text: '영상 추가' }), h('span', { text: '에서 유튜브 링크를 넣어 보세요.' })),
+    );
+    sections.push(sermonBrowser(items, empty));
   }
-  const empty = h('div', { class: 'empty' }, h('p', {}, h('strong', { text: '아직 정리된 사용자 영상이 없습니다.' })));
-  sections.push(h('section', { class: 'block' }, h('h2', { text: '정리된 영상' }), sermonBrowser(items, empty)));
   app.replaceChildren(...sections);
 }
 
 function buildUserForm() {
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const field = (label, input, hint) => h('label', { class: 'field' }, h('span', { class: 'field-label', text: label }), input, hint ? h('span', { class: 'meta', text: hint }) : null);
   const url = h('input', { class: 'search', type: 'url', placeholder: 'https://www.youtube.com/watch?v=…', required: true, 'aria-label': '유튜브 주소' });
-  const date = h('input', { class: 'search', type: 'date', value: todayStr, 'aria-label': '설교 날짜' });
-  const title = h('input', { class: 'search', placeholder: '비워 두면 유튜브 영상 제목을 씁니다', 'aria-label': '설교 제목' });
+  const date = h('input', { class: 'search', type: 'date', 'aria-label': '설교 날짜' });
+  const title = h('input', { class: 'search', placeholder: '비워 두면 영상 제목에서 읽습니다', 'aria-label': '설교 제목' });
   const scripture = h('input', { class: 'search', placeholder: '예: 요한복음 3:16-21', 'aria-label': '성경 본문' });
   const preacher = h('input', { class: 'search', placeholder: '예: 홍길동 목사', 'aria-label': '설교자' });
   const msg = h('p', { class: 'meta', role: 'status' });
@@ -294,10 +311,15 @@ function buildUserForm() {
     'form',
     { class: 'user-form point' },
     h('h2', { text: '영상 추가' }),
-    field('유튜브 주소', url),
-    h('div', { class: 'form-grid' }, field('설교 날짜', date), field('설교자', preacher)),
-    field('설교 제목', title),
-    field('성경 본문', scripture, '본문을 적어 주면 성경 4역본(개역개정 · NIV · 표준새번역 · 메시지)이 함께 붙습니다.'),
+    field('유튜브 주소', url, '설교 제목 · 설교자 · 성경 본문 · 날짜는 영상 제목을 보고 알아서 채웁니다. 성경 본문이 있으면 성경 4역본(개역개정 · NIV · 표준새번역 · 메시지)이 함께 붙습니다.'),
+    h(
+      'details',
+      { class: 'user-extra' },
+      h('summary', { text: '직접 입력 (선택) — 제목에서 못 읽을 때만 적어 주세요' }),
+      h('div', { class: 'form-grid' }, field('설교 날짜', date, '비우면 제목의 날짜, 없으면 유튜브 게시일'), field('설교자', preacher)),
+      field('설교 제목', title),
+      field('성경 본문', scripture),
+    ),
     h('div', { class: 'admin-row' }, btn),
     msg,
   );
@@ -309,13 +331,15 @@ function buildUserForm() {
     try {
       const r = await notesCall('user_video_add', { url: url.value.trim(), date: date.value, title: title.value.trim(), scripture: scripture.value.trim(), preacher: preacher.value.trim() });
       if (!r.ok) throw new Error(r.error || '등록하지 못했습니다.');
-      msg.textContent = r.dispatched
-        ? `"${r.title}" 등록 완료. AI 정리를 시작했습니다. 보통 몇 분 걸리며, 끝나면 아래 "정리된 영상"에 나타납니다 (반영까지 1~2분 더).`
-        : `"${r.title}" 등록 완료. 자동 정리는 다음 정해진 시각(새벽기도회 수집 시간)에 시작됩니다.`;
+      const text = r.dispatched
+        ? `"${r.title}" 등록 완료. AI 정리를 시작했습니다. 보통 몇 분 걸리며, 끝나면 "정리된 영상"에 나타납니다 (반영까지 1~2분 더). `
+        : `"${r.title}" 등록 완료. 자동 정리는 다음 정해진 시각(새벽기도회 수집 시간)에 시작됩니다. `;
+      msg.replaceChildren(text, h('a', { href: '#/u', text: '정리된 영상 보기' }));
       url.value = '';
       title.value = '';
       scripture.value = '';
       preacher.value = '';
+      date.value = '';
       mine.refresh();
     } catch (err) {
       msg.textContent = `오류: ${err.message || err}`;

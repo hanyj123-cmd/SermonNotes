@@ -875,7 +875,7 @@ function userVideoAdd(user, body) {
   const preacher = String(body.preacher || '').trim().slice(0, 40);
   let date = String(body.date || '').trim();
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: '날짜는 2026-10-08 처럼 입력해 주세요.' };
-  if (!date) date = todayString();
+  // 날짜를 안 적으면 비워 두고, 동기화가 제목의 날짜 → 유튜브 게시일 순서로 채웁니다
 
   const sh = ensureSermonsSheet();
   const rows = readUserRows(sh);

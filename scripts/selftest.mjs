@@ -10,6 +10,8 @@ import { normalizePassages, toUsfm } from './lib/bible-books.mjs';
 import { extractJson, normalizeReview, normalizeQt, normalizeStudy, normalizeGroup, readResponseText } from './lib/gemini.mjs';
 import { MODES, systemPromptFor, buildUserMessage } from './lib/prompt.mjs';
 import { buildQueue } from './lib/queue.mjs';
+import { guessFromTitle, parseAnyTitle } from './lib/title.mjs';
+import { fetchPublishDates } from './lib/youtube.mjs';
 import { processRow, CELL_LIMIT, readExisting, knownInfo } from './lib/process.mjs';
 import { RULES, torontoClock, dueCategories, decide, shouldRun } from './gate.mjs';
 import { parseCategories, toExport, exportJson } from './sync.mjs';
@@ -363,6 +365,50 @@ await t('처리: 시트에서 기존 모드 읽기', async () => {
 });
 
 /* ===== 내보내기 ===== */
+await t('사용자 영상 제목에서 제목·설교자·본문·날짜 읽기', async () => {
+  const g = (x) => guessFromTitle(x);
+  assert.deepEqual(g('진리를 분별하는 삶 | 전대혁 목사 | 요한복음 3:16-21'), { date: '', title: '진리를 분별하는 삶', scripture: '요한복음 3:16-21', preacher: '전대혁 목사', decomposed: true });
+  const b = g('[주일설교] 믿음의 길 (창세기 12:1-9) - 홍길동 담임목사');
+  assert.deepEqual([b.title, b.scripture, b.preacher], ['믿음의 길', '창세기 12:1-9', '홍길동 목사']);
+  const c = g('2026.10.04 주일예배 열왕기상 4, 5장 윤정환 목사');
+  assert.deepEqual([c.date, c.title, c.scripture, c.preacher], ['2026-10-04', '', '열왕기상 4, 5장', '윤정환 목사']);
+  const d = g('하나님의 은혜 - 롬 8:1-11 | 토론토영락교회 전대혁 목사');
+  assert.deepEqual([d.title, d.scripture, d.preacher], ['하나님의 은혜', '롬 8:1-11', '전대혁 목사']);
+  const e = g('믿음의 길 홍길동 목사 #설교 #주일예배');
+  assert.deepEqual([e.title, e.preacher], ['믿음의 길', '홍길동 목사']);
+  const f = g('시편 23편 묵상 / 김철수 목사');
+  assert.deepEqual([f.title, f.scripture, f.preacher], ['', '시편 23편', '김철수 목사']);
+  for (const plain of ['예수님과 함께하는 40일 새벽기도', '다니엘 12명의 제자 이야기', 'The Power of Prayer - Pastor John']) {
+    const x = g(plain);
+    assert.equal(x.decomposed, false, plain);
+    assert.equal(x.title, plain);
+    assert.equal(x.scripture + x.preacher, '', plain);
+  }
+  // 교회 영상은 기존 형식대로, 사용자 영상만 자유 형식
+  assert.equal(parseAnyTitle('sunday', '진리를 분별하는 삶 | 전대혁 목사').title, '');
+  assert.equal(parseAnyTitle('user', '진리를 분별하는 삶 | 전대혁 목사').preacher, '전대혁 목사');
+});
+await t('사용자 영상: 제목에서 읽은 값이 정리 입력과 화면 데이터에 반영됨', async () => {
+  const row = sermonRow({ category: 'user', title: '진리를 분별하는 삶 | 전대혁 목사 | 요한복음 3:16-21', published_at: '' });
+  const info = knownInfo(row);
+  assert.deepEqual([info.title, info.scripture, info.preacher], ['진리를 분별하는 삶', '요한복음 3:16-21', '전대혁 목사']);
+  const done = await run(row, { ai: fakeAi() });
+  assert.equal(done.patch.scripture, '요한복음 3:16-21');
+  assert.equal(done.patch.preacher, '전대혁 목사');
+  const ex = toExport({ ...row, ...done.patch, published_at: '2026-10-04' }).index;
+  assert.equal(ex.title, '진리를 분별하는 삶'); // 사용자 영상은 구분 이름을 붙이지 않음
+  assert.equal(ex.preacher, '전대혁 목사');
+  assert.equal(ex.scripture, '요한복음 3:16-21');
+  assert.equal(ex.book, '요한복음');
+  // 직접 입력한 값은 제목에서 읽은 값보다 우선
+  assert.equal(knownInfo({ ...row, preacher: '박은혜 목사', scripture: '시편 23편' }).preacher, '박은혜 목사');
+});
+await t('게시일 조회: 형식이 맞는 날짜만, 오류는 건너뜀', async () => {
+  const ok = await fetchPublishDates(['a', 'b'], 'k', async () => ({ ok: true, json: async () => ({ items: [{ id: 'a', snippet: { publishedAt: '2026-09-28T14:00:00Z' } }, { id: 'b', snippet: {} }] }) }));
+  assert.deepEqual([...ok], [['a', '2026-09-28']]);
+  const fail = await fetchPublishDates(['a'], 'k', async () => ({ ok: false, status: 403 }));
+  assert.equal(fail.size, 0);
+});
 await t('수정값: 앱에서 고친 제목·설교자가 자동 값보다 우선하고, 비우면 자동 값으로 돌아감', async () => {
   const done = await run(sermonRow(), { ai: fakeAi() });
   const auto = toExport(sermonRow({ ...done.patch })).index;

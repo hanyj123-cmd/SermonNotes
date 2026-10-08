@@ -404,3 +404,7 @@ ol.q li > span { display: block; }
 @media print { .sermon-edit { display: none; } }
 @media (max-width: 560px) { .sermon-edit .edit-field { grid-template-columns: 1fr; gap: 4px; } }
 .sermon-edit [hidden] { display: none !important; }
+
+/* 사용자 영상: 영상 추가 화면 */
+.user-extra { margin: 4px 0 14px; }
+.user-extra summary { cursor: pointer; color: var(--blue-deep); font-weight: 600; margin-bottom: 10px; }

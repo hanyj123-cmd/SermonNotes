@@ -30,13 +30,13 @@ import {
   SERMON_HEADERS,
   CATEGORY_KEYS,
 } from './lib/sheets.mjs';
-import { extractPlaylistId, fetchPlaylistVideos, fetchVideoStates } from './lib/youtube.mjs';
+import { extractPlaylistId, fetchPlaylistVideos, fetchVideoStates, fetchPublishDates } from './lib/youtube.mjs';
 import { buildQueue } from './lib/queue.mjs';
 import { attachSongVideos, attachBibleAudio, buildPrayerMusic, musicIsStale } from './lib/media.mjs';
 import { fetchBibleBlock, bibleIsCurrent } from './lib/bible-web.mjs';
 import { processRow, CELL_LIMIT } from './lib/process.mjs';
 import { createGemini, DEFAULT_MODEL } from './lib/gemini.mjs';
-import { parseTitle, parseScripture, bookOf, tidyTitle, normalizePreacher, displayTitle } from './lib/title.mjs';
+import { parseTitle, parseAnyTitle, parseScripture, bookOf, tidyTitle, normalizePreacher, displayTitle } from './lib/title.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '../docs/data');
@@ -80,7 +80,7 @@ const parseJson = (s) => {
 export function toExport(s) {
   const result = parseJson(s.result_json);
   if (!result || result.schema !== 3 || !result.review?.outline?.length) return null;
-  const p = parseTitle(s.title);
+  const p = parseAnyTitle(s.category, s.title); // 사용자 영상은 자유로운 제목 형식도 읽습니다
   const date = p.date || String(s.published_at || '').slice(0, 10);
   const scriptureFixed = String(s.scripture_override || '').trim();
   const scripture = scriptureFixed || String(s.scripture || '').trim() || p.scripture || (result.scripture || []).join(', ');
@@ -98,7 +98,7 @@ export function toExport(s) {
   }
   const modes = ['review', ...(qt ? ['qt'] : []), ...(study ? ['study'] : []), ...(group ? ['group'] : [])];
   const titleFixed = String(s.title_override || '').trim();
-  const title = displayTitle({ category: s.category, title: titleFixed || (p.date ? p.title : ''), aiTitle: tidyTitle(result.title), scripture }) || p.title || s.title; // "주일예배 - 설교제목" (제목이 없으면 성경 본문)
+  const title = displayTitle({ category: s.category, title: titleFixed || p.title, aiTitle: tidyTitle(result.title), scripture }) || p.title || s.title; // "주일예배 - 설교제목" (제목이 없으면 성경 본문)
   const index = {
     id: s.video_id,
     category: s.category,
@@ -308,6 +308,16 @@ async function main() {
   const retried = queue.filter((r) => r.status === 'error' || r.status === 'no_transcript').length;
 
   console.log(`🛠  이번 실행에서 정리할 영상: ${queue.length}편 (최대 ${maxPerRun}편${retried ? `, 이전에 실패한 ${retried}편 포함` : ''})`);
+
+  // 사용자 영상에 날짜가 비어 있으면 제목의 날짜 → 유튜브 게시일 → 오늘 순서로 채웁니다
+  const noDate = queue.filter((r) => r.category === 'user' && !String(r.published_at || '').trim());
+  if (noDate.length) {
+    const posted = await fetchPublishDates(noDate.map((r) => r.video_id), youtubeKey);
+    for (const row of noDate) {
+      row.published_at = parseAnyTitle('user', row.title).date || posted.get(row.video_id) || now().slice(0, 10);
+      await updateSermonRow(sheets, spreadsheetId, row.rowNumber, { published_at: row.published_at });
+    }
+  }
 
   const mediaState = {};
   for (const row of queue) {

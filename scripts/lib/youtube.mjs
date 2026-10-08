@@ -128,3 +128,25 @@ export async function fetchTranscript(videoId) {
   }
   return { text: '', error: lastErr || '자막을 가져오지 못했습니다' };
 }
+
+/** 영상 ID → 게시일(YYYY-MM-DD). 찾지 못하거나 오류면 그 영상은 빠집니다. (사용자 영상의 날짜를 자동으로 채울 때 씀) */
+export async function fetchPublishDates(videoIds, apiKey, fetchImpl = fetch) {
+  const ids = [...new Set(videoIds)];
+  const out = new Map();
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    const params = new URLSearchParams({ part: 'snippet', id: chunk.join(','), key: apiKey });
+    try {
+      const res = await fetchImpl(`https://www.googleapis.com/youtube/v3/videos?${params}`);
+      if (!res.ok) throw new Error(`YouTube API 오류 (${res.status})`);
+      const data = await res.json();
+      for (const it of data.items || []) {
+        const d = String(it.snippet?.publishedAt || '').slice(0, 10);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(d)) out.set(it.id, d);
+      }
+    } catch (e) {
+      console.warn(`⚠️  영상 게시일을 확인하지 못했습니다 (오늘 날짜로 둡니다): ${e.message}`);
+    }
+  }
+  return out;
+}

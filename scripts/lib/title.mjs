@@ -63,6 +63,106 @@ export function parseTitle(raw) {
   return { date, title: s, scripture, preacher };
 }
 
+const PREACHER_AT_END = /(?:^|\s)((?:토론토\s*)?(?:영락교회\s*)?[가-힣]{2,4})\s*(?:담임|부|협동|원로|객원|초청|수석|선임)?\s*(목사|전도사|강도사|장로|선교사|교수|박사)님?\s*$/;
+const NOISE_SEGMENT = /^(토론토\s*영락교회|영락교회|토론토영락교회\s*\S*|(주일|수요|새벽|청년부?|금요|특별)?\s*(예배|설교|말씀|기도회|설교말씀|예배설교|말씀묵상|라이브|실황|full|풀영상|본예배|낮예배|묵상|큐티|qt)|live|sunday\s*service|full\s*service)$/i;
+const REF_TOKEN = /^\d+(?:장|편|절)?(?:[:.]\d+(?:절)?)?(?:\s*[-~–]\s*\d+(?:장|편|절|[:.]\d+(?:절)?)?)?[,;]?$/;
+
+/** 문장 속에서 성경 본문 표기("요한복음 3:16-21", "열왕기상 4, 5장")를 찾아 [본문, 본문을 뺀 나머지]를 돌려줍니다. 없으면 null */
+function pullScripture(text) {
+  const tokens = String(text || '').split(/\s+/).filter(Boolean);
+  for (let i = 0; i < tokens.length; i++) {
+    // 책 이름이 공백 없이 숫자와 붙은 경우("롬8:1")도 보도록, 토큰을 붙여서 확인
+    const head = tokens.slice(i).join(' ');
+    const b = bookOf(head);
+    if (!b) continue;
+    const bookLen = head.length - b.rest.length;
+    const bookText = head.slice(0, bookLen).trim();
+    const restTokens = b.rest.split(/\s+/).filter(Boolean);
+    let n = 0;
+    while (n < restTokens.length && REF_TOKEN.test(restTokens[n].replace(/^[(\[]|[)\]]$/g, ''))) n++;
+    // "4, 5장" 처럼 쉼표로 이어진 숫자 토큰 뒤에 "장"이 붙는 경우도 같이 묶습니다
+    if (n === 0) continue;
+    const ref = `${bookText} ${restTokens.slice(0, n).join(' ')}`.replace(/\s+/g, ' ').replace(/[,;]$/, '').trim();
+    const before = tokens.slice(0, i).join(' ');
+    const after = restTokens.slice(n).join(' ');
+    return [ref, `${before} ${after}`.replace(/\s+/g, ' ').trim()];
+  }
+  return null;
+}
+
+/**
+ * 형식이 정해지지 않은 유튜브 제목에서 날짜·제목·본문·설교자를 읽어 냅니다 (사용자 영상용).
+ *   "진리를 분별하는 삶 | 전대혁 목사 | 요한복음 3:16-21"
+ *   "[주일설교] 믿음의 길 (창세기 12:1-9) - 홍길동 담임목사"
+ *   "2026.10.04 주일예배 열왕기상 4, 5장 윤정환 목사"
+ * 읽은 게 하나도 없으면 title 은 원래 제목 그대로, decomposed 는 false 입니다.
+ */
+export function guessFromTitle(raw) {
+  const original = String(raw || '').trim();
+  const out = { date: '', title: original, scripture: '', preacher: '', decomposed: false };
+  let s = original.replace(/#\S+/g, ' ').replace(/[“”"]/g, ' ');
+  // 날짜: [2026.10.04] / (2026.10.04) / 맨 앞의 2026.10.04 / 2026년 10월 4일
+  const dm = /[[(]?\s*(\d{4})\s*[.\-/년]\s*(\d{1,2})\s*[.\-/월]\s*(\d{1,2})\s*일?\s*[\])]?/.exec(s);
+  if (dm && dm.index < 4) {
+    out.date = `${dm[1]}-${dm[2].padStart(2, '0')}-${dm[3].padStart(2, '0')}`;
+    s = s.slice(dm.index + dm[0].length);
+  }
+  // 괄호·대괄호 안의 내용을 따로 떼어 분류합니다 (본문 / 설교자 / [주일설교] 같은 꼬리표)
+  const bracketed = [];
+  s = s.replace(/[[(〈<「【]([^\])〉>」】]{1,40})[\])〉>」】]/g, (_, inner) => {
+    bracketed.push(inner.trim());
+    return ' | ';
+  });
+  const pieces = [...bracketed, ...s.split(/\s*[|｜ㅣ]\s*|\s+[-–—]\s+|\s+[/·•]\s+/)].map((x) => x.trim()).filter(Boolean);
+  const keep = [];
+  for (let piece of pieces) {
+    if (NOISE_SEGMENT.test(piece)) {
+      out.decomposed = true;
+      continue;
+    }
+    if (!out.scripture) {
+      const hit = pullScripture(piece);
+      if (hit) {
+        out.scripture = hit[0];
+        out.decomposed = true;
+        piece = hit[1];
+        if (!piece) continue;
+      }
+    }
+    if (!out.preacher) {
+      const m = PREACHER_AT_END.exec(piece.replace(/^(설교자|설교|강사)\s*[:：]?\s*/, ''));
+      if (m && (m.index === 0 || piece.length - m[0].length >= 0)) {
+        const name = m[1].replace(/^토론토\s*/, '').replace(/^영락교회\s*/, '').trim();
+        if (/^[가-힣]{2,4}$/.test(name)) {
+          out.preacher = `${name} ${m[2]}`;
+          out.decomposed = true;
+          piece = piece.replace(/^(설교자|설교|강사)\s*[:：]?\s*/, '').slice(0, m.index).trim();
+          if (!piece) continue;
+        }
+      }
+    }
+    if (NOISE_SEGMENT.test(piece)) continue;
+    keep.push(piece);
+  }
+  if (out.decomposed && keep.length) out.title = keep[0].replace(/^[\s:：,·\-–—]+|[\s:：,·\-–—]+$/g, '');
+  if (out.decomposed && !keep.length) out.title = '';
+  return out;
+}
+
+/**
+ * 시트 행의 영상 제목에서 날짜·제목·본문·설교자를 읽습니다.
+ * 교회 재생목록 영상은 정해진 형식("[날짜] 제목 (본문) - 설교자")으로, 사용자 영상은 자유로운 형식도 읽습니다.
+ * title 은 제목에서 확실히 읽은 것만 (못 읽었으면 '') — 비어 있으면 호출한 쪽이 AI 제목이나 성경 본문으로 채웁니다.
+ */
+export function parseAnyTitle(category, rawTitle) {
+  if (category !== 'user') {
+    const p = parseTitle(rawTitle);
+    return { ...p, title: p.date ? p.title : '', rawParsed: p };
+  }
+  const g = guessFromTitle(rawTitle);
+  return { date: g.date, title: g.decomposed ? g.title : '', scripture: g.scripture, preacher: g.preacher, rawParsed: g };
+}
+
 /** 화면·PDF에 쓸 깔끔한 제목: "[2026.10.04] 믿음의 길 (창 12:1-9) - 홍길동 목사" → "믿음의 길" (규칙에 안 맞는 제목은 그대로) */
 export function tidyTitle(raw) {
   const s = String(raw || '').trim();

@@ -5,7 +5,7 @@
 // 일부 모드만 실패하면 status 를 error 로 두되 성공한 모드는 시트에 남기고, 다음 재시도 때는 빠진 모드만 다시 만듭니다.
 import { obtainMaterial as defaultObtain } from './transcript.mjs';
 import { MODES, MODE_LABELS } from './prompt.mjs';
-import { parseTitle, parseScripture, normalizePreacher } from './title.mjs';
+import { parseTitle, parseAnyTitle, parseScripture, normalizePreacher } from './title.mjs';
 import { bibleIsCurrent } from './bible-web.mjs';
 
 export const CELL_LIMIT = 49_000; // Google Sheets 셀 하나의 최대 글자 수는 50,000
@@ -35,7 +35,7 @@ export function readExisting(row) {
 
 /** 영상 제목 · 사용자가 직접 입력한 값으로 이미 알고 있는 정보 (날짜·제목·본문·설교자) */
 export function knownInfo(row) {
-  const p = parseTitle(row.title);
+  const p = row.category === 'user' ? parseAnyTitle('user', row.title) : parseTitle(row.title); // 사용자 영상은 자유로운 제목 형식도 읽습니다
   return {
     date: p.date || String(row.published_at || '').slice(0, 10),
     title: String(row.title_override || '').trim() || p.title || row.title,
