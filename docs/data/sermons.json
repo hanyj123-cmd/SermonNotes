@@ -1,11 +1,11 @@
 {
- "updated": "2026-10-08T14:36:29.238Z",
- "count": 11,
+ "updated": "2026-10-08T14:57:30.669Z",
+ "count": 14,
  "sermons": [
   {
    "id": "dAtaD-X_yFE",
    "category": "dawn",
-   "title": "[2026.10.07] 새벽기도회 (열왕기상 10장) - 최형종 목사",
+   "title": "새벽기도회",
    "date": "2026-10-07",
    "url": "https://www.youtube.com/watch?v=dAtaD-X_yFE",
    "preacher": "최형종 목사",
@@ -24,7 +24,7 @@
   {
    "id": "DfnbwbrAsZ8",
    "category": "dawn",
-   "title": "[2026.10.06] 새벽기도회 (열왕기상 9:1-9) - 강삼엘 목사",
+   "title": "새벽기도회",
    "date": "2026-10-06",
    "url": "https://www.youtube.com/watch?v=DfnbwbrAsZ8",
    "preacher": "강삼엘 목사",
@@ -43,7 +43,7 @@
   {
    "id": "ntN600KgfJ0",
    "category": "dawn",
-   "title": "[2026.10.05] 새벽기도회 (열왕기상 8:41-43) - 심홍섭 목사",
+   "title": "새벽기도회",
    "date": "2026-10-05",
    "url": "https://www.youtube.com/watch?v=ntN600KgfJ0",
    "preacher": "심홍섭 목사",
@@ -62,7 +62,7 @@
   {
    "id": "SgQ6EvDdYR4",
    "category": "dawn",
-   "title": "[2026.10.03] 새벽기도회 (열왕기상 6장) - 전대혁 목사",
+   "title": "새벽기도회",
    "date": "2026-10-03",
    "url": "https://www.youtube.com/watch?v=SgQ6EvDdYR4",
    "preacher": "전대혁 목사",
@@ -81,7 +81,7 @@
   {
    "id": "Lywujb0IpUw",
    "category": "dawn",
-   "title": "[2026.10.01] 새벽기도회 (열왕기상 5:1-12) - 윤정환 목사",
+   "title": "새벽기도회",
    "date": "2026-10-01",
    "url": "https://www.youtube.com/watch?v=Lywujb0IpUw",
    "preacher": "윤정환 목사",
@@ -98,9 +98,28 @@
    "complete": true
   },
   {
+   "id": "IoV6J25v3qE",
+   "category": "wednesday",
+   "title": "말씀 앞에 설 때 (느혜미야 8:1-12)",
+   "date": "2026-09-30",
+   "url": "https://www.youtube.com/watch?v=IoV6J25v3qE",
+   "preacher": "정은희 목사",
+   "scripture": "느헤미야 8:1-12",
+   "book": "느헤미야",
+   "bookIdx": 16,
+   "summary_short": "이스라엘 백성이 성벽 재건 이후 하나님의 말씀을 간절히 사모하며 모였듯이, 우리도 겸손한 마음과 아멘의 고백으로 말씀 앞에 서서 영적으로 회복되어야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
    "id": "6-HiR1JZHAc",
    "category": "sunday",
-   "title": "[2026.09.27] 주일예배 (계 2:12-17) - 전대혁 목사",
+   "title": "진리를 분별하는 삶",
    "date": "2026-09-27",
    "url": "https://www.youtube.com/watch?v=6-HiR1JZHAc",
    "preacher": "전대혁 목사",
@@ -117,9 +136,28 @@
    "complete": true
   },
   {
+   "id": "52Tu3Dkf3Ng",
+   "category": "wednesday",
+   "title": "죄에서 자유를 얻게 함은",
+   "date": "2026-09-23",
+   "url": "https://www.youtube.com/watch?v=52Tu3Dkf3Ng",
+   "preacher": "윤정환 목사",
+   "scripture": "삼하 12:7-15",
+   "book": "사무엘하",
+   "bookIdx": 10,
+   "summary_short": "하나님 앞에서 자신의 죄를 변명하지 않고 정직하게 인정하며, 오직 예수 그리스도의 보혈을 의지하여 십자가 앞으로 나아가는 것이 진정한 회개와 죄에서 자유를 얻는 길입니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
    "id": "9vD6ZcrrzYU",
    "category": "sunday",
-   "title": "[2026.09.20] 주일예배 (계 2:8-11) - 전대혁 목사",
+   "title": "고난을 두려워하지 않는 믿음",
    "date": "2026-09-20",
    "url": "https://www.youtube.com/watch?v=9vD6ZcrrzYU",
    "preacher": "전대혁 목사",
@@ -136,9 +174,28 @@
    "complete": true
   },
   {
+   "id": "9c221eiafuk",
+   "category": "wednesday",
+   "title": "내가 누구인지 이제 알았습니다",
+   "date": "2026-09-16",
+   "url": "https://www.youtube.com/watch?v=9c221eiafuk",
+   "preacher": "최형종 목사",
+   "scripture": "엡 1:1-7",
+   "book": "에베소서",
+   "bookIdx": 49,
+   "summary_short": "세상의 왜곡된 시선과 상처 속에서 방황하던 우리가 창세전부터 그리스도 안에서 택하심을 받은 하나님의 자녀라는 참된 정체성을 깨달을 때 비로소 풍성한 은혜의 삶을 누릴 수 있습니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
    "id": "-pkBZt1QUgE",
    "category": "sunday",
-   "title": "[2026.09.13] 주일예배 (계 2:1-7) - 토론토영락교회 전대혁 목사",
+   "title": "첫 사랑을 되살리다",
    "date": "2026-09-13",
    "url": "https://www.youtube.com/watch?v=-pkBZt1QUgE",
    "preacher": "토론토영락교회 전대혁 목사",
@@ -157,7 +214,7 @@
   {
    "id": "jSpz_J5O9_s",
    "category": "sunday",
-   "title": "[2026.09.06] 주일예배 (계 1:9-20) - 토론토영락교회 전대혁 목사",
+   "title": "우리보다 우리를 잘 아시는 예수 그리스도",
    "date": "2026-09-06",
    "url": "https://www.youtube.com/watch?v=jSpz_J5O9_s",
    "preacher": "토론토영락교회 전대혁 목사",
@@ -176,7 +233,7 @@
   {
    "id": "_oTtkG7fWEo",
    "category": "sunday",
-   "title": "[2026.08.30] 주일예배 (살전 5:14) - 전대혁 담임목사",
+   "title": "함께함의 능력",
    "date": "2026-08-30",
    "url": "https://www.youtube.com/watch?v=_oTtkG7fWEo",
    "preacher": "전대혁 담임목사",
@@ -195,7 +252,7 @@
   {
    "id": "PZJYS19qA7U",
    "category": "sunday",
-   "title": "[2026.08.23] 주일예배 (시 78:1-8) - 전대혁 담임목사",
+   "title": "하나님께서 행하신 일을 알고 전하는 교회",
    "date": "2026-08-23",
    "url": "https://www.youtube.com/watch?v=PZJYS19qA7U",
    "preacher": "전대혁 담임목사",
