@@ -7,6 +7,7 @@
 //   ADMIN_PASSWORD    재생목록 관리 비밀번호
 //   GOOGLE_CLIENT_ID  구글 로그인용 OAuth 클라이언트 ID  (…apps.googleusercontent.com)
 //   ALLOWED_EMAILS    노트를 쓸 수 있는 구글 계정 (쉼표로 구분). 비워 두면 로그인한 누구나 가능
+//   SESSION_SECRET    (자동 생성) 30일 로그인 유지용 서명 비밀키. 직접 만들 필요 없습니다.
 
 const SHEET_NAME = 'Playlists';
 const HEADERS = ['category', 'playlist_url', 'max_videos'];
@@ -123,16 +124,80 @@ function verifyIdToken(token) {
   const exp = Number(t.exp);
   if (!(exp * 1000 > Date.now()) || !t.sub) throw new Error('auth');
 
+  checkAllowed(t.email);
+
+  const user = { sub: String(t.sub), email: String(t.email || ''), name: String(t.name || ''), exp: exp };
+  const ttl = Math.min(600, Math.max(1, Math.floor(exp - Date.now() / 1000)));
+  cache.put(key, JSON.stringify(user), ttl);
+  return user;
+}
+
+// ALLOWED_EMAILS 가 설정되어 있으면, 그 목록에 있는 계정만 통과시킵니다. (로그인할 때마다 다시 확인)
+function checkAllowed(email) {
   const allowed = prop('ALLOWED_EMAILS')
     .split(',')
     .map(function (x) { return x.trim().toLowerCase(); })
     .filter(Boolean);
-  if (allowed.length && allowed.indexOf(String(t.email || '').toLowerCase()) < 0) throw new Error('forbidden');
+  if (allowed.length && allowed.indexOf(String(email || '').toLowerCase()) < 0) throw new Error('forbidden');
+}
 
-  const user = { sub: String(t.sub), email: String(t.email || ''), exp: exp };
-  const ttl = Math.min(600, Math.max(1, Math.floor(exp - Date.now() / 1000)));
-  cache.put(key, JSON.stringify(user), ttl);
-  return user;
+/* ---------- 로그인 유지 (앱 전용 세션 토큰) ----------
+   구글 ID 토큰은 1시간이면 만료됩니다. 그래서 로그인할 때 한 번만 구글 토큰을 확인하고,
+   서버가 서명한 30일짜리 세션 토큰을 내려줍니다. 서명 비밀키(SESSION_SECRET)는 처음 쓸 때 자동으로 만들어
+   스크립트 속성에 저장됩니다. 비밀키를 지우면 모든 로그인이 한꺼번에 풀립니다. */
+
+const SESSION_DAYS = 30;
+
+function sessionSecret() {
+  const props = PropertiesService.getScriptProperties();
+  let s = props.getProperty('SESSION_SECRET');
+  if (s) return s;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    s = props.getProperty('SESSION_SECRET');
+    if (!s) {
+      s = Utilities.getUuid() + Utilities.getUuid() + Utilities.getUuid();
+      props.setProperty('SESSION_SECRET', s);
+    }
+    return s;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function sign(text) {
+  return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(text, sessionSecret()));
+}
+
+function sameText(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function issueSession(user) {
+  const exp = Math.floor(Date.now() / 1000) + SESSION_DAYS * 86400;
+  const payload = Utilities.base64EncodeWebSafe(
+    JSON.stringify({ sub: user.sub, email: user.email, name: user.name || '', exp: exp }),
+    Utilities.Charset.UTF_8
+  );
+  return { token: payload + '.' + sign(payload), exp: exp };
+}
+
+function verifySession(token) {
+  const parts = String(token || '').split('.');
+  if (parts.length !== 2 || !sameText(sign(parts[0]), parts[1])) throw new Error('auth');
+  let p;
+  try {
+    p = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString('UTF-8'));
+  } catch (err) {
+    throw new Error('auth');
+  }
+  if (!p || !p.sub || !(Number(p.exp) * 1000 > Date.now())) throw new Error('auth');
+  checkAllowed(p.email); // 허용 목록에서 빠진 계정은 세션이 남아 있어도 바로 막힙니다.
+  return { sub: String(p.sub), email: String(p.email || ''), name: String(p.name || ''), exp: Number(p.exp) };
 }
 
 function authError(err) {
@@ -146,9 +211,21 @@ function authError(err) {
 /* ---------- 개인 노트 ---------- */
 
 function handleNotes(action, body) {
+  // 로그인 직후 한 번: 구글 ID 토큰을 확인하고 30일짜리 앱 전용 세션 토큰을 발급합니다.
+  if (action === 'notes_login') {
+    try {
+      const u = verifyIdToken(body.id_token);
+      const s = issueSession(u);
+      return { ok: true, session: s.token, expires_at: s.exp, user: { name: u.name, email: u.email } };
+    } catch (err) {
+      return authError(err);
+    }
+  }
+
+  // 그 외 노트 요청: 앱 세션 토큰으로 확인합니다. (구글 ID 토큰을 직접 보내는 방식도 그대로 허용)
   let user;
   try {
-    user = verifyIdToken(body.id_token);
+    user = body.session ? verifySession(body.session) : verifyIdToken(body.id_token);
   } catch (err) {
     return authError(err);
   }

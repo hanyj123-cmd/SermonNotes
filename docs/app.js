@@ -45,10 +45,10 @@ function formatDate(iso) {
   return `${y}.${m}.${d}`;
 }
 
-function toast(message) {
+function toast(message, ms = 1800) {
   const t = h('div', { class: 'toast', role: 'status', text: message });
   document.body.append(t);
-  setTimeout(() => t.remove(), 1800);
+  setTimeout(() => t.remove(), ms);
 }
 
 async function copyText(text) {
@@ -577,42 +577,30 @@ function renderAdminPanel(password) {
    서버가 토큰을 확인하고 "그 사람의" 노트만 읽고 씁니다. 화면에서 보이는 이름·이메일은 표시용일 뿐 신뢰하지 않습니다. */
 const CLIENT_ID = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_CLIENT_ID) || '';
 const NOTES_ENABLED = Boolean(CLIENT_ID && ADMIN_URL);
-const TOKEN_KEY = 'sn-id-token';
+const SESSION_KEY = 'sn-session';
 const auth = { token: '', user: null };
 let currentNotes = null;
 let expiredShown = false;
 
-function decodeJwt(token) {
-  try {
-    const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    const bytes = atob(part)
-      .split('')
-      .map((c) => `%${`00${c.charCodeAt(0).toString(16)}`.slice(-2)}`)
-      .join('');
-    return JSON.parse(decodeURIComponent(bytes));
-  } catch {
-    return null;
-  }
-}
-
-function setSession(token) {
-  const p = decodeJwt(token || '');
-  if (!p || !p.exp || p.exp * 1000 <= Date.now()) return false;
-  auth.token = token;
-  auth.user = { name: p.name || p.email || '로그인됨', email: p.email || '', exp: p.exp };
+// 로그인 유지: 구글 로그인 직후 서버(Apps Script)가 30일짜리 앱 전용 로그인 토큰을 내려줍니다.
+// 이 브라우저에는 그 토큰만 저장하고, 구글 ID 토큰(1시간짜리)은 저장하지 않습니다.
+function setSession({ session, name, email, exp }) {
+  if (!session || !exp || exp * 1000 <= Date.now()) return false;
+  auth.token = session;
+  auth.user = { name: name || email || '로그인됨', email: email || '', exp };
   expiredShown = false;
   try {
-    sessionStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ session, name, email, exp }));
   } catch {
-    /* 저장 불가 환경: 이 탭에서만 유지 */
+    /* 저장 불가 환경(사생활 보호 모드 등): 이 탭을 닫기 전까지만 유지 */
   }
   return true;
 }
 
 function restoreSession() {
   try {
-    const t = sessionStorage.getItem(TOKEN_KEY);
-    if (t && !setSession(t)) sessionStorage.removeItem(TOKEN_KEY);
+    const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    if (saved && !setSession(saved)) localStorage.removeItem(SESSION_KEY);
   } catch {
     /* 무시 */
   }
@@ -623,7 +611,7 @@ function clearSession() {
   auth.user = null;
   state.noteIds = new Set();
   try {
-    sessionStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(SESSION_KEY);
   } catch {
     /* 무시 */
   }
@@ -673,7 +661,7 @@ function handleAuthExpired() {
 }
 
 async function notesCall(action, payload = {}) {
-  const r = await adminPost({ action, id_token: auth.token, ...payload });
+  const r = await adminPost({ action, session: auth.token, ...payload });
   if (!r.ok && (r.code === 'auth' || r.code === 'forbidden')) {
     if (r.code === 'auth') handleAuthExpired();
   }
@@ -696,7 +684,18 @@ function rerenderIfListOrHome() {
 }
 
 async function onCredential(resp) {
-  if (!setSession(resp && resp.credential)) return;
+  // 구글이 준 1시간짜리 토큰을 서버에 보내 확인받고, 30일짜리 로그인 토큰으로 바꿔 받습니다.
+  try {
+    const r = await adminPost({ action: 'notes_login', id_token: resp && resp.credential });
+    if (!r.ok) throw new Error(r.error || '로그인하지 못했습니다.');
+    const user = r.user || {};
+    if (!setSession({ session: r.session, name: user.name, email: user.email, exp: r.expires_at })) {
+      throw new Error('로그인 정보를 받지 못했습니다.');
+    }
+  } catch (e) {
+    toast(String(e.message || e), 6000);
+    return;
+  }
   renderAccountArea();
   await fetchNoteIds();
   rerenderIfListOrHome();
