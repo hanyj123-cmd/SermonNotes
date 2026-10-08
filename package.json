@@ -1,0 +1,21 @@
+{
+  "name": "sermon-notes",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "유튜브 설교 자막 → 설교 정리 · 삶의 적용 · 묵상 · 소그룹 질문 (Google Sheets + GitHub Pages)",
+  "scripts": {
+    "sync": "node scripts/sync.mjs",
+    "export": "node scripts/sync.mjs --export-only",
+    "serve": "npx --yes serve docs",
+    "test": "node scripts/selftest.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@google/genai": "^2.28.0",
+    "googleapis": "^184.0.0",
+    "youtube-transcript": "^1.3.1"
+  }
+}

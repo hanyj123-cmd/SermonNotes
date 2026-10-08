@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>말씀 노트</title>
+  <meta name="description" content="설교 자막을 바탕으로 한 설교 정리, 삶의 적용, 묵상, 소그룹 나눔 질문" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Noto+Serif+KR:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="#/" aria-label="말씀 노트 처음으로">
+        <span class="brand-mark" aria-hidden="true">✝</span>
+        <span class="brand-name">말씀 노트</span>
+      </a>
+      <p class="brand-sub">설교를 다시 읽고, 삶에 적용하고, 함께 나누는 자리</p>
+    </div>
+  </header>
+
+  <main class="wrap" id="app" aria-live="polite">
+    <p class="loading">불러오는 중…</p>
+  </main>
+
+  <footer class="site-footer wrap">
+    <p>이 정리는 영상 자막을 바탕으로 AI가 만든 것으로, 자막 인식 오류나 요약 과정의 누락이 있을 수 있습니다. 정확한 말씀과 설교는 반드시 원 영상과 성경으로 확인해 주세요.</p>
+    <p id="updated"></p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
