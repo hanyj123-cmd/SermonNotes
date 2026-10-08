@@ -109,7 +109,10 @@ function route() {
   teardownMarks(); // 형광펜·밑줄·메모 저장 후 도구 막대 정리
   teardownHandout();
   document.body.classList.toggle('handout-mode', kind === 'h');
-  setActiveMenu(kind === 'u' ? 'user' : kind === 'g' || kind === 'q' ? 'game' : kind === 'admin' ? '' : 'church');
+  // 첫 화면(#/ 또는 주소 없음)은 말씀 게임 메인입니다
+  const home = !kind;
+  setActiveMenu(kind === 'u' ? 'user' : home || kind === 'g' || kind === 'q' ? 'game' : kind === 'admin' ? '' : 'church');
+  if (home) return renderGame('home');
   if (kind === 'admin') return renderAdminRoute();
   if (kind === 'g') return renderGame(arg || 'home');
   if (kind === 'q' && arg) return renderQuest(decodeURIComponent(arg));
@@ -461,7 +464,7 @@ async function adminPost(payload) {
 }
 
 function backToHome() {
-  return h('a', { class: 'back', href: '#/' }, icon('back'), '목록으로');
+  return h('a', { class: 'back', href: '#/c/sunday' }, icon('back'), '목록으로');
 }
 
 function renderAdminRoute() {

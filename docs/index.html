@@ -7,7 +7,7 @@
   <meta name="description" content="설교 자막을 바탕으로 한 설교 정리, 삶의 적용, 묵상, 소그룹 나눔 질문" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Serif+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Noto+Serif+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <meta name="theme-color" content="#ffffff" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
   <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png" />
@@ -23,8 +23,8 @@
     // 저장해 둔 글자 크기를 화면이 그려지기 전에 적용합니다 (깜빡임 방지)
     try { var fs = parseInt(localStorage.getItem('sn-fs'), 10); if (fs >= 10 && fs <= 20) document.documentElement.style.setProperty('--fs', String(fs)); } catch (e) {}
   </script>
-  <link rel="stylesheet" href="style.css?v=9.18" />
-  <link rel="stylesheet" href="game.css?v=9.18" />
+  <link rel="stylesheet" href="style.css?v=9.19" />
+  <link rel="stylesheet" href="game.css?v=9.19" />
 </head>
 <body>
   <header class="site-header">
@@ -37,9 +37,9 @@
           <span class="brand-name">말씀결</span>
         </a>
         <nav class="menu" aria-label="주 메뉴">
+          <a class="menu-link menu-game" data-menu="game" href="#/">말씀 게임</a>
           <a class="menu-link" data-menu="church" href="#/c/sunday">토론토영락교회 설교</a>
           <a class="menu-link" data-menu="user" href="#/u">사용자 영상</a>
-          <a class="menu-link menu-game" data-menu="game" href="#/g">말씀 게임</a>
         </nav>
         <div class="header-tools">
           <div class="header-row">
@@ -66,17 +66,17 @@
   </footer>
 
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="config.js?v=9.18"></script>
-  <script src="content.js?v=9.18"></script>
-  <script src="float.js?v=9.18"></script>
-  <script src="notes.js?v=9.18"></script>
-  <script src="marks.js?v=9.18"></script>
-  <script src="admin-extra.js?v=9.18"></script>
-  <script src="handout.js?v=9.18"></script>
-  <script src="game-data.js?v=9.18"></script>
-  <script src="game-art.js?v=9.18"></script>
-  <script src="game.js?v=9.18"></script>
-  <script src="detail.js?v=9.18"></script>
-  <script src="app.js?v=9.18"></script>
+  <script src="config.js?v=9.19"></script>
+  <script src="content.js?v=9.19"></script>
+  <script src="float.js?v=9.19"></script>
+  <script src="notes.js?v=9.19"></script>
+  <script src="marks.js?v=9.19"></script>
+  <script src="admin-extra.js?v=9.19"></script>
+  <script src="handout.js?v=9.19"></script>
+  <script src="game-data.js?v=9.19"></script>
+  <script src="game-art.js?v=9.19"></script>
+  <script src="game.js?v=9.19"></script>
+  <script src="detail.js?v=9.19"></script>
+  <script src="app.js?v=9.19"></script>
 </body>
 </html>

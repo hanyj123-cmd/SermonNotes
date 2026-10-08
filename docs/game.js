@@ -27,6 +27,11 @@ function rememberLook(look) {
     /* 저장하지 못해도 괜찮습니다 */
   }
 }
+// 지금 주소가 게임 화면인지 (#/ 첫 화면 · #/g…)
+const isGameHash = () => {
+  const k = location.hash.split('/')[1];
+  return !k || k === 'g';
+};
 const gameCanSave = () => typeof NOTES_ENABLED !== 'undefined' && NOTES_ENABLED && auth.user;
 
 async function gameCall(action, payload = {}) {
@@ -76,7 +81,7 @@ function progressBar(value, max, cls = '') {
 function confetti(host, n = 26) {
   if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const box = h('div', { class: 'gm-confetti', 'aria-hidden': 'true' });
-  const colors = ['#ffd36b', '#ff9fb8', '#8fcf5a', '#7cc3ea', '#b69cff', '#ff8a5b'];
+  const colors = ['#ecd492', '#c9a14a', '#f4e2a6', '#a3243a', '#fbf8f1', '#8f6b22'];
   for (let i = 0; i < n; i++) {
     box.append(h('i', { style: `left:${Math.random() * 100}%;background:${colors[i % colors.length]};animation-delay:${(Math.random() * 0.4).toFixed(2)}s;transform:rotate(${Math.round(Math.random() * 360)}deg)` }));
   }
@@ -97,11 +102,15 @@ function countUp(el, to, ms = 900) {
   };
   requestAnimationFrame(step);
 }
-function stampSvg(size = 40, label = '') {
+// 붉은 밀랍 인장 (도장)
+function stampSvg(size = 40) {
+  const uid = `ws${Math.random().toString(36).slice(2, 7)}`;
   return svgNode(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="${size}" height="${size}" aria-hidden="true">
-    <circle cx="24" cy="24" r="21" fill="#fff4f1" stroke="#e0574e" stroke-width="2.6"/><circle cx="24" cy="24" r="16.5" fill="none" stroke="#e0574e" stroke-width="1.4" stroke-dasharray="2 2.4"/>
-    <path d="M24 13v18M17.5 19h13" stroke="#e0574e" stroke-width="3.2" stroke-linecap="round"/>
-    <path d="M15 33q9 5 18 0" fill="none" stroke="#e0574e" stroke-width="2" stroke-linecap="round"/>${label ? `<text x="24" y="44" font-size="7" text-anchor="middle" fill="#e0574e" font-weight="700">${label}</text>` : ''}</svg>`);
+    <defs><radialGradient id="${uid}" cx="38%" cy="32%" r="70%"><stop offset="0" stop-color="#d4495a"/><stop offset=".55" stop-color="#a3243a"/><stop offset="1" stop-color="#6f1426"/></radialGradient></defs>
+    <path d="M24 3.5c3 0 4.2 2.4 7 3.2s5.4-.4 7.2 1.8 .8 4.8 2 7.4 3.9 3.6 3.9 6.6-2.6 4.1-3.4 6.9.6 5.4-1.4 7.4-4.7 1-7.4 2.2-3.8 3.8-6.9 3.8-4.2-2.6-7-3.4-5.4.4-7.2-1.8-.8-4.8-2-7.4S3.4 27 3.4 24s2.6-4.1 3.4-6.9-.6-5.4 1.4-7.4 4.7-1 7.4-2.2S20.9 3.5 24 3.5z" fill="url(#${uid})"/>
+    <circle cx="24" cy="24" r="13.5" fill="none" stroke="#f3c9a8" stroke-opacity=".55" stroke-width="1.2"/>
+    <path d="M24 15.5v17M18 21.5h12" stroke="#f6dcc0" stroke-opacity=".9" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M14 13q4-4 9-4.5" stroke="#fff" stroke-opacity=".35" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`);
 }
 
 /* ---------- 게임 상단 탭 ---------- */
@@ -116,7 +125,7 @@ function gameTabs(cur) {
   return h(
     'nav',
     { class: 'gm-tabs', 'aria-label': '말씀 게임 메뉴' },
-    GAME_TABS.map(([k, label, ic]) => h('a', { class: 'gm-tab', href: k === 'home' ? '#/g' : `#/g/${k}`, 'aria-current': k === cur ? 'page' : false }, icon(ic), h('span', { text: label }))),
+    GAME_TABS.map(([k, label, ic]) => h('a', { class: 'gm-tab', href: k === 'home' ? '#/' : `#/g/${k}`, 'aria-current': k === cur ? 'page' : false }, icon(ic), h('span', { text: label }))),
   );
 }
 function gameTopStats(st) {
@@ -145,7 +154,7 @@ async function renderGame(tab = 'home') {
     app.replaceChildren(h('div', { class: 'gm' }, gameTabs(tab), h('div', { class: 'empty' }, h('p', { text: String(e.message || e) }))));
     return;
   }
-  if (!location.hash.startsWith('#/g')) return;
+  if (!isGameHash()) return;
   let firstTime = false;
   try {
     firstTime = !st.stats.quests && !st.stats.reflects && !localStorage.getItem('sn-game-made');
@@ -157,7 +166,7 @@ async function renderGame(tab = 'home') {
     return;
   }
   const body = { home: renderGameHome, journey: renderJourneys, closet: renderCloset, shop: renderShop, rank: renderRank }[tab](st);
-  app.replaceChildren(h('div', { class: 'gm' }, gameTabs(tab), gameTopStats(st), body));
+  app.replaceChildren(h('div', { class: `gm gm-page-${tab}` }, gameTabs(tab), tab === 'home' ? null : gameTopStats(st), body));
 }
 
 function renderGameIntro() {
@@ -254,23 +263,22 @@ function quizSermons() {
 function renderGameHome(st) {
   const lvStart = levelXp(st.level);
   const lvNext = levelXp(st.level + 1);
+  const now = new Date(`${st.today}T12:00:00Z`);
+  const dateLabel = `${now.getUTCMonth() + 1}월 ${now.getUTCDate()}일 ${['일', '월', '화', '수', '목', '금', '토'][now.getUTCDay()]}요일`;
+  const stat = (label, value, cls = '') => h('div', { class: `gm-stat ${cls}` }, h('dt', { text: label }), h('dd', {}, value));
   const hero = h(
     'section',
     { class: 'gm-hero' },
-    h('a', { class: 'gm-hero-art', href: '#/g/closet', title: '옷장에서 갈아입기' }, avatarNode(st.look, { size: 180, mood: st.stampedToday ? 'cheer' : 'smile' })),
+    h('div', { class: 'gm-hero-stage' }, h('a', { class: 'gm-arch', href: '#/g/closet', title: '옷장에서 갈아입기' }, avatarNode(st.look, { size: 200, mood: st.stampedToday ? 'cheer' : 'smile' })), h('span', { class: 'gm-pedestal', 'aria-hidden': 'true' })),
     h(
       'div',
       { class: 'gm-hero-info' },
-      h('p', { class: 'gm-hello', text: st.stampedToday ? `${st.nick || '순례자'}님, 오늘 도장 받았어요!` : `${st.nick || '순례자'}님, 오늘의 퀘스트가 기다려요` }),
-      h('div', { class: 'gm-lvline' }, h('strong', { text: `Lv.${st.level} ${st.title || st.levelTitle}` }), h('span', { class: 'meta', text: `다음 레벨까지 ${Math.max(0, lvNext - st.xp)} XP` })),
-      progressBar(st.xp - lvStart, lvNext - lvStart, 'gm-bar-xp'),
-      h(
-        'div',
-        { class: 'gm-hero-stats' },
-        h('div', {}, h('span', { class: 'meta', text: '달란트' }), coin(st.talents, 'big')),
-        h('div', {}, h('span', { class: 'meta', text: '연속 도장' }), h('b', { class: 'gm-big-num' }, icon('flame'), `${st.streak}일`)),
-        h('div', {}, h('span', { class: 'meta', text: '이번 주' }), h('b', { class: 'gm-big-num', text: `${st.weekXp} XP` })),
-      ),
+      h('p', { class: 'gm-date', text: dateLabel }),
+      h('h1', { class: 'gm-hello', text: st.stampedToday ? `${st.nick || '순례자'}님, 오늘의 도장을 받았어요` : `${st.nick || '순례자'}님, 오늘의 말씀이 기다려요` }),
+      h('div', { class: 'gm-lvline' }, h('span', { class: 'gm-lv', text: `Lv.${st.level}` }), h('span', { class: 'gm-lv-title', text: st.title || st.levelTitle }), h('span', { class: 'gm-lv-next', text: `다음 레벨까지 ${Math.max(0, lvNext - st.xp)} XP` })),
+      progressBar(st.xp - lvStart, lvNext - lvStart, 'gm-bar-gold'),
+      h('dl', { class: 'gm-hero-stats' }, stat('달란트', coin(st.talents)), stat('연속 도장', [icon('flame'), `${st.streak}일`], st.streak ? 'fire' : ''), stat('이번 주', `${st.weekXp} XP`)),
+      st.mult > 1 ? h('p', { class: 'gm-mult' }, icon('flame'), `연속 ${st.streak}일 — 오늘 받는 달란트 ×${st.mult}`) : null,
     ),
   );
 
@@ -282,12 +290,13 @@ function renderGameHome(st) {
     'section',
     { class: 'gm-card gm-quest' },
     h('div', { class: 'gm-card-head' }, h('h2', {}, icon('star'), '오늘의 말씀 퀘스트'), h('span', { class: 'gm-chip-soft', text: st.dailyLeft ? `점수 퀘스트 ${st.dailyLeft}개 남음` : '오늘 점수 퀘스트 완료 · 연습은 계속 OK' })),
-    h('p', { class: 'meta', text: `객관식과 빈칸(직접 입력)을 풀어요. 절반 이상 맞히면 오늘의 도장! 지금 연속 ${st.streak}일이라 달란트가 ×${st.mult}배예요.` }),
+    h('p', { class: 'meta', text: '객관식과 빈칸(직접 입력)을 풀어요. 절반 이상 맞히면 오늘의 도장을 받아요.' }),
+    picks.length ? h('a', { class: 'btn gm-cta', href: `#/q/${encodeURIComponent(picks[0].id)}` }, icon('star'), st.quizzes[picks[0].id] ? '다시 풀어 보기' : '오늘의 퀘스트 시작', h('span', { class: 'gm-cta-sub', text: picks[0].title })) : null,
     picks.length
       ? h(
           'ul',
           { class: 'gm-quest-list' },
-          picks.map((s) => {
+          picks.slice(1).map((s) => {
             const done = st.quizzes[s.id];
             return h(
               'li',
@@ -313,7 +322,7 @@ function renderStampBoard(st) {
     const d = new Date(start.getTime() + i * 86400000);
     const key = d.toISOString().slice(0, 10);
     const future = key > today;
-    cells.push(h('div', { class: `gm-day${set.has(key) ? ' on' : ''}${key === today ? ' today' : ''}${future ? ' future' : ''}`, title: key }, h('span', { class: 'gm-day-n', text: String(d.getUTCDate()) }), set.has(key) ? stampSvg(30) : null));
+    cells.push(h('div', { class: `gm-day${set.has(key) ? ' on' : ''}${key === today ? ' today' : ''}${future ? ' future' : ''}`, title: key }, h('span', { class: 'gm-day-n', text: String(d.getUTCDate()) }), set.has(key) ? stampSvg(34) : null));
   }
   const toWeek = 7 - (st.streak % 7 || (st.streak ? 7 : 0)) || 7;
   return h(
@@ -940,7 +949,7 @@ function eventCard(ev) {
 function renderResult({ d, items, correct, answers, right, total, server, events, err, bestCombo, shell }) {
   const pct = right / total;
   const grade = pct === 1 ? '만점! 말씀을 꼭 붙드셨네요' : pct >= 0.8 ? '훌륭해요!' : pct >= 0.5 ? '잘했어요! 오늘의 도장 조건 달성' : '조금 아쉬워요. 설교를 다시 보고 도전해 보세요';
-  const ring = svgNode(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="150" height="150" aria-hidden="true"><circle cx="60" cy="60" r="50" fill="none" stroke="#e8f0fc" stroke-width="12"/><circle cx="60" cy="60" r="50" fill="none" stroke="${pct >= 0.5 ? '#8fcf5a' : '#f4a259'}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${(314 * pct).toFixed(1)} 314" transform="rotate(-90 60 60)" class="gm-ring"/></svg>`);
+  const ring = svgNode(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="150" height="150" aria-hidden="true"><circle cx="60" cy="60" r="50" fill="none" stroke="#efe9da" stroke-width="9"/><circle cx="60" cy="60" r="50" fill="none" stroke="${pct >= 0.5 ? '#c9a14a' : '#b9a98a'}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${(314 * pct).toFixed(1)} 314" transform="rotate(-90 60 60)" class="gm-ring"/></svg>`);
   const xpEl = h('b', { text: '0' });
   const talEl = h('b', { text: '0' });
   const head = h(
@@ -975,7 +984,7 @@ function renderResult({ d, items, correct, answers, right, total, server, events
         ),
       )
     : null;
-  const actions = h('div', { class: 'gm-row gm-result-actions' }, h('a', { class: 'btn primary gm-big', href: '#/g' }, '게임 홈으로'), h('a', { class: 'btn', href: `#/v/${encodeURIComponent(d.id)}/study` }, '설교로 돌아가기'), h('a', { class: 'btn', href: `#/q/${encodeURIComponent(d.id)}`, onclick: (e) => (e.preventDefault(), renderQuest(d.id)) }, '다시 풀기'));
+  const actions = h('div', { class: 'gm-row gm-result-actions' }, h('a', { class: 'btn primary gm-big', href: '#/' }, '게임 홈으로'), h('a', { class: 'btn', href: `#/v/${encodeURIComponent(d.id)}/study` }, '설교로 돌아가기'), h('a', { class: 'btn', href: `#/q/${encodeURIComponent(d.id)}`, onclick: (e) => (e.preventDefault(), renderQuest(d.id)) }, '다시 풀기'));
   const page = h('div', { class: 'gm gm-questwrap' }, head, evBox, review, actions);
   shell.replaceWith(page);
   app.replaceChildren(page);
@@ -1013,7 +1022,7 @@ function gameReflectButton(videoId, notes) {
       return;
     }
     btn.replaceChildren(icon('stamp'), '묵상 퀘스트 완료');
-    out.replaceChildren(h('span', { text: `+${r.result.xp} XP · +${r.result.talents} 달란트${r.result.stamped ? ' · 오늘의 도장 쾅!' : ''} ` }), h('a', { href: '#/g', text: '게임 홈 보기' }));
+    out.replaceChildren(h('span', { text: `+${r.result.xp} XP · +${r.result.talents} 달란트${r.result.stamped ? ' · 오늘의 도장 쾅!' : ''} ` }), h('a', { href: '#/', text: '게임 홈 보기' }));
     if (r.result.stamped) confetti(btn.parentElement, 16);
   });
   return h('div', { class: 'gm-reflect-box' }, h('p', { class: 'meta', text: '묵상 질문에 내 답을 적고 이 버튼을 누르면 경험치와 달란트를 받아요 (설교마다 한 번, 오늘의 도장도 받아요).' }), btn, out);
