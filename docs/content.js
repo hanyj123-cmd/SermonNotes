@@ -38,6 +38,11 @@ const ICON_PATHS = {
   check: [['circle', { cx: '12', cy: '12', r: '8.5' }], ['path', { d: 'M8.2 12.3l2.6 2.6 5-5.3' }]],
   alert: [['path', { d: 'M10.3 4.6L3.2 17a2 2 0 0 0 1.7 3h14.2a2 2 0 0 0 1.7-3L13.7 4.6a2 2 0 0 0-3.4 0z' }], ['path', { d: 'M12 9.5v4' }], ['circle', { cx: '12', cy: '16.8', r: '1', fill: 'currentColor', stroke: 'none' }]],
   plus: [['path', { d: 'M12 5v14M5 12h14' }]],
+  pause: [['rect', { x: '7', y: '5.5', width: '3.2', height: '13', rx: '1', fill: 'currentColor', stroke: 'none' }], ['rect', { x: '13.8', y: '5.5', width: '3.2', height: '13', rx: '1', fill: 'currentColor', stroke: 'none' }]],
+  back15: [['path', { d: 'M4.5 12a7.5 7.5 0 1 0 2.2-5.3' }], ['path', { d: 'M4.3 3.8v3.4h3.4' }], ['text', { x: '12.2', y: '15', 'text-anchor': 'middle', 'font-size': '7.2', 'font-weight': '700', fill: 'currentColor', stroke: 'none', 'font-family': 'system-ui, sans-serif' }, '15']],
+  fwd15: [['path', { d: 'M19.5 12a7.5 7.5 0 1 1-2.2-5.3' }], ['path', { d: 'M19.7 3.8v3.4h-3.4' }], ['text', { x: '11.8', y: '15', 'text-anchor': 'middle', 'font-size': '7.2', 'font-weight': '700', fill: 'currentColor', stroke: 'none', 'font-family': 'system-ui, sans-serif' }, '15']],
+  volume: [['path', { d: 'M4 9.5h3.2L12 5.5v13l-4.8-4H4z' }], ['path', { d: 'M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a7.8 7.8 0 0 1 0 11' }]],
+  mute: [['path', { d: 'M4 9.5h3.2L12 5.5v13l-4.8-4H4z' }], ['path', { d: 'M16 9.5l5 5M21 9.5l-5 5' }]],
 };
 const SVG_NS = 'http://www.w3.org/2000/svg';
 function icon(name, { label = '' } = {}) {
@@ -48,9 +53,10 @@ function icon(name, { label = '' } = {}) {
     svg.setAttribute('role', 'img');
     svg.setAttribute('aria-label', label);
   } else svg.setAttribute('aria-hidden', 'true');
-  for (const [tag, attrs] of ICON_PATHS[name] || []) {
+  for (const [tag, attrs, text] of ICON_PATHS[name] || []) {
     const el = document.createElementNS(SVG_NS, tag);
     for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    if (text) el.textContent = text;
     svg.append(el);
   }
   return svg;
@@ -214,10 +220,9 @@ function setYtOpenPref(on) {
     el.checked = on;
   });
 }
-/** 재생 시작: 선택에 따라 YouTube(앱)를 열거나, 화면 위에 떠 있는 작은 창(float.js)에서 재생합니다. */
+/** 재생 시작: 화면 위에 떠 있는 작은 창(float.js)에서 재생합니다. */
 function startPlayback(id, title) {
-  if (ytOpenPref()) openYoutubeApp(id);
-  else openFloatPlayer(id, title);
+  openFloatPlayer(id, title); // 항상 앱 안의 떠 있는 창에서 재생 (YouTube 앱은 창의 "YouTube" 버튼으로)
 }
 
 /* ---------- 성경 본문: 4역본 전환 보기 ---------- */

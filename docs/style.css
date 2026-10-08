@@ -420,8 +420,6 @@ ol.q li > span { display: block; }
 .fp-btn:hover, .fp-btn:focus-visible { background: rgba(255, 255, 255, 0.28); outline: none; }
 .fp-body { aspect-ratio: 16 / 9; background: #000; flex: none; }
 .fp-body iframe { width: 100%; height: 100%; border: 0; display: block; }
-.fp-foot { flex: none; padding: 6px 10px; min-height: 34px; display: flex; align-items: center; }
-.fp-ad { background: none; border: 0; color: #cfe0ff; font: inherit; font-size: 0.74rem; text-decoration: underline; cursor: pointer; padding: 0; text-align: left; }
 .fp-resize { position: absolute; right: 0; bottom: 0; width: 22px; height: 22px; cursor: nwse-resize; touch-action: none; background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0.55) 58%, transparent 58%, transparent 68%, rgba(255, 255, 255, 0.55) 68%, rgba(255, 255, 255, 0.55) 76%, transparent 76%); }
 body.handout-mode .float-player { display: none; }
 @media print { .float-player { display: none !important; } }
@@ -441,16 +439,25 @@ span.mk-ul { text-decoration-line: underline; text-decoration-thickness: 2px; te
 .mk:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 .mk-flash { animation: mk-flash 1.4s ease; }
 @keyframes mk-flash { 0%, 60% { box-shadow: 0 0 0 4px rgba(27, 95, 196, 0.35); } 100% { box-shadow: none; } }
-.mk-tool, .mk-pop { position: fixed; z-index: 70; background: var(--bg, #fff); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 28px rgba(14, 33, 56, 0.22); padding: 8px 10px; }
+.mk-tool, .mk-pop { position: fixed; z-index: 70; background: rgba(255, 255, 255, 0.78); -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%); border: 1px solid rgba(255, 255, 255, 0.7); border-radius: 14px; box-shadow: 0 10px 30px rgba(14, 33, 56, 0.18), 0 1px 0 rgba(255, 255, 255, 0.6) inset; padding: 8px 10px; }
+.mk-tool { animation: mk-in 0.14s ease-out; }
+@keyframes mk-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .mk-tool { animation: none; } }
 .mk-tool { display: grid; gap: 6px; max-width: calc(100vw - 16px); }
-.mk-pop { width: min(360px, calc(100vw - 16px)); display: grid; gap: 8px; }
+.mk-pop { width: min(440px, calc(100vw - 16px)); display: grid; gap: 8px; }
+.mk-pop.mk-sheet { left: 50%; top: auto; transform: translateX(-50%); overflow: auto; background: rgba(255, 255, 255, 0.9); padding: 12px 14px; }
+.mk-sheet-head { display: flex; align-items: center; justify-content: space-between; color: var(--blue-deep); }
+.mk-sheet-head strong { display: inline-flex; align-items: center; gap: 4px; }
+.mk-x { border: 0; background: transparent; color: var(--muted); width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; cursor: pointer; }
+.mk-x:hover { background: rgba(0, 0, 0, 0.06); }
+.mk-pop .note-input { font-size: 16px; } /* 아이폰에서 입력할 때 화면이 확대되지 않게 */
 .mk-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .mk-row-label { font-size: 0.75rem; color: var(--muted); width: 3.2em; }
 .mk-sw { width: 28px; height: 28px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.12); cursor: pointer; padding: 0; font-size: 0.8rem; font-weight: 700; background: #fff; color: #1d2623; }
 .mk-sw.is-on { outline: 2px solid var(--blue); outline-offset: 2px; }
 .mk-sw-hl.mk-hl-yellow { background: var(--mk-yellow); } .mk-sw-hl.mk-hl-green { background: var(--mk-green); } .mk-sw-hl.mk-hl-pink { background: var(--mk-pink); }
 .mk-sw-hl.mk-hl-sky { background: var(--mk-sky); } .mk-sw-hl.mk-hl-orange { background: var(--mk-orange); } .mk-sw-hl.mk-hl-purple { background: var(--mk-purple); }
-.mk-sw-ul { text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 3px; }
+.mk-sw-ul { text-decoration-line: underline; text-decoration-thickness: 3px; text-underline-offset: 3px; }
 .mk-login { margin: 0; font-size: 0.85rem; max-width: 260px; }
 .mk-quote { margin: 0; font-size: 0.85rem; color: var(--muted); border-left: 3px solid var(--line); padding-left: 8px; }
 .mode-bar-tools { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -479,3 +486,24 @@ span.mk-ul { text-decoration-line: underline; text-decoration-thickness: 2px; te
 .mk-item-note .ic { margin-top: 0.25em; color: var(--blue); }
 [role="status"] .ic, .meta .ic { vertical-align: -0.22em; margin-right: 2px; }
 .ic-check { color: #2f9e44; } .ic-alert { color: var(--alert); } .ic-clock { color: var(--blue); }
+
+/* 재생 창 조절 막대 (앞뒤 15초 · 배속 · 볼륨) */
+.fp-holder, .fp-body > div { width: 100%; height: 100%; }
+.fp-controls { flex: none; padding: 6px 10px 10px; display: grid; gap: 4px; background: linear-gradient(#0f1b2d, #0b1524); }
+.fp-controls[hidden] { display: none; }
+.fp-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.fp-time { flex: none; font-size: 0.72rem; color: #c8d6ee; font-variant-numeric: tabular-nums; min-width: 6.6em; text-align: right; }
+.fp-ctl { flex: none; display: inline-grid; place-items: center; width: 34px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: #fff; cursor: pointer; padding: 0; font: inherit; }
+.fp-ctl:hover, .fp-ctl:focus-visible { background: rgba(255, 255, 255, 0.14); outline: none; }
+.fp-ctl .ic { width: 22px; height: 22px; }
+.fp-play { background: rgba(255, 255, 255, 0.16); border-radius: 50%; width: 36px; height: 36px; }
+.fp-speed { width: auto; min-width: 42px; padding: 0 8px; font-size: 0.8rem; font-weight: 700; border: 1px solid rgba(255, 255, 255, 0.25); }
+.fp-volwrap { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; min-width: 0; }
+.fp-volwrap .fp-ctl { width: 30px; }
+.fp-seek, .fp-vol { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.25); cursor: pointer; margin: 0; }
+.fp-seek { flex: 1; min-width: 0; background: linear-gradient(90deg, #8fcf5a var(--fp-progress, 0%), rgba(255, 255, 255, 0.25) var(--fp-progress, 0%)); }
+.fp-vol { width: 72px; }
+.fp-seek::-webkit-slider-thumb, .fp-vol::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); }
+.fp-seek::-moz-range-thumb, .fp-vol::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 0; }
+@media (max-width: 420px) { .fp-vol { width: 54px; } .fp-ctl { width: 32px; } }
+.mk-tool[hidden], .mk-pop[hidden], .float-player[hidden] { display: none !important; }

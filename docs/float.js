@@ -60,7 +60,7 @@ function floatLimits() {
   return { maxW };
 }
 function floatHeight(w) {
-  return FLOAT_BAR_H + Math.round((w * 9) / 16) + 34; // 제목줄 + 16:9 영상 + 아래 안내줄
+  return FLOAT_BAR_H + Math.round((w * 9) / 16) + 84; // 제목줄 + 16:9 영상 + 조절 막대
 }
 
 /** 창이 화면 밖으로 나가지 않게 위치·너비를 맞춥니다 (높이는 실제로 그려진 높이를 읽어서 계산) */
@@ -79,26 +79,74 @@ function fitFloat(el, st) {
   return st;
 }
 
+/* ---------- YouTube 재생기 API (앞뒤 15초 · 배속 · 볼륨을 앱에서 조절) ---------- */
+let ytApiPromise = null;
+function loadYtApi() {
+  if (window.YT && window.YT.Player) return Promise.resolve(window.YT);
+  if (ytApiPromise) return ytApiPromise;
+  ytApiPromise = new Promise((resolve, reject) => {
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      if (typeof prev === 'function') prev();
+      resolve(window.YT);
+    };
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    tag.async = true;
+    tag.onerror = () => reject(new Error('YouTube 재생기를 불러오지 못했습니다'));
+    document.head.append(tag);
+    setTimeout(() => reject(new Error('YouTube 재생기 응답이 늦습니다')), 8000);
+  });
+  ytApiPromise.catch(() => {
+    ytApiPromise = null; // 다음에 다시 시도
+  });
+  return ytApiPromise;
+}
+
+const SPEEDS = [1, 1.25, 1.5, 1.75, 2, 0.75];
+const fmtTime = (t) => {
+  t = Math.max(0, Math.floor(t || 0));
+  const hh = Math.floor(t / 3600);
+  const mm = Math.floor((t % 3600) / 60);
+  const ss = String(t % 60).padStart(2, '0');
+  return hh ? `${hh}:${String(mm).padStart(2, '0')}:${ss}` : `${mm}:${ss}`;
+};
+
 function buildFloat() {
   const saved = readFloatState();
-  const defW = isMobile() ? Math.min(window.innerWidth - 16, 340) : 380;
+  const defW = isMobile() ? Math.min(window.innerWidth - 16, 360) : 420;
   const st = { w: saved.w || defW, x: 0, y: 0 };
   st.x = typeof saved.x === 'number' ? saved.x : window.innerWidth - st.w - 16;
   st.y = typeof saved.y === 'number' ? saved.y : window.innerHeight - floatHeight(st.w) - 16;
 
   const titleEl = h('span', { class: 'fp-title' });
-  const link = h('a', { class: 'fp-btn', target: '_blank', rel: 'noopener noreferrer', title: 'YouTube에서 열기' }, icon('external'), 'YouTube');
+  const link = h('a', { class: 'fp-btn', target: '_blank', rel: 'noopener noreferrer', title: 'YouTube 앱·사이트에서 열기' }, icon('external'), 'YouTube');
   const closeBtn = h('button', { class: 'fp-btn fp-close', type: 'button', 'aria-label': '재생 창 닫기', title: '닫기' }, icon('close'));
   const bar = h('div', { class: 'fp-bar', title: '끌어서 옮기기' }, h('span', { class: 'fp-grip', 'aria-hidden': 'true' }, icon('grip')), titleEl, link, closeBtn);
   const body = h('div', { class: 'fp-body' });
-  const adBtn = h('button', { class: 'fp-ad', type: 'button' }, '광고가 나와요 → 앞으로 항상 YouTube에서 열기');
-  const foot = h('div', { class: 'fp-foot' }, adBtn);
-  const grip = h('div', { class: 'fp-resize', title: '끌어서 크기 조절', 'aria-hidden': 'true' });
-  const el = h('div', { class: 'float-player', role: 'dialog', 'aria-label': '재생 창' }, bar, body, foot, grip);
-  el._st = st;
-  el._els = { titleEl, link, body };
 
-  const persist = () => saveFloatState({ x: st.x, y: st.y, w: st.w });
+  // 조절 막대: 진행 막대 / 뒤로 15초 · 재생 · 앞으로 15초 · 배속 · 볼륨
+  const seek = h('input', { class: 'fp-seek', type: 'range', min: '0', max: '1000', value: '0', step: '1', 'aria-label': '재생 위치' });
+  const timeEl = h('span', { class: 'fp-time', text: '0:00 / 0:00' });
+  const back15 = h('button', { class: 'fp-ctl', type: 'button', title: '15초 뒤로', 'aria-label': '15초 뒤로' }, icon('back15'));
+  const playBtn = h('button', { class: 'fp-ctl fp-play', type: 'button', title: '재생/일시정지', 'aria-label': '재생' }, icon('play'));
+  const fwd15 = h('button', { class: 'fp-ctl', type: 'button', title: '15초 앞으로', 'aria-label': '15초 앞으로' }, icon('fwd15'));
+  const speedBtn = h('button', { class: 'fp-ctl fp-speed', type: 'button', title: '재생 속도', 'aria-label': '재생 속도 1배' }, '1x');
+  const muteBtn = h('button', { class: 'fp-ctl', type: 'button', title: '소리 끄기/켜기', 'aria-label': '소리 끄기' }, icon('volume'));
+  const vol = h('input', { class: 'fp-vol', type: 'range', min: '0', max: '100', value: String(saved.vol ?? 100), step: '1', 'aria-label': '볼륨' });
+  const controls = h(
+    'div',
+    { class: 'fp-controls' },
+    h('div', { class: 'fp-row' }, seek, timeEl),
+    h('div', { class: 'fp-row' }, back15, playBtn, fwd15, speedBtn, h('span', { class: 'fp-volwrap' }, muteBtn, vol)),
+  );
+  const grip = h('div', { class: 'fp-resize', title: '끌어서 크기 조절', 'aria-hidden': 'true' });
+  const el = h('div', { class: 'float-player', role: 'dialog', 'aria-label': '재생 창' }, bar, body, controls, grip);
+  el._st = st;
+  el._els = { titleEl, link, body, controls };
+  el._speed = 1;
+
+  const persist = () => saveFloatState({ x: st.x, y: st.y, w: st.w, vol: Number(vol.value) });
 
   // 끌어서 옮기기 (마우스 · 터치 공통)
   bar.addEventListener('pointerdown', (e) => {
@@ -153,16 +201,132 @@ function buildFloat() {
   link.addEventListener('click', (e) => {
     if (!isMobile() || !el._vid) return; // 휴대폰에서는 YouTube 앱으로 바로 엽니다
     e.preventDefault();
+    const p = el._player;
+    if (p && p.pauseVideo) p.pauseVideo();
     openYoutubeApp(el._vid);
   });
-  adBtn.addEventListener('click', () => {
-    const vid = el._vid;
-    setYtOpenPref(true);
-    toast('앞으로 재생 버튼은 YouTube를 바로 엽니다 (화면 맨 아래에서 바꿀 수 있어요)');
-    closeFloatPlayer();
-    if (vid) openYoutubeApp(vid);
+
+  // 조절 버튼 → 재생기
+  const P = () => (el._player && el._player.getPlayerState ? el._player : null);
+  const jump = (sec) => {
+    const p = P();
+    if (!p) return;
+    const t = Math.max(0, (p.getCurrentTime() || 0) + sec);
+    p.seekTo(Math.min(t, Math.max(0, (p.getDuration() || t) - 0.5)), true);
+    tick();
+  };
+  back15.addEventListener('click', () => jump(-15));
+  fwd15.addEventListener('click', () => jump(15));
+  playBtn.addEventListener('click', () => {
+    const p = P();
+    if (!p) return;
+    if (p.getPlayerState() === 1) p.pauseVideo();
+    else p.playVideo();
   });
+  speedBtn.addEventListener('click', () => {
+    const p = P();
+    el._speed = SPEEDS[(SPEEDS.indexOf(el._speed) + 1) % SPEEDS.length];
+    if (p) p.setPlaybackRate(el._speed);
+    paintSpeed();
+  });
+  const paintSpeed = () => {
+    speedBtn.textContent = `${el._speed}x`;
+    speedBtn.setAttribute('aria-label', `재생 속도 ${el._speed}배`);
+  };
+  const paintVol = (muted) => {
+    muteBtn.replaceChildren(icon(muted || Number(vol.value) === 0 ? 'mute' : 'volume'));
+    muteBtn.setAttribute('aria-label', muted ? '소리 켜기' : '소리 끄기');
+  };
+  vol.addEventListener('input', () => {
+    const p = P();
+    if (p) {
+      p.setVolume(Number(vol.value));
+      if (Number(vol.value) > 0 && p.isMuted()) p.unMute();
+    }
+    paintVol(false);
+  });
+  vol.addEventListener('change', persist);
+  muteBtn.addEventListener('click', () => {
+    const p = P();
+    if (!p) return;
+    if (p.isMuted()) p.unMute();
+    else p.mute();
+    setTimeout(() => paintVol(p.isMuted()), 60);
+  });
+  let seeking = false;
+  seek.addEventListener('input', () => {
+    seeking = true;
+    const p = P();
+    const d = p ? p.getDuration() || 0 : 0;
+    timeEl.textContent = `${fmtTime((Number(seek.value) / 1000) * d)} / ${fmtTime(d)}`;
+  });
+  seek.addEventListener('change', () => {
+    const p = P();
+    if (p) p.seekTo((Number(seek.value) / 1000) * (p.getDuration() || 0), true);
+    seeking = false;
+  });
+  function tick() {
+    const p = P();
+    if (!p || seeking) return;
+    const d = p.getDuration() || 0;
+    const t = p.getCurrentTime() || 0;
+    seek.value = d ? String(Math.round((t / d) * 1000)) : '0';
+    seek.style.setProperty('--fp-progress', `${d ? (t / d) * 100 : 0}%`);
+    timeEl.textContent = `${fmtTime(t)} / ${fmtTime(d)}`;
+  }
+  el._tick = tick;
+  el._paintPlay = (playing) => {
+    playBtn.replaceChildren(icon(playing ? 'pause' : 'play'));
+    playBtn.setAttribute('aria-label', playing ? '일시정지' : '재생');
+  };
+  el._paintSpeed = paintSpeed;
+  el._paintVol = paintVol;
+  el._timer = setInterval(tick, 500);
   return el;
+}
+
+/** 재생기 API로 영상을 띄웁니다. API를 못 쓰면 일반 퍼가기 화면으로 대신합니다(조절 막대는 숨김). */
+function mountPlayer(id, title) {
+  const el = floatEl;
+  const { body, controls } = el._els;
+  controls.hidden = false;
+  if (el._player && el._player.loadVideoById) {
+    el._player.loadVideoById(id);
+    return;
+  }
+  const holder = h('div', { class: 'fp-holder' });
+  body.replaceChildren(holder);
+  loadYtApi()
+    .then((YT) => {
+      if (floatEl !== el || el._vid !== id || !holder.isConnected) return;
+      el._player = new YT.Player(holder, {
+        videoId: id,
+        host: 'https://www.youtube.com',
+        playerVars: { autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1 },
+        events: {
+          onReady: (e) => {
+            const vol = el.querySelector('.fp-vol');
+            e.target.setVolume(Number(vol.value));
+            e.target.setPlaybackRate(el._speed);
+            e.target.playVideo();
+            el._paintVol(false);
+          },
+          onStateChange: (e) => {
+            el._paintPlay(e.data === 1 || e.data === 3);
+            if (e.data === 1) e.target.setPlaybackRate(el._speed); // 새 영상도 같은 배속으로
+            el._tick();
+          },
+        },
+      });
+      const frame = body.querySelector('iframe');
+      if (frame) frame.setAttribute('title', title || '유튜브 영상');
+    })
+    .catch(() => {
+      if (floatEl !== el || el._vid !== id) return;
+      controls.hidden = true; // 조절 기능 없이 기본 재생
+      body.replaceChildren(embedPlayer(id, title));
+      fitFloat(el, el._st);
+    });
 }
 
 /** 떠 있는 창에서 재생합니다. 이미 열려 있으면 영상만 바꿉니다. */
@@ -171,20 +335,25 @@ function openFloatPlayer(id, title) {
   if (!floatEl) {
     floatEl = buildFloat();
     document.body.append(floatEl);
-    fitFloat(floatEl, floatEl._st); // 화면에 붙인 뒤에 실제 높이로 위치를 맞춥니다
   }
-  const { titleEl, link, body } = floatEl._els;
+  const { titleEl, link } = floatEl._els;
   floatEl._vid = id;
   titleEl.textContent = title || '재생 중';
   link.setAttribute('href', ytWatch(id));
-  body.replaceChildren(embedPlayer(id, title));
+  mountPlayer(id, title);
   floatEl.hidden = false;
-  fitFloat(floatEl, floatEl._st);
+  fitFloat(floatEl, floatEl._st); // 화면에 붙인 뒤 실제 높이로 위치를 맞춥니다
 }
 
 function closeFloatPlayer() {
   if (!floatEl) return;
-  floatEl.remove(); // iframe 이 사라지므로 재생도 멈춥니다
+  clearInterval(floatEl._timer);
+  try {
+    if (floatEl._player && floatEl._player.destroy) floatEl._player.destroy();
+  } catch {
+    /* 이미 정리됨 */
+  }
+  floatEl.remove(); // 재생도 멈춥니다
   floatEl = null;
 }
 

@@ -205,6 +205,12 @@ function createMarks(videoId, root, { enabled }) {
   document.body.append(tool, pop);
   // 도구 막대를 눌러도 고른 글이 풀리지 않게 합니다
   tool.addEventListener('mousedown', (e) => e.preventDefault());
+  // 막대를 누르는 동안(휴대폰에서 고른 글이 잠깐 풀려도) 막대가 사라지지 않게 합니다
+  let pressingTool = false;
+  tool.addEventListener('pointerdown', () => {
+    pressingTool = true;
+  });
+  const releaseTool = () => setTimeout(() => (pressingTool = false), 400);
 
   function placeNear(el, rect) {
     el.hidden = false;
@@ -221,6 +227,7 @@ function createMarks(videoId, root, { enabled }) {
     tool.hidden = true;
   };
   const hidePop = () => {
+    if (pop.contains(document.activeElement)) document.activeElement.blur(); // 키보드도 내립니다
     pop.hidden = true;
   };
 
@@ -261,7 +268,7 @@ function createMarks(videoId, root, { enabled }) {
   function showForSelection() {
     const got = selectionSegments();
     if (!got) {
-      if (!tool.matches(':hover')) hideTool();
+      if (!pressingTool) hideTool(); // 빈 곳을 눌러 고른 것이 풀리면 막대도 사라집니다
       return;
     }
     hidePop();
@@ -332,30 +339,62 @@ function createMarks(videoId, root, { enabled }) {
   }
 
   /* ---------- 메모 ---------- */
+  // 메모 창: 화면 아래쪽에 붙는 시트. 휴대폰 키보드가 올라오면 키보드 바로 위로 따라 올라갑니다.
+  function placeSheet() {
+    if (pop.hidden) return;
+    const vv = window.visualViewport;
+    const keyboard = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+    pop.style.left = '';
+    pop.style.top = '';
+    pop.style.bottom = `${keyboard + 12}px`;
+    pop.style.maxHeight = `${Math.max(180, (vv ? vv.height : window.innerHeight) - 24)}px`;
+  }
+  const vv = window.visualViewport;
+  if (vv) {
+    vv.addEventListener('resize', placeSheet);
+    vv.addEventListener('scroll', placeSheet);
+  }
+  // 버튼을 누르는 순간 실행합니다: 키보드가 내려가며 화면이 움직여 "닫기"가 안 눌리는 문제를 막습니다
+  function sheetBtn(label, cls, fn) {
+    const b = h('button', { class: `btn small ${cls}`, type: 'button' }, label);
+    b.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      fn();
+    });
+    b.addEventListener('click', (e) => {
+      if (e.detail === 0) fn(); // 키보드(Enter·Space)로 누른 경우
+    });
+    return b;
+  }
   function openNote(g) {
     const list = groupMarks(g);
     if (!list.length) return;
+    hideTool();
     const ta = h('textarea', { class: 'note-input', rows: '4', maxlength: String(MARK_NOTE_MAX), placeholder: '이 부분에 대한 내 생각, 기도, 적용을 적어 보세요', 'aria-label': '메모' });
     ta.value = list[0].n || '';
     const quote = list.map((m) => m.q).join(' … ');
-    const saveBtn = h('button', { class: 'btn primary small', type: 'button' }, '저장');
-    const delBtn = h('button', { class: 'btn small', type: 'button' }, '메모 지우기');
-    const cancel = h('button', { class: 'btn small', type: 'button' }, '닫기');
-    saveBtn.addEventListener('click', () => {
+    const saveBtn = sheetBtn('저장', 'primary', () => {
       changeGroup(g, { n: ta.value.trim().slice(0, MARK_NOTE_MAX) });
       hidePop();
       toast('메모를 저장했습니다');
     });
-    delBtn.addEventListener('click', () => {
+    const delBtn = sheetBtn('메모 지우기', '', () => {
       changeGroup(g, { n: '' });
       hidePop();
     });
-    cancel.addEventListener('click', hidePop);
-    pop.replaceChildren(h('p', { class: 'mk-quote', text: quote.length > 160 ? `${quote.slice(0, 160)}…` : quote }), ta, h('div', { class: 'admin-row' }, saveBtn, list[0].n ? delBtn : null, cancel));
-    const anchor = root.querySelector(`.mk[data-mg="${g}"]`);
-    const rect = anchor ? anchor.getBoundingClientRect() : { top: window.innerHeight / 3, bottom: window.innerHeight / 3, left: window.innerWidth / 2, width: 0 };
-    placeNear(pop, rect);
-    ta.focus();
+    const cancel = sheetBtn('닫기', '', hidePop);
+    pop.replaceChildren(
+      h('div', { class: 'mk-sheet-head' }, h('strong', {}, icon('pencil'), ' 메모'), h('button', { class: 'mk-x', type: 'button', 'aria-label': '메모 창 닫기', onpointerdown: (e) => (e.preventDefault(), hidePop()), onclick: (e) => e.detail === 0 && hidePop() }, icon('close'))),
+      h('p', { class: 'mk-quote', text: quote.length > 160 ? `${quote.slice(0, 160)}…` : quote }),
+      ta,
+      h('div', { class: 'admin-row' }, saveBtn, list[0].n ? delBtn : null, cancel),
+    );
+    pop.classList.add('mk-sheet');
+    pop.hidden = false;
+    placeSheet();
+    ta.focus({ preventScroll: true });
+    setTimeout(placeSheet, 350); // 키보드가 다 올라온 뒤 한 번 더 맞춥니다
   }
 
   /* ---------- 내 표시 모아 보기 ---------- */
@@ -412,6 +451,11 @@ function createMarks(videoId, root, { enabled }) {
     clearTimeout(selTimer);
     selTimer = setTimeout(showForSelection, 280);
   };
+  const onPointerDown = (e) => {
+    if (tool.hidden || tool.contains(e.target)) return;
+    if (e.target.closest && e.target.closest('.mk') && root.contains(e.target)) return; // 칠한 곳을 누르면 그 표시의 막대가 뜹니다
+    hideTool(); // 빈 곳을 누르면 사라지고, 글을 다시 고르면 다시 나옵니다
+  };
   const onClick = (e) => {
     const el = e.target.closest && e.target.closest('.mk');
     if (el && root.contains(el) && enabled && window.getSelection().isCollapsed) {
@@ -436,6 +480,8 @@ function createMarks(videoId, root, { enabled }) {
   };
   document.addEventListener('selectionchange', onSelChange);
   document.addEventListener('click', onClick);
+  document.addEventListener('pointerdown', onPointerDown, true);
+  document.addEventListener('pointerup', releaseTool, true);
   document.addEventListener('keydown', onKey);
   window.addEventListener('scroll', onScroll, { passive: true });
 
@@ -444,6 +490,12 @@ function createMarks(videoId, root, { enabled }) {
     observer.disconnect();
     document.removeEventListener('selectionchange', onSelChange);
     document.removeEventListener('click', onClick);
+    document.removeEventListener('pointerdown', onPointerDown, true);
+    document.removeEventListener('pointerup', releaseTool, true);
+    if (vv) {
+      vv.removeEventListener('resize', placeSheet);
+      vv.removeEventListener('scroll', placeSheet);
+    }
     document.removeEventListener('keydown', onKey);
     window.removeEventListener('scroll', onScroll);
     tool.remove();
