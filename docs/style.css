@@ -50,9 +50,26 @@ button { font: inherit; color: inherit; }
 .brand-name { font-family: var(--serif); font-weight: 700; font-size: 1.6rem; letter-spacing: -0.01em; }
 .brand-sub { margin: 4px 0 0; color: var(--muted); font-size: 0.92rem; }
 
-.admin-link { position: absolute; top: 28px; right: 16px; font-size: 0.85rem; color: var(--muted); text-decoration: none; }
 .site-header .wrap { position: relative; }
+.header-tools { position: absolute; top: 26px; right: 16px; display: flex; align-items: center; gap: 12px; }
+.admin-link { font-size: 0.85rem; color: var(--muted); text-decoration: none; white-space: nowrap; }
 .admin-link:hover { color: var(--accent); }
+.account { display: flex; align-items: center; gap: 8px; min-height: 32px; }
+.account-name { font-size: 0.88rem; color: var(--muted); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn.small { padding: 4px 10px; font-size: 0.82rem; }
+
+/* personal notes */
+.note-input { width: 100%; padding: 10px 12px; margin-top: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; line-height: 1.6; resize: vertical; min-height: 84px; }
+.note-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.note-input:disabled { opacity: 0.6; }
+.note-memo { min-height: 150px; }
+.note-hint { background: var(--accent-soft); border-radius: 10px; padding: 12px 16px; margin: 0; color: var(--muted); font-size: 0.92rem; }
+.note-status { font-size: 0.82rem; }
+.check { display: inline-flex; align-items: center; gap: 4px; margin-top: 10px; cursor: pointer; font-size: 0.92rem; }
+.check input { width: 18px; height: 18px; accent-color: var(--accent); }
+.check-date { margin-left: 8px; }
+.note-chip { background: var(--accent-soft); color: var(--accent); }
+ol.q li > span { display: block; }
 
 /* admin */
 .admin-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 6px 0 14px; }
@@ -71,7 +88,7 @@ button.btn:disabled { opacity: 0.55; cursor: default; }
 @media (max-width: 600px) {
   .admin-fields { grid-template-columns: 1fr; }
   .admin-cat, .admin-max { width: 100%; }
-  .admin-link { position: static; display: inline-block; margin-top: 8px; }
+  .header-tools { position: static; margin-top: 10px; flex-wrap: wrap; }
 }
 
 /* tabs */
@@ -170,7 +187,7 @@ ol.q li, ul.plain li { margin: 0 0 10px; }
 
 @media print {
   body { background: #fff; color: #000; font-size: 11pt; }
-  .site-header .brand-sub, .tabs, .actions, .secnav, .back, .site-footer p:last-child, .toast { display: none !important; }
+  .site-header .brand-sub, .header-tools, .tabs, .actions, .secnav, .back, .site-footer p:last-child, .toast, .note-hint, .note-status { display: none !important; }
   .point, .app-item { break-inside: avoid; border-color: #ccc; }
   a { color: inherit; text-decoration: none; }
 }

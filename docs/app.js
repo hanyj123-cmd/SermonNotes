@@ -9,7 +9,7 @@ const CATEGORIES = [
 ];
 
 const app = document.getElementById('app');
-const state = { sermons: [], updated: null, demo: new URLSearchParams(location.search).has('demo'), query: '' };
+const state = { sermons: [], updated: null, demo: new URLSearchParams(location.search).has('demo'), query: '', noteIds: new Set() };
 
 /* ---------- 작은 DOM 헬퍼 (innerHTML 미사용 → 내용이 코드로 해석되지 않음) ---------- */
 function h(tag, attrs = {}, ...children) {
@@ -79,6 +79,11 @@ async function load() {
 function route() {
   const [, kind, arg] = location.hash.split('/');
   window.scrollTo(0, 0);
+  // 다른 화면으로 넘어가기 전에, 아직 저장되지 않은 노트가 있으면 먼저 저장합니다.
+  if (currentNotes) {
+    currentNotes.flush();
+    currentNotes = null;
+  }
   if (kind === 'admin') return renderAdminRoute();
   if (kind === 'v' && arg) return renderDetail(decodeURIComponent(arg));
   const firstWithData = CATEGORIES.find((c) => state.sermons.some((s) => s.category === c.key));
@@ -166,7 +171,13 @@ function renderList(cat) {
             h(
               'div',
               { class: 'card-body' },
-              h('div', { class: 'meta' }, (r.scripture || [])[0] ? h('span', { class: 'chip', text: r.scripture[0] }) : null, formatDate(s.published_at)),
+              h(
+                'div',
+                { class: 'meta' },
+                (r.scripture || [])[0] ? h('span', { class: 'chip', text: r.scripture[0] }) : null,
+                state.noteIds.has(s.id) ? h('span', { class: 'chip note-chip', text: '📝 내 노트' }) : null,
+                formatDate(s.published_at),
+              ),
               h('h2', { class: 'card-title', text: s.title }),
               h('p', { class: 'card-summary', text: r.summary_short || r.theme || '' }),
             ),
@@ -224,6 +235,10 @@ function renderDetail(id) {
 
   const ytUrl = safeYoutube(s.url, s.id);
 
+  // 로그인했다면 이 설교의 개인 노트를 준비합니다 (로그인 전이면 null).
+  const notes = NOTES_ENABLED && auth.user ? createNotes(s) : null;
+  currentNotes = notes;
+
   const questionGroup = (title, arr) =>
     arr?.length ? h('div', { class: 'sg-group' }, h('h3', { text: title }), h('ol', { class: 'q' }, arr.map((q) => h('li', { text: q })))) : null;
 
@@ -256,7 +271,11 @@ function renderDetail(id) {
         'section',
         { class: 'block', id: 'apply' },
         h('h2', { text: '삶의 적용 포인트' }),
-        h('div', { class: 'apps' }, r.applications.map((a) => h('div', { class: 'app-item' }, h('h3', { text: a.title }), h('p', { text: a.detail })))),
+        h(
+          'div',
+          { class: 'apps' },
+          r.applications.map((a, i) => h('div', { class: 'app-item' }, h('h3', { text: a.title }), h('p', { text: a.detail }), notes ? notes.checkRow(i) : null)),
+        ),
       ),
     );
   }
@@ -268,7 +287,7 @@ function renderDetail(id) {
         'section',
         { class: 'block', id: 'meditate' },
         h('h2', { text: '묵상 질문' }),
-        h('ol', { class: 'q' }, r.meditation_questions.map((q) => h('li', { text: q }))),
+        h('ol', { class: 'q' }, r.meditation_questions.map((q, i) => h('li', {}, h('span', { text: q }), notes ? notes.answerBox(i) : null))),
       ),
     );
   }
@@ -292,6 +311,20 @@ function renderDetail(id) {
     ),
   );
 
+  // 내 메모 (로그인 전에는 안내 문구만 보입니다)
+  if (NOTES_ENABLED) {
+    sections.push(
+      h(
+        'section',
+        { class: 'block', id: 'mynote' },
+        h('div', { class: 'block-head' }, h('h2', { text: '내 메모' }), notes ? notes.status : null),
+        notes
+          ? [notes.memoBox(), h('p', { class: 'meta', text: '내 구글 계정으로 자동 저장되며, 다른 로그인 사용자에게는 보이지 않습니다.' })]
+          : h('p', { class: 'note-hint', text: '화면 위쪽에서 구글 로그인을 하면, 이 설교에 대한 메모와 묵상 답변, 적용 체크를 나만의 노트로 남길 수 있어요.' }),
+      ),
+    );
+  }
+
   if (r.caveats) sections.push(h('p', { class: 'caveats', text: `참고: ${r.caveats}` }));
 
   app.replaceChildren(
@@ -313,7 +346,7 @@ function renderDetail(id) {
     h(
       'nav',
       { class: 'secnav', 'aria-label': '섹션 이동' },
-      [['outline', '설교 정리'], ['apply', '삶의 적용'], ['meditate', '묵상'], ['group', '소그룹']]
+      [['outline', '설교 정리'], ['apply', '삶의 적용'], ['meditate', '묵상'], ['group', '소그룹'], ['mynote', '내 메모']]
         .filter(([sid]) => sections.some((el) => el.id === sid))
         .map(([sid, label]) =>
           h('a', {
@@ -328,6 +361,7 @@ function renderDetail(id) {
     ),
     ...sections,
   );
+  if (notes) notes.load();
 }
 
 /* ---------- 관리: 재생목록 추가·수정·삭제 (Apps Script 웹앱 경유) ---------- */
@@ -538,6 +572,296 @@ function renderAdminPanel(password) {
   reload();
 }
 
+/* ---------- 구글 로그인 + 개인 노트 ----------
+   로그인: 구글 로그인(Google Identity Services)으로 받은 ID 토큰을 Apps Script에 보내면,
+   서버가 토큰을 확인하고 "그 사람의" 노트만 읽고 씁니다. 화면에서 보이는 이름·이메일은 표시용일 뿐 신뢰하지 않습니다. */
+const CLIENT_ID = (window.APP_CONFIG && window.APP_CONFIG.GOOGLE_CLIENT_ID) || '';
+const NOTES_ENABLED = Boolean(CLIENT_ID && ADMIN_URL);
+const TOKEN_KEY = 'sn-id-token';
+const auth = { token: '', user: null };
+let currentNotes = null;
+let expiredShown = false;
+
+function decodeJwt(token) {
+  try {
+    const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const bytes = atob(part)
+      .split('')
+      .map((c) => `%${`00${c.charCodeAt(0).toString(16)}`.slice(-2)}`)
+      .join('');
+    return JSON.parse(decodeURIComponent(bytes));
+  } catch {
+    return null;
+  }
+}
+
+function setSession(token) {
+  const p = decodeJwt(token || '');
+  if (!p || !p.exp || p.exp * 1000 <= Date.now()) return false;
+  auth.token = token;
+  auth.user = { name: p.name || p.email || '로그인됨', email: p.email || '', exp: p.exp };
+  expiredShown = false;
+  try {
+    sessionStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    /* 저장 불가 환경: 이 탭에서만 유지 */
+  }
+  return true;
+}
+
+function restoreSession() {
+  try {
+    const t = sessionStorage.getItem(TOKEN_KEY);
+    if (t && !setSession(t)) sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* 무시 */
+  }
+}
+
+function clearSession() {
+  auth.token = '';
+  auth.user = null;
+  state.noteIds = new Set();
+  try {
+    sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* 무시 */
+  }
+  try {
+    window.google?.accounts?.id?.disableAutoSelect();
+  } catch {
+    /* 무시 */
+  }
+}
+
+function renderAccountArea() {
+  const box = document.getElementById('account');
+  if (!box || !NOTES_ENABLED) return;
+  box.replaceChildren();
+  if (auth.user) {
+    const out = h('button', { class: 'btn small', type: 'button' }, '로그아웃');
+    out.addEventListener('click', async () => {
+      // 로그아웃 전에 저장 안 된 노트를 먼저 저장합니다.
+      if (currentNotes) await currentNotes.flush();
+      currentNotes = null;
+      clearSession();
+      renderAccountArea();
+      route();
+    });
+    box.append(h('span', { class: 'account-name', text: auth.user.name }), out);
+    return;
+  }
+  if (window.google?.accounts?.id) {
+    const slot = h('div');
+    box.append(slot);
+    window.google.accounts.id.renderButton(slot, { theme: 'outline', size: 'medium', text: 'signin_with', locale: 'ko' });
+  }
+}
+
+// 로그인 토큰은 약 1시간 뒤 만료됩니다. 서버가 거절하면 다시 로그인하도록 안내합니다.
+function handleAuthExpired() {
+  if (expiredShown) return;
+  expiredShown = true;
+  clearSession();
+  renderAccountArea();
+  toast('로그인이 만료되었습니다. 다시 로그인해 주세요.');
+  try {
+    window.google?.accounts?.id?.prompt();
+  } catch {
+    /* 무시 */
+  }
+}
+
+async function notesCall(action, payload = {}) {
+  const r = await adminPost({ action, id_token: auth.token, ...payload });
+  if (!r.ok && (r.code === 'auth' || r.code === 'forbidden')) {
+    if (r.code === 'auth') handleAuthExpired();
+  }
+  return r;
+}
+
+async function fetchNoteIds() {
+  if (!auth.user) return;
+  try {
+    const r = await notesCall('notes_list');
+    if (r.ok) state.noteIds = new Set((r.items || []).map((x) => x.video_id));
+  } catch {
+    /* 목록의 "내 노트" 표시만 빠질 뿐이라 조용히 넘어갑니다 */
+  }
+}
+
+function rerenderIfListOrHome() {
+  const kind = location.hash.split('/')[1];
+  if (kind !== 'admin') route();
+}
+
+async function onCredential(resp) {
+  if (!setSession(resp && resp.credential)) return;
+  renderAccountArea();
+  await fetchNoteIds();
+  rerenderIfListOrHome();
+}
+
+function startGoogle(tries = 0) {
+  if (!NOTES_ENABLED) return;
+  if (!window.google?.accounts?.id) {
+    // 구글 스크립트가 아직 로드되는 중일 수 있습니다 (최대 약 10초 대기).
+    if (tries < 50) setTimeout(() => startGoogle(tries + 1), 200);
+    return;
+  }
+  window.google.accounts.id.initialize({ client_id: CLIENT_ID, callback: onCredential, auto_select: true });
+  renderAccountArea();
+}
+
+const localDate = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// 설교 한 편에 대한 내 노트: 메모 + 묵상 질문 답변 + 적용 체크. 입력하면 잠시 뒤 자동 저장합니다.
+function createNotes(s) {
+  const r = s.result || {};
+  const questions = r.meditation_questions || [];
+  const apps = r.applications || [];
+  const values = {
+    memo: '',
+    answers: questions.map(() => ''),
+    checks: apps.map(() => ({ done: false, date: '' })),
+  };
+  const fields = []; // 불러오기가 끝나기 전에는 입력을 막아, 기존 노트를 빈 값으로 덮어쓰지 않게 합니다.
+  const painters = [];
+  const answerEls = [];
+  let memoEl = null;
+  const status = h('span', { class: 'meta note-status', role: 'status' });
+  let ready = false;
+  let dirty = false;
+  let timer = null;
+  let saving = null;
+
+  const setStatus = (t) => {
+    status.textContent = t;
+  };
+
+  async function save() {
+    if (!ready || !dirty) return;
+    if (saving) await saving;
+    dirty = false;
+    setStatus('저장 중…');
+    saving = (async () => {
+      try {
+        const res = await notesCall('notes_save', {
+          video_id: s.id,
+          memo: values.memo,
+          answers: questions.map((q, i) => ({ q, a: values.answers[i] })),
+          checks: apps.map((a, i) => ({ t: a.title, done: values.checks[i].done, date: values.checks[i].date })),
+        });
+        if (!res.ok) throw new Error(res.error || '저장하지 못했습니다.');
+        state.noteIds.add(s.id);
+        setStatus(`저장됨 ${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`);
+      } catch (e) {
+        dirty = true;
+        setStatus(`저장 실패: ${e.message || e}`);
+      }
+    })();
+    await saving;
+    saving = null;
+  }
+
+  const touch = () => {
+    dirty = true;
+    setStatus('입력 중…');
+    clearTimeout(timer);
+    timer = setTimeout(save, 1200);
+  };
+  const flush = () => {
+    clearTimeout(timer);
+    return save();
+  };
+
+  function answerBox(i) {
+    const ta = h('textarea', { class: 'note-input', rows: '3', placeholder: '내 생각을 적어 보세요', 'aria-label': `묵상 질문 ${i + 1} 답변`, disabled: true });
+    ta.addEventListener('input', () => {
+      values.answers[i] = ta.value;
+      touch();
+    });
+    fields.push(ta);
+    answerEls[i] = ta;
+    return ta;
+  }
+
+  function checkRow(i) {
+    const cb = h('input', { type: 'checkbox', disabled: true, 'aria-label': '실천했어요' });
+    const dateEl = h('span', { class: 'meta check-date' });
+    const paint = () => {
+      const c = values.checks[i];
+      cb.checked = c.done;
+      dateEl.textContent = c.done && c.date ? `${c.date} 실천` : '';
+    };
+    cb.addEventListener('change', () => {
+      const c = values.checks[i];
+      c.done = cb.checked;
+      c.date = c.done ? c.date || localDate() : '';
+      paint();
+      touch();
+    });
+    fields.push(cb);
+    painters.push(paint);
+    return h('label', { class: 'check' }, cb, h('span', { text: ' 실천했어요' }), dateEl);
+  }
+
+  function memoBox() {
+    memoEl = h('textarea', {
+      class: 'note-input note-memo',
+      rows: '6',
+      placeholder: '이 설교를 들으며 떠오른 생각, 기도 제목, 나누고 싶은 말을 자유롭게 적어 보세요.',
+      'aria-label': '내 메모',
+      disabled: true,
+    });
+    memoEl.addEventListener('input', () => {
+      values.memo = memoEl.value;
+      touch();
+    });
+    fields.push(memoEl);
+    return memoEl;
+  }
+
+  async function load() {
+    setStatus('노트 불러오는 중…');
+    try {
+      const res = await notesCall('notes_get', { video_id: s.id });
+      if (!res.ok) throw new Error(res.error || '노트를 불러오지 못했습니다.');
+      const n = res.note;
+      if (n) {
+        values.memo = n.memo || '';
+        // 설교 정리가 다시 만들어져 질문 문구가 바뀌면 옛 답변은 시트에만 남고 화면에는 나오지 않습니다.
+        const aMap = new Map((n.answers || []).map((x) => [x.q, x.a]));
+        questions.forEach((q, i) => {
+          values.answers[i] = aMap.get(q) || '';
+        });
+        const cMap = new Map((n.checks || []).map((x) => [x.t, x]));
+        apps.forEach((a, i) => {
+          const c = cMap.get(a.title);
+          values.checks[i] = c ? { done: !!c.done, date: c.date || '' } : { done: false, date: '' };
+        });
+      }
+      if (memoEl) memoEl.value = values.memo;
+      answerEls.forEach((ta, i) => {
+        if (ta) ta.value = values.answers[i] || '';
+      });
+      painters.forEach((p) => p());
+      fields.forEach((el) => {
+        el.disabled = false;
+      });
+      ready = true;
+      setStatus('');
+    } catch (e) {
+      setStatus(`오류: ${e.message || e}`);
+    }
+  }
+
+  return { answerBox, checkRow, memoBox, status, load, flush };
+}
+
 /* ---------- 시작 ---------- */
 (async function init() {
   let loadError = null;
@@ -549,10 +873,21 @@ function renderAdminPanel(password) {
   const upd = document.getElementById('updated');
   if (upd && state.updated) upd.textContent = `최근 갱신: ${state.updated.slice(0, 10)}${state.demo ? ' (샘플 데이터)' : ''}`;
   window.addEventListener('hashchange', route);
+  window.addEventListener('pagehide', () => currentNotes && currentNotes.flush());
+  restoreSession();
   // 관리 화면은 정리 데이터가 없어도 열 수 있어야 합니다.
   if (loadError && !location.hash.startsWith('#/admin')) {
     app.replaceChildren(h('div', { class: 'empty' }, h('p', {}, h('strong', { text: '데이터를 불러오지 못했습니다.' })), h('p', { text: String(loadError.message || loadError) })));
-    return;
+  } else {
+    route();
   }
-  route();
+  renderAccountArea();
+  startGoogle();
+  if (auth.user) {
+    // 목록 화면에만 "내 노트" 표시를 다시 그립니다. 설교 화면에서 입력 중인 내용은 건드리지 않습니다.
+    fetchNoteIds().then(() => {
+      const kind = location.hash.split('/')[1];
+      if (kind !== 'v' && kind !== 'admin') route();
+    });
+  }
 })();
