@@ -8,6 +8,9 @@
 //   GOOGLE_CLIENT_ID  구글 로그인용 OAuth 클라이언트 ID  (…apps.googleusercontent.com)
 //   ALLOWED_EMAILS    노트를 쓸 수 있는 구글 계정 (쉼표로 구분). 비워 두면 로그인한 누구나 가능
 //   SESSION_SECRET    (자동 생성) 30일 로그인 유지용 서명 비밀키. 직접 만들 필요 없습니다.
+//   GITHUB_TOKEN      (선택) 앱에서 "지금 동기화"를 누를 때 쓰는 GitHub 토큰. 이 저장소의 Actions 읽기/쓰기 권한만 주세요.
+//   GITHUB_REPO       (선택) 예: hanyj123-cmd/SermonNotes
+//   GITHUB_REF        (선택) 실행할 브랜치. 비워 두면 main
 
 const SHEET_NAME = 'Playlists';
 const HEADERS = ['category', 'playlist_url', 'max_videos'];
@@ -61,6 +64,8 @@ function doPost(e) {
     return json({ ok: false, error: '비밀번호가 맞지 않습니다.' });
   }
   if (action === 'check') return json({ ok: true });
+  if (action === 'sync_status') return json(guarded(syncStatus));
+  if (action === 'sync_run') return json(guarded(function () { return syncRun(body); }));
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -411,4 +416,95 @@ function deleteRow(body) {
   if (!(row >= 2 && row <= sh.getLastRow())) return { ok: false, error: '삭제할 행을 찾지 못했습니다. 새로고침 후 다시 해 주세요.' };
   sh.deleteRow(row);
   return { ok: true };
+}
+
+/* ---------- 지금 동기화 (GitHub Actions 실행) ---------- */
+
+const GH_WORKFLOW = 'sync.yml';
+const SYNC_MIN = 1;
+const SYNC_MAX = 30;
+const SYNC_DEFAULT = 5;
+
+function guarded(fn) {
+  try {
+    return fn();
+  } catch (err) {
+    return { ok: false, error: String(err && err.message ? err.message : err) };
+  }
+}
+
+// GitHub API 호출. 토큰은 스크립트 속성에만 있고 화면으로는 절대 나가지 않습니다.
+function ghRequest(method, path, payload) {
+  const token = prop('GITHUB_TOKEN');
+  const repo = prop('GITHUB_REPO');
+  if (!token || !repo) {
+    throw new Error('GitHub 연결이 아직 설정되지 않았습니다. (스크립트 속성 GITHUB_TOKEN, GITHUB_REPO 를 추가하세요)');
+  }
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) {
+    throw new Error('GITHUB_REPO 형식이 올바르지 않습니다. 예: hanyj123-cmd/SermonNotes');
+  }
+  const opts = {
+    method: method,
+    muteHttpExceptions: true,
+    headers: {
+      Authorization: 'Bearer ' + token,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  };
+  if (payload) {
+    opts.contentType = 'application/json';
+    opts.payload = JSON.stringify(payload);
+  }
+  const res = UrlFetchApp.fetch('https://api.github.com/repos/' + repo + path, opts);
+  const code = res.getResponseCode();
+  let body = {};
+  try {
+    body = JSON.parse(res.getContentText() || '{}');
+  } catch (err) {
+    body = {};
+  }
+  if (code === 401) throw new Error('GitHub 토큰이 올바르지 않거나 만료되었습니다. 새 토큰을 만들어 GITHUB_TOKEN 을 바꿔 주세요.');
+  if (code === 403 || code === 404) {
+    throw new Error('GitHub에서 접근을 거부했습니다. 저장소 이름(GITHUB_REPO)과, 토큰의 Actions "Read and write" 권한을 확인하세요.');
+  }
+  if (code === 422) {
+    throw new Error('GitHub가 실행 요청을 받아들이지 않았습니다: ' + String(body.message || '').slice(0, 150) + ' (브랜치 이름 GITHUB_REF 와 sync.yml 을 확인하세요)');
+  }
+  if (code >= 300) throw new Error('GitHub 응답 오류 (' + code + ')');
+  return { code: code, body: body };
+}
+
+// 가장 최근 실행 한 건의 상태
+function latestRun() {
+  const r = ghRequest('get', '/actions/workflows/' + GH_WORKFLOW + '/runs?per_page=1');
+  const run = (r.body.workflow_runs || [])[0];
+  if (!run) return { state: 'none' };
+  let state = 'running';
+  if (run.status === 'completed') state = run.conclusion === 'success' ? 'success' : 'failed';
+  return {
+    state: state,
+    started_at: run.run_started_at || run.created_at || '',
+    updated_at: run.updated_at || '',
+    event: run.event || '',
+    url: run.html_url || '',
+  };
+}
+
+function syncStatus() {
+  return { ok: true, run: latestRun() };
+}
+
+function syncRun(body) {
+  let n = parseInt(body.max_new, 10);
+  if (isNaN(n)) n = SYNC_DEFAULT;
+  n = Math.min(SYNC_MAX, Math.max(SYNC_MIN, n));
+  if (latestRun().state === 'running') {
+    return { ok: false, error: '이미 실행 중입니다. 끝난 뒤에 다시 눌러 주세요.' };
+  }
+  ghRequest('post', '/actions/workflows/' + GH_WORKFLOW + '/dispatches', {
+    ref: prop('GITHUB_REF') || 'main',
+    inputs: { max_new: String(n) },
+  });
+  return { ok: true, max_new: n };
 }

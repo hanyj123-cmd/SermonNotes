@@ -45,6 +45,13 @@ function formatDate(iso) {
   return `${y}.${m}.${d}`;
 }
 
+// "2026년 10월 8일 오전 1:30" (보는 사람의 시간대 기준)
+function formatDateTime(iso) {
+  const d = new Date(iso);
+  if (!iso || isNaN(d)) return '';
+  return new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d);
+}
+
 function toast(message, ms = 1800) {
   const t = h('div', { class: 'toast', role: 'status', text: message });
   document.body.append(t);
@@ -511,6 +518,56 @@ function renderAdminPanel(password) {
     if (ok) addUrl.value = '';
   });
 
+  // 지금 동기화: GitHub Actions를 앱에서 바로 실행하고 진행 상태를 보여 줍니다.
+  const syncInfo = h('p', { class: 'meta', role: 'status' });
+  const syncMax = h('select', { class: 'search admin-max', 'aria-label': '정리할 영상 수' }, [1, 3, 5, 10, 20].map((n) => h('option', { value: String(n), text: `${n}편`, selected: n === 5 })));
+  const syncBtn = h('button', { class: 'btn primary', type: 'button' }, '지금 동기화');
+  let syncTimer = null;
+  const syncText = (run) => {
+    const when = formatDateTime(run.started_at);
+    if (run.state === 'running') return `⏳ 실행 중입니다${when ? ` (시작 ${when})` : ''}. 보통 몇 분 걸립니다.`;
+    if (run.state === 'success') return `✅ 마지막 실행 완료${when ? ` (${when})` : ''}. 앱에는 1~2분 뒤 반영되니 새로고침해 보세요.`;
+    if (run.state === 'failed') return `⚠️ 마지막 실행이 실패했습니다${when ? ` (${when})` : ''}. 자세한 내용은 GitHub Actions 기록을 확인하세요.`;
+    return '아직 실행 기록이 없습니다.';
+  };
+  const renderSync = (run) => {
+    syncInfo.replaceChildren(syncText(run));
+    if (run.state === 'failed' && /^https:\/\/github\.com\//.test(run.url || '')) {
+      syncInfo.append(' ', h('a', { href: run.url, target: '_blank', rel: 'noopener', text: '기록 보기' }));
+    }
+    syncBtn.disabled = run.state === 'running';
+  };
+  async function refreshSync() {
+    clearTimeout(syncTimer);
+    try {
+      const r = await adminPost({ action: 'sync_status', password });
+      if (!r.ok) throw new Error(r.error || '상태를 확인하지 못했습니다.');
+      renderSync(r.run || { state: 'none' });
+      // 이 화면을 보고 있고 실행 중일 때만 10초마다 다시 확인합니다.
+      if (r.run && r.run.state === 'running') {
+        syncTimer = setTimeout(() => {
+          if (document.body.contains(syncInfo)) refreshSync();
+        }, 10000);
+      }
+    } catch (e) {
+      syncInfo.textContent = `상태를 확인하지 못했습니다: ${e.message || e}`;
+    }
+  }
+  syncBtn.addEventListener('click', async () => {
+    syncBtn.disabled = true;
+    syncInfo.textContent = '실행을 요청하는 중…';
+    try {
+      const r = await adminPost({ action: 'sync_run', password, max_new: syncMax.value });
+      if (!r.ok) throw new Error(r.error || '실행하지 못했습니다.');
+      syncInfo.textContent = '⏳ 실행을 요청했습니다. 잠시 뒤 상태가 표시됩니다…';
+      // GitHub가 실행을 등록하기까지 몇 초 걸립니다. 그 사이 이전 기록이 보이지 않게 잠시 기다립니다.
+      syncTimer = setTimeout(refreshSync, 6000);
+    } catch (e) {
+      syncInfo.textContent = `오류: ${e.message || e}`;
+      syncBtn.disabled = false;
+    }
+  });
+
   const rowFor = (p) => {
     const cat = h('select', { class: 'search admin-cat', 'aria-label': '구분' }, categoryOptions(p.category));
     const url = h('input', { class: 'search', value: p.playlist_url, 'aria-label': '재생목록 주소' });
@@ -559,17 +616,26 @@ function renderAdminPanel(password) {
     ),
     h(
       'section',
+      { class: 'point admin-sync' },
+      h('h2', { text: '지금 동기화' }),
+      h('p', { class: 'meta', text: '새 영상을 찾아 설교 정리를 만듭니다. 자동으로는 매일 아침에도 실행됩니다. 영상 1편에 몇 분씩 걸립니다.' }),
+      h('div', { class: 'admin-row' }, h('label', { class: 'meta', text: '한 번에 정리할 영상' }), syncMax, syncBtn),
+      syncInfo,
+    ),
+    h(
+      'section',
       { class: 'point admin-add' },
       h('h2', { text: '재생목록 추가' }),
       h('div', { class: 'admin-fields' }, addCat, addUrl, addMax),
       h('div', { class: 'admin-row' }, addBtn),
-      h('p', { class: 'meta', text: '추가하거나 바꾼 재생목록은 다음 자동 정리 때 반영됩니다. 바로 반영하려면 GitHub Actions에서 Run workflow를 실행하세요.' }),
+      h('p', { class: 'meta', text: '추가하거나 바꾼 재생목록은 다음 자동 정리 때 반영됩니다. 바로 반영하려면 위의 "지금 동기화"를 누르세요.' }),
     ),
     status,
     h('h2', { class: 'admin-sub', text: '등록된 재생목록' }),
     list,
   );
   reload();
+  refreshSync();
 }
 
 /* ---------- 구글 로그인 + 개인 노트 ----------
@@ -870,7 +936,8 @@ function createNotes(s) {
     loadError = e;
   }
   const upd = document.getElementById('updated');
-  if (upd && state.updated) upd.textContent = `최근 갱신: ${state.updated.slice(0, 10)}${state.demo ? ' (샘플 데이터)' : ''}`;
+  const updatedAt = formatDateTime(state.updated);
+  if (upd && updatedAt) upd.textContent = `마지막 업데이트 ${updatedAt}${state.demo ? ' (샘플 데이터)' : ''}`;
   window.addEventListener('hashchange', route);
   window.addEventListener('pagehide', () => currentNotes && currentNotes.flush());
   restoreSession();

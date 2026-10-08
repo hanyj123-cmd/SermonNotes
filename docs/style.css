@@ -75,7 +75,8 @@ ol.q li > span { display: block; }
 .admin-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 6px 0 14px; }
 .admin-head h1 { font-family: var(--serif); font-size: 1.5rem; margin: 0; }
 .admin-sub { font-size: 1.05rem; margin: 26px 0 10px; font-family: var(--serif); }
-.admin-add h2 { font-size: 1.05rem; margin: 0 0 10px; font-family: var(--serif); }
+.admin-sync { margin-bottom: 14px; }
+.admin-sync h2, .admin-add h2 { font-size: 1.05rem; margin: 0 0 10px; font-family: var(--serif); }
 .admin-fields { display: grid; grid-template-columns: 130px 1fr 100px; gap: 8px; align-items: center; }
 .admin-fields .search { margin-bottom: 0; }
 .admin-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
@@ -191,3 +192,6 @@ ol.q li, ul.plain li { margin: 0 0 10px; }
   .point, .app-item { break-inside: avoid; border-color: #ccc; }
   a { color: inherit; text-decoration: none; }
 }
+
+#updated { font-size: 0.74rem; opacity: 0.85; margin: 6px 0 0; }
+.admin-row label { align-self: center; }
