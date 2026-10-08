@@ -87,9 +87,9 @@ function buildFloat() {
   st.y = typeof saved.y === 'number' ? saved.y : window.innerHeight - floatHeight(st.w) - 16;
 
   const titleEl = h('span', { class: 'fp-title' });
-  const link = h('a', { class: 'fp-btn', target: '_blank', rel: 'noopener noreferrer', title: 'YouTube에서 열기' }, 'YouTube');
-  const closeBtn = h('button', { class: 'fp-btn fp-close', type: 'button', 'aria-label': '재생 창 닫기', title: '닫기' }, '✕');
-  const bar = h('div', { class: 'fp-bar', title: '끌어서 옮기기' }, h('span', { class: 'fp-grip', 'aria-hidden': 'true', text: '⠿' }), titleEl, link, closeBtn);
+  const link = h('a', { class: 'fp-btn', target: '_blank', rel: 'noopener noreferrer', title: 'YouTube에서 열기' }, icon('external'), 'YouTube');
+  const closeBtn = h('button', { class: 'fp-btn fp-close', type: 'button', 'aria-label': '재생 창 닫기', title: '닫기' }, icon('close'));
+  const bar = h('div', { class: 'fp-bar', title: '끌어서 옮기기' }, h('span', { class: 'fp-grip', 'aria-hidden': 'true' }, icon('grip')), titleEl, link, closeBtn);
   const body = h('div', { class: 'fp-body' });
   const adBtn = h('button', { class: 'fp-ad', type: 'button' }, '광고가 나와요 → 앞으로 항상 YouTube에서 열기');
   const foot = h('div', { class: 'fp-foot' }, adBtn);

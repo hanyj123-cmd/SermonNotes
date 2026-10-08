@@ -97,6 +97,7 @@ function route() {
     currentNotes.flush();
     currentNotes = null;
   }
+  teardownMarks(); // 형광펜·밑줄·메모 저장 후 도구 막대 정리
   teardownHandout();
   document.body.classList.toggle('handout-mode', kind === 'h');
   setActiveMenu(kind === 'u' ? 'user' : kind === 'admin' ? '' : 'church');
@@ -449,7 +450,7 @@ async function adminPost(payload) {
 }
 
 function backToHome() {
-  return h('a', { class: 'back', href: '#/', text: '← 목록으로' });
+  return h('a', { class: 'back', href: '#/' }, icon('back'), '목록으로');
 }
 
 function renderAdminRoute() {
@@ -578,13 +579,13 @@ function renderAdminPanel(password) {
   };
   const syncText = (run) => {
     const when = formatDateTime(run.started_at);
-    if (run.state === 'running') return `⏳ 실행 중입니다${when ? ` (시작 ${when})` : ''}. 보통 몇 분 걸립니다.`;
-    if (run.state === 'success') return `✅ 마지막 실행 완료${when ? ` (${when})` : ''}. 앱에는 1~2분 뒤 반영되니 새로고침해 보세요.`;
-    if (run.state === 'failed') return `⚠️ 마지막 실행이 실패했습니다${when ? ` (${when})` : ''}. 자세한 내용은 GitHub Actions 기록을 확인하세요.`;
-    return '아직 실행 기록이 없습니다.';
+    if (run.state === 'running') return [icon('clock'), ` 실행 중입니다${when ? ` (시작 ${when})` : ''}. 보통 몇 분 걸립니다.`];
+    if (run.state === 'success') return [icon('check'), ` 마지막 실행 완료${when ? ` (${when})` : ''}. 앱에는 1~2분 뒤 반영되니 새로고침해 보세요.`];
+    if (run.state === 'failed') return [icon('alert'), ` 마지막 실행이 실패했습니다${when ? ` (${when})` : ''}. 자세한 내용은 GitHub Actions 기록을 확인하세요.`];
+    return ['아직 실행 기록이 없습니다.'];
   };
   const renderSync = (run) => {
-    syncInfo.replaceChildren(syncText(run));
+    syncInfo.replaceChildren(...syncText(run));
     if (run.state === 'failed' && /^https:\/\/github\.com\//.test(run.url || '')) {
       syncInfo.append(' ', h('a', { href: run.url, target: '_blank', rel: 'noopener', text: '기록 보기' }));
     }
@@ -615,7 +616,7 @@ function renderAdminPanel(password) {
       const r = await adminPost({ action: 'sync_run', password, max_new: String(count), categories: categories || syncCategories() });
       if (passwordRejected(r)) return false;
       if (!r.ok) throw new Error(r.error || '실행하지 못했습니다.');
-      syncInfo.textContent = '⏳ 실행을 요청했습니다. 잠시 뒤 상태가 표시됩니다…';
+      syncInfo.replaceChildren(icon('clock'), ' 실행을 요청했습니다. 잠시 뒤 상태가 표시됩니다…');
       // GitHub가 실행을 등록하기까지 몇 초 걸립니다. 그 사이 이전 기록이 보이지 않게 잠시 기다립니다.
       syncTimer = setTimeout(refreshSync, 6000);
       return true;
@@ -770,6 +771,7 @@ function renderAccountArea() {
     out.addEventListener('click', async () => {
       // 로그아웃 전에 저장 안 된 노트를 먼저 저장합니다.
       if (currentNotes) await currentNotes.flush();
+      if (currentMarks) await currentMarks.flush();
       currentNotes = null;
       clearSession();
       renderAccountArea();
@@ -917,7 +919,10 @@ function initFontControl() {
   const updatedAt = formatDateTime(state.updated);
   if (upd && updatedAt) upd.textContent = `마지막 업데이트 ${updatedAt}${state.demo ? ' (샘플 데이터)' : ''}`;
   window.addEventListener('hashchange', route);
-  window.addEventListener('pagehide', () => currentNotes && currentNotes.flush());
+  window.addEventListener('pagehide', () => {
+    if (currentNotes) currentNotes.flush();
+    if (currentMarks) currentMarks.flush();
+  });
   restoreSession();
   // 관리 화면은 정리 데이터가 없어도 열 수 있어야 합니다.
   if (loadError && !location.hash.startsWith('#/admin')) {

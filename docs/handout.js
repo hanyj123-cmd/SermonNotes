@@ -273,7 +273,7 @@ function loadPaged() {
 let handoutCss = null;
 async function loadHandoutCss() {
   if (handoutCss) return handoutCss;
-  const res = await fetch('handout.css?v=9.11');
+  const res = await fetch('handout.css?v=9.13');
   if (!res.ok) throw new Error(`핸드아웃 서식을 불러오지 못했습니다 (${res.status})`);
   handoutCss = await res.text();
   return handoutCss;
@@ -282,7 +282,7 @@ async function loadHandoutCss() {
 async function renderHandout(id, modeArg) {
   teardownHandout();
   const item = state.sermons.find((x) => x.id === id);
-  const back = (href, text) => h('a', { class: 'back', href, text });
+  const back = (href, text) => h('a', { class: 'back', href }, icon('back'), text.replace(/^←\s*/, ''));
   if (!item) {
     app.replaceChildren(back('#/', '← 목록으로'), h('div', { class: 'empty' }, h('p', { text: '해당 설교를 찾을 수 없습니다.' })));
     return;

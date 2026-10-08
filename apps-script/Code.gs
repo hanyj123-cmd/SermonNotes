@@ -20,7 +20,9 @@ const DEFAULT_MAX = 30;
 const MAX_LIMIT = 100;
 
 const NOTES_SHEET = 'Notes';
-const NOTE_HEADERS = ['user_sub', 'email', 'video_id', 'memo', 'answers_json', 'checks_json', 'updated_at', 'fields_json'];
+const NOTE_HEADERS = ['user_sub', 'email', 'video_id', 'memo', 'answers_json', 'checks_json', 'updated_at', 'fields_json', 'marks_json'];
+const MAX_MARKS = 500; // 설교 한 편에 남길 수 있는 형광펜·밑줄·메모 조각 수
+const MARK_COLORS = ['yellow', 'green', 'pink', 'sky', 'orange', 'purple', 'red', 'blue'];
 const MAX_FIELDS = 80; // 모드별 개인 기록(묵상 답, 삶의 적용, 소그룹 메모 등) 칸 수
 const MAX_FIELD_LEN = 5000;
 const MAX_MEMO = 20000;
@@ -247,6 +249,15 @@ function handleNotes(action, body) {
   try {
     if (action === 'notes_get') return notesGet(user, body);
     if (action === 'notes_list') return notesList(user);
+    if (action === 'notes_marks_save') {
+      const lock = LockService.getScriptLock();
+      lock.waitLock(20000);
+      try {
+        return marksSave(user, body);
+      } finally {
+        lock.releaseLock();
+      }
+    }
     if (action === 'notes_save') {
       const lock = LockService.getScriptLock();
       lock.waitLock(20000);
@@ -271,9 +282,10 @@ function getNotesSheet() {
     // 모든 칸을 '텍스트'로 고정: 긴 숫자 ID가 깨지거나, "=" 로 시작하는 메모가 수식으로 실행되는 것을 막습니다.
     sh.getRange(1, 1, sh.getMaxRows(), NOTE_HEADERS.length).setNumberFormat('@');
   } else if (sh.getLastColumn() < NOTE_HEADERS.length) {
-    // 예전 버전에서 만든 Notes 탭에 새 열(fields_json)을 덧붙입니다
+    // 예전 버전에서 만든 Notes 탭에 새 열(fields_json, marks_json)을 덧붙입니다
+    const have = Math.max(1, sh.getLastColumn());
     sh.getRange(1, 1, 1, NOTE_HEADERS.length).setValues([NOTE_HEADERS]);
-    sh.getRange(1, NOTE_HEADERS.length, sh.getMaxRows(), 1).setNumberFormat('@');
+    sh.getRange(1, have + 1, sh.getMaxRows(), NOTE_HEADERS.length - have).setNumberFormat('@');
   }
   return sh;
 }
@@ -326,6 +338,7 @@ function notesGet(user, body) {
       checks: parseJsonArray(r[5]),
       updated_at: String(r[6] || ''),
       fields: parseJsonObject(r[7]),
+      marks: parseJsonArray(r[8]),
     },
   };
 }
@@ -386,7 +399,47 @@ function notesSave(user, body) {
   const row = found || sh.getLastRow() + 1;
   const range = sh.getRange(row, 1, 1, NOTE_HEADERS.length);
   range.setNumberFormat('@');
-  range.setValues([[user.sub, user.email, videoId, memo, answersJson, checksJson, new Date().toISOString(), fieldsJson]]);
+  range.setValues([[user.sub, user.email, videoId, memo, answersJson, checksJson, new Date().toISOString(), fieldsJson, String(prev[8] || '[]')]]);
+  return { ok: true };
+}
+
+// 형광펜·밑줄·메모 (marks_json). 본인 것만, 설교 한 편 단위로 통째로 저장합니다.
+function cleanMarks(raw) {
+  const list = Array.isArray(raw) ? raw : [];
+  const out = [];
+  const idRe = /^[\w-]{1,48}$/;
+  for (let i = 0; i < list.length && out.length < MAX_MARKS; i++) {
+    const m = list[i] || {};
+    const s = Number(m.s);
+    const e = Number(m.e);
+    if (!idRe.test(String(m.id || '')) || !idRe.test(String(m.g || '')) || !/^[a-z0-9]{1,20}$/.test(String(m.k || ''))) continue;
+    if (!(s >= 0 && e > s && e <= 100000 && Math.floor(s) === s && Math.floor(e) === e)) continue;
+    if (m.st !== 'hl' && m.st !== 'ul') continue;
+    if (MARK_COLORS.indexOf(String(m.c)) < 0) continue;
+    out.push({
+      id: String(m.id), g: String(m.g), k: String(m.k), s: s, e: e,
+      q: String(m.q || '').slice(0, 400), st: m.st, c: String(m.c),
+      n: String(m.n || '').slice(0, 2000), at: String(m.at || '').slice(0, 30),
+    });
+  }
+  return out;
+}
+
+function marksSave(user, body) {
+  const videoId = checkVideoId(body.video_id);
+  const json = JSON.stringify(cleanMarks(body.marks));
+  if (json.length > MAX_CELL) throw new Error('이 설교에 남긴 표시·메모가 너무 많습니다. 몇 개를 지워 주세요.');
+  const sh = getNotesSheet();
+  const found = findNoteRow(sh, user.sub, videoId);
+  const stamp = new Date().toISOString();
+  if (found) {
+    sh.getRange(found, 7).setNumberFormat('@').setValues([[stamp]]);
+    sh.getRange(found, 9).setNumberFormat('@').setValues([[json]]);
+  } else {
+    const range = sh.getRange(sh.getLastRow() + 1, 1, 1, NOTE_HEADERS.length);
+    range.setNumberFormat('@');
+    range.setValues([[user.sub, user.email, videoId, '', '[]', '[]', stamp, '{}', json]]);
+  }
   return { ok: true };
 }
 
@@ -403,7 +456,8 @@ function notesList(user) {
     const hasAnswer = parseJsonArray(r[4]).some(function (x) { return x && String(x.a || '').trim() !== ''; });
     const hasCheck = parseJsonArray(r[5]).some(function (x) { return x && x.done; });
     const hasField = Object.keys(parseJsonObject(r[7])).length > 0;
-    if (hasMemo || hasAnswer || hasCheck || hasField) items.push({ video_id: String(r[2]), updated_at: String(r[6] || '') });
+    const hasMark = parseJsonArray(r[8]).length > 0;
+    if (hasMemo || hasAnswer || hasCheck || hasField || hasMark) items.push({ video_id: String(r[2]), updated_at: String(r[6] || '') });
   });
   return { ok: true, items: items };
 }

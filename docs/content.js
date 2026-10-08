@@ -22,6 +22,40 @@ const MODES = [
 ];
 const modeLabel = (key) => MODES.find((m) => m.key === key)?.label || key;
 
+/* ---------- 선 아이콘 (24×24 격자, 글자 색을 따라감) ---------- */
+// 버튼 안의 그림 글자(이모지) 대신 쓰는 단정한 선 그림입니다. 사용: icon('play') → <svg class="ic ic-play">
+const ICON_PATHS = {
+  play: [['path', { d: 'M8 5.8v12.4a.8.8 0 0 0 1.2.7l9.6-6.2a.8.8 0 0 0 0-1.4L9.2 5.1A.8.8 0 0 0 8 5.8z', fill: 'currentColor' }]],
+  headphones: [['path', { d: 'M4 15.5V12a8 8 0 0 1 16 0v3.5' }], ['path', { d: 'M4 15a2 2 0 0 1 2-2h1.5v7H6a2 2 0 0 1-2-2zM20 15a2 2 0 0 0-2-2h-1.5v7H18a2 2 0 0 0 2-2z' }]],
+  highlighter: [['path', { d: 'M14.6 4.4l5 5-8.3 8.3H6.3v-5z' }], ['path', { d: 'M12.1 6.9l5 5' }], ['path', { d: 'M3.5 20.5h9', 'stroke-width': '2.4' }]],
+  pencil: [['path', { d: 'M4.5 19.5l1-4.2L16 4.8a2 2 0 0 1 2.8 0l.4.4a2 2 0 0 1 0 2.8L8.7 18.5z' }], ['path', { d: 'M14.2 6.6l3.2 3.2' }]],
+  close: [['path', { d: 'M6.5 6.5l11 11M17.5 6.5l-11 11' }]],
+  grip: [6, 12, 18].flatMap((y) => [9, 15].map((x) => ['circle', { cx: String(x), cy: String(y), r: '1.4', fill: 'currentColor', stroke: 'none' }])),
+  back: [['path', { d: 'M19 12H5.5' }], ['path', { d: 'M11 6l-6 6 6 6' }]],
+  external: [['path', { d: 'M14 4h6v6' }], ['path', { d: 'M20 4l-8.5 8.5' }], ['path', { d: 'M18 13.5V18a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4.5' }]],
+  file: [['path', { d: 'M13.5 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5z' }], ['path', { d: 'M13.5 3v5.5H19' }], ['path', { d: 'M8.8 13h6.4M8.8 16.5h4.2' }]],
+  clock: [['circle', { cx: '12', cy: '12', r: '8.5' }], ['path', { d: 'M12 7.5V12l3 2' }]],
+  check: [['circle', { cx: '12', cy: '12', r: '8.5' }], ['path', { d: 'M8.2 12.3l2.6 2.6 5-5.3' }]],
+  alert: [['path', { d: 'M10.3 4.6L3.2 17a2 2 0 0 0 1.7 3h14.2a2 2 0 0 0 1.7-3L13.7 4.6a2 2 0 0 0-3.4 0z' }], ['path', { d: 'M12 9.5v4' }], ['circle', { cx: '12', cy: '16.8', r: '1', fill: 'currentColor', stroke: 'none' }]],
+  plus: [['path', { d: 'M12 5v14M5 12h14' }]],
+};
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function icon(name, { label = '' } = {}) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('class', `ic ic-${name}`);
+  if (label) {
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', label);
+  } else svg.setAttribute('aria-hidden', 'true');
+  for (const [tag, attrs] of ICON_PATHS[name] || []) {
+    const el = document.createElementNS(SVG_NS, tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    svg.append(el);
+  }
+  return svg;
+}
+
 /* ---------- 간단한 마크다운 (굵게 · 인용 · 목록) ---------- */
 function inlineMd(text) {
   const out = [];
@@ -235,10 +269,10 @@ function renderBibleAudio(bible, gae) {
   const items = ((bible && bible.audio) || []).filter((a) => ytId(a.video_id));
   const wrap = h('div', { class: 'bible-audio' }, h('p', { class: 'meta', text: '개역개정 낭독을 들어 보세요. 유튜브에 올라온 음원(예: 드라마바이블)으로 연결합니다.' }));
   items.forEach((a) => {
-    const play = h('button', { class: 'btn primary', type: 'button', onclick: () => startPlayback(a.video_id, `${a.reference} 낭독`) }, `🎧 ${a.reference} 듣기`);
-    wrap.append(h('div', { class: 'audio-item' }, h('div', { class: 'actions' }, play, h('a', { class: 'btn', href: ytWatch(a.video_id), target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기')), a.title ? h('p', { class: 'meta', text: `${a.title}${a.channel ? ` · ${a.channel}` : ''}` }) : null));
+    const play = h('button', { class: 'btn primary', type: 'button', onclick: () => startPlayback(a.video_id, `${a.reference} 낭독`) }, icon('headphones'), `${a.reference} 듣기`);
+    wrap.append(h('div', { class: 'audio-item' }, h('div', { class: 'actions' }, play, h('a', { class: 'btn', href: ytWatch(a.video_id), target: '_blank', rel: 'noopener noreferrer' }, icon('external'), 'YouTube에서 열기')), a.title ? h('p', { class: 'meta', text: `${a.title}${a.channel ? ` · ${a.channel}` : ''}` }) : null));
   });
-  if (!items.length && chapterRef) wrap.append(h('div', { class: 'actions' }, h('a', { class: 'btn', href: ytSearch(`드라마바이블 ${chapterRef}`), target: '_blank', rel: 'noopener noreferrer' }, `🎧 ${chapterRef} 듣기 (YouTube에서 찾기)`)));
+  if (!items.length && chapterRef) wrap.append(h('div', { class: 'actions' }, h('a', { class: 'btn', href: ytSearch(`드라마바이블 ${chapterRef}`), target: '_blank', rel: 'noopener noreferrer' }, icon('headphones'), `${chapterRef} 듣기 (YouTube에서 찾기)`)));
   return wrap;
 }
 
@@ -296,9 +330,9 @@ function renderWorshipSection(songs, { title = '찬양', intro = '말씀을 묵�
               class: 'btn primary',
               type: 'button',
               onclick: () => startPlayback(vid, `${s.title} 찬양`),
-            }, '▶ 듣기')
+            }, icon('play'), '듣기')
           : null;
-        const link = h('a', { class: 'btn', href: vid ? ytWatch(vid) : ytSearch(`${s.title} ${s.artist || ''}`.trim()), target: '_blank', rel: 'noopener noreferrer' }, vid ? 'YouTube에서 열기' : 'YouTube에서 찾기');
+        const link = h('a', { class: 'btn', href: vid ? ytWatch(vid) : ytSearch(`${s.title} ${s.artist || ''}`.trim()), target: '_blank', rel: 'noopener noreferrer' }, icon('external'), vid ? 'YouTube에서 열기' : 'YouTube에서 찾기');
         return h(
           'article',
           { class: 'song' },
@@ -326,13 +360,13 @@ function renderMusicSection(music, seed) {
     class: 'btn primary',
     type: 'button',
     onclick: () => startPlayback(t.id, t.title),
-  }, '▶ 듣기');
+  }, icon('play'), '듣기');
   return h(
     'section',
     { class: 'block', id: 'music' },
     h('h2', { text: '묵상 음악' }),
     h('p', { class: 'meta', text: '조용히 말씀을 묵상하거나 기도할 때 틀어 두세요. 잔잔한 MR·연주 음악입니다. 재생 창은 끌어서 옮길 수 있고, 다른 화면으로 이동해도 계속 재생됩니다.' }),
-    h('article', { class: 'song' }, h('div', { class: 'song-head' }, h('h3', { text: t.title })), h('p', { class: 'meta', text: `${t.channel || ''}${t.minutes ? ` · ${t.minutes}분` : ''}` }), h('div', { class: 'actions' }, play, h('a', { class: 'btn', href: ytWatch(t.id), target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기'))),
+    h('article', { class: 'song' }, h('div', { class: 'song-head' }, h('h3', { text: t.title })), h('p', { class: 'meta', text: `${t.channel || ''}${t.minutes ? ` · ${t.minutes}분` : ''}` }), h('div', { class: 'actions' }, play, h('a', { class: 'btn', href: ytWatch(t.id), target: '_blank', rel: 'noopener noreferrer' }, icon('external'), 'YouTube에서 열기'))),
   );
 }
 

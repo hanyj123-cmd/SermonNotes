@@ -251,7 +251,7 @@ let detailToken = 0;
 async function renderDetail(id, modeArg) {
   const token = ++detailToken;
   const item = state.sermons.find((x) => x.id === id);
-  const back = (cat) => h('a', { class: 'back', href: cat === 'user' ? '#/u' : `#/c/${cat || 'sunday'}`, text: `← ${cat === 'user' ? '사용자 영상' : catLabel(cat || 'sunday')} 목록` });
+  const back = (cat) => h('a', { class: 'back', href: cat === 'user' ? '#/u' : `#/c/${cat || 'sunday'}` }, icon('back'), `${cat === 'user' ? '사용자 영상' : catLabel(cat || 'sunday')} 목록`);
   if (!item) {
     app.replaceChildren(back(), h('div', { class: 'empty' }, h('p', { text: '해당 설교를 찾을 수 없습니다.' })));
     return;
@@ -278,16 +278,18 @@ async function renderDetail(id, modeArg) {
   const vid = ytId(d.id);
 
   // 영상 보기: 화면 위에 떠 있는 작은 창에서 재생합니다 (끌어서 옮길 수 있고, 다른 화면으로 가도 계속 재생)
-  const watchBtn = h('button', { class: 'btn primary', type: 'button' }, '▶ 영상 보기');
+  const watchBtn = h('button', { class: 'btn primary', type: 'button' }, icon('play'), '영상 보기');
   watchBtn.addEventListener('click', () => {
     if (vid) startPlayback(vid, d.title);
     else window.open(ytUrl, '_blank', 'noopener');
   });
 
-  const handoutBtn = h('a', { class: 'btn', href: `#/h/${encodeURIComponent(d.id)}/${mode}` }, '핸드아웃 PDF');
+  const handoutBtn = h('a', { class: 'btn', href: `#/h/${encodeURIComponent(d.id)}/${mode}` }, icon('file'), '핸드아웃 PDF');
   const body = h('div', { class: 'mode-body', id: 'mode-body', role: 'tabpanel' });
   const nav = h('nav', { class: 'secnav', 'aria-label': '이 모드 안에서 이동' });
   const tabs = h('div', { class: 'mode-tabs', role: 'tablist', 'aria-label': '보기 방식' });
+  teardownMarks();
+  const marks = createMarks(d.id, body, { enabled: !!notes }); // 형광펜·밑줄·메모 (로그인했을 때 나만 보이게 저장)
 
   function drawMode() {
     const renderers = { review: () => renderReviewMode(d), qt: () => renderQtMode(d, notes), study: () => renderStudyMode(d), group: () => renderGroupMode(d, notes) };
@@ -364,9 +366,10 @@ async function renderDetail(id, modeArg) {
       titleEl,
       scriptureEl,
       d.result.summary_short || d.result.theme ? h('div', { class: 'detail-theme' }, h('strong', { class: 'theme-label', text: '한 줄 정리' }), h('p', { text: d.result.summary_short || d.result.theme })) : null,
-      h('div', { class: 'actions' }, watchBtn, handoutBtn, h('a', { class: 'btn', href: ytUrl, target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기')),
+      h('div', { class: 'actions' }, watchBtn, handoutBtn, h('a', { class: 'btn', href: ytUrl, target: '_blank', rel: 'noopener noreferrer' }, icon('external'), 'YouTube에서 열기')),
     ),
-    h('div', { class: 'mode-bar' }, tabs, notes ? notes.status : null),
+    h('div', { class: 'mode-bar' }, tabs, h('span', { class: 'mode-bar-tools' }, marks.listBtn, notes ? notes.status : null)),
+    marks.panel,
     nav,
     body,
     h('footer', { class: 'sermon-foot' }, h('p', { text: `참고: ${footnoteText(d.category)}` }), d.result.caveats ? h('p', { class: 'caveats', text: `유의: ${d.result.caveats}` }) : null, editor),
@@ -374,6 +377,9 @@ async function renderDetail(id, modeArg) {
   drawMode();
   if (notes) {
     // 기록 칸은 불러오기가 끝나야 열립니다. 불러온 뒤에는 로그인 여부에 따라 모드 화면이 달라지지 않으므로 칸만 채웁니다.
-    notes.load();
+    // 형광펜·밑줄·메모도 같은 기록에 들어 있어 함께 불러옵니다.
+    notes.load().then((n) => {
+      if (currentMarks === marks) marks.setAll(n ? n.marks : []);
+    });
   }
 }

@@ -144,8 +144,10 @@ function createNotes(s) {
       }
       fillAll();
       setStatus('');
+      return n || null;
     } catch (e) {
       setStatus(`오류: ${e.message || e}`);
+      return null;
     }
   }
 

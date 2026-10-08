@@ -114,6 +114,31 @@ const rows = env.sheets.get('Notes').rows;
 check('다시 저장해도 줄이 늘지 않음 (헤더 + A + B = 3줄)', rows.length === 3, String(rows.length));
 check('수정 내용 반영', post({ action: 'notes_get', id_token: A, video_id: VID }).note.memo === '수정됨');
 
+// 형광펜·밑줄·메모 (marks)
+{
+  const mk = (o = {}) => ({ id: 'ma-0', g: 'ma', k: 'abc123', s: 2, e: 9, q: '하나님의 은혜', st: 'hl', c: 'yellow', n: '', at: '2026-10-08T00:00:00Z', ...o });
+  r = post({ action: 'notes_marks_save', id_token: A, video_id: VID, marks: [mk(), mk({ id: 'mb-0', g: 'mb', st: 'ul', c: 'red', n: '=기도 제목' }), mk({ id: 'bad', st: 'xx' }), mk({ id: 'bad2', c: 'black' }), mk({ id: 'bad3', s: 9, e: 2 }), mk({ id: '<script>' })] });
+  check('표시 저장 성공', r.ok === true, JSON.stringify(r));
+  let n = post({ action: 'notes_get', id_token: A, video_id: VID }).note;
+  check('표시: 올바른 것만 저장 (이상한 색·종류·위치·ID 제외)', n.marks.length === 2 && n.marks[1].n === '=기도 제목' && n.marks[1].st === 'ul', JSON.stringify(n.marks));
+  check('표시: 다른 사람(B)에게는 안 보임', (post({ action: 'notes_get', id_token: B, video_id: VID }).note.marks || []).length === 0);
+  post({ action: 'notes_save', id_token: A, video_id: VID, memo: '수정됨', answers: [], checks: [] });
+  n = post({ action: 'notes_get', id_token: A, video_id: VID }).note;
+  check('표시: 메모를 저장해도 표시는 그대로', n.memo === '수정됨' && n.marks.length === 2);
+  r = post({ action: 'notes_marks_save', id_token: A, video_id: 'otherVideo1', marks: [mk()] });
+  const rows2 = env.sheets.get('Notes').rows;
+  check('표시: 노트가 없는 설교에도 새 줄로 저장', r.ok && rows2.length === 4 && rows2[3][8].includes('abc123') && rows2[3][3] === '', JSON.stringify(rows2[3]));
+  check('표시: 표시만 있는 설교도 "내 노트" 목록에 나옴', post({ action: 'notes_list', id_token: A }).items.some((x) => x.video_id === 'otherVideo1'));
+  const many = Array.from({ length: 700 }, (_, i) => mk({ id: `m${i}`, g: `g${i}`, q: 'a', at: '' }));
+  post({ action: 'notes_marks_save', id_token: A, video_id: 'otherVideo1', marks: many });
+  check('표시: 한 편에 500개까지만', JSON.parse(env.sheets.get('Notes').rows[3][8]).length === 500);
+  const huge = Array.from({ length: 400 }, (_, i) => mk({ id: `h${i}`, g: `h${i}`, n: 'x'.repeat(2000) }));
+  check('표시: 너무 크면 거부', post({ action: 'notes_marks_save', id_token: A, video_id: 'otherVideo1', marks: huge }).ok === false);
+  check('표시: 로그인 없이는 거부', post({ action: 'notes_marks_save', video_id: VID, marks: [mk()] }).ok === false);
+  post({ action: 'notes_marks_save', id_token: A, video_id: 'otherVideo1', marks: [] });
+  check('표시: 모두 지우면 빈 목록', post({ action: 'notes_get', id_token: A, video_id: 'otherVideo1' }).note.marks.length === 0);
+}
+
 // 목록: 본인 것만
 post({ action: 'notes_save', id_token: A, video_id: 'otherVideo01', memo: '다른 영상 메모', answers: [], checks: [] });
 const la = post({ action: 'notes_list', id_token: A }).items.map((x) => x.video_id).sort();
