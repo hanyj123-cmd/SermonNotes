@@ -11,6 +11,7 @@
 //   GITHUB_TOKEN      (선택) 앱에서 "지금 동기화"를 누를 때 쓰는 GitHub 토큰. 이 저장소의 Actions 읽기/쓰기 권한만 주세요.
 //   GITHUB_REPO       (선택) 예: hanyj123-cmd/SermonNotes
 //   GITHUB_REF        (선택) 실행할 브랜치. 비워 두면 main
+// Settings 탭(AI 모델·성경 역본)과 Sermons 탭(영상 선택 관리)은 이 코드가 직접 읽고 씁니다. 별도 설정은 필요 없습니다.
 
 const SHEET_NAME = 'Playlists';
 const HEADERS = ['category', 'playlist_url', 'max_videos'];
@@ -65,7 +66,9 @@ function doPost(e) {
   }
   if (action === 'check') return json({ ok: true });
   if (action === 'sync_status') return json(guarded(syncStatus));
+  if (action === 'settings_get') return json(guarded(settingsGet));
   if (action === 'sync_run') return json(guarded(function () { return syncRun(body); }));
+  if (action === 'videos_list') return json(guarded(videosList));
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -73,6 +76,8 @@ function doPost(e) {
     if (action === 'add') return json(addRow(body));
     if (action === 'update') return json(updateRow(body));
     if (action === 'delete') return json(deleteRow(body));
+    if (action === 'settings_set') return json(settingsSet(body));
+    if (action === 'videos_mark') return json(videosMark(body));
     return json({ ok: false, error: '알 수 없는 작업입니다.' });
   } catch (err) {
     return json({ ok: false, error: String(err && err.message ? err.message : err) });
@@ -507,4 +512,146 @@ function syncRun(body) {
     inputs: { max_new: String(n) },
   });
   return { ok: true, max_new: n };
+}
+
+/* ---------- 설정 (AI 모델 · 성경 역본) — Settings 탭 ---------- */
+
+const SETTINGS_SHEET = 'Settings';
+const SETTINGS_HEADERS = ['key', 'value'];
+const MODEL_PATTERN = /^[\w.-]{3,60}$/;
+
+function getSettingsSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(SETTINGS_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(SETTINGS_SHEET);
+    sh.getRange(1, 1, 1, 2).setValues([SETTINGS_HEADERS]);
+  }
+  return sh;
+}
+
+function readSettingsMap() {
+  const sh = getSettingsSheet();
+  const last = sh.getLastRow();
+  const out = {};
+  if (last < 2) return out;
+  sh.getRange(2, 1, last - 1, 2).getValues().forEach(function (r) {
+    const k = String(r[0] || '').trim();
+    if (k) out[k] = String(r[1] === undefined || r[1] === null ? '' : r[1]);
+  });
+  return out;
+}
+
+function writeSetting(key, value) {
+  const sh = getSettingsSheet();
+  const last = sh.getLastRow();
+  const keys = last >= 2 ? sh.getRange(2, 1, last - 1, 1).getValues() : [];
+  for (let i = 0; i < keys.length; i++) {
+    if (String(keys[i][0]).trim() === key) {
+      sh.getRange(i + 2, 2).setNumberFormat('@').setValues([[value]]);
+      return;
+    }
+  }
+  const row = Math.max(2, last + 1);
+  sh.getRange(row, 1, 1, 2).setNumberFormat('@').setValues([[key, value]]);
+}
+
+function parseVersions(raw) {
+  let arr;
+  try {
+    arr = JSON.parse(raw || '[]');
+  } catch (err) {
+    arr = [];
+  }
+  return Array.isArray(arr) ? arr : [];
+}
+
+function settingsGet() {
+  const m = readSettingsMap();
+  return { ok: true, settings: { gemini_model: m.gemini_model || '', bible_versions: parseVersions(m.bible_versions) } };
+}
+
+function settingsSet(body) {
+  if (body.gemini_model !== undefined) {
+    const model = String(body.gemini_model || '').trim();
+    if (model && !MODEL_PATTERN.test(model)) return { ok: false, error: '모델 이름이 올바르지 않습니다. 예: gemini-3.8-flash' };
+    writeSetting('gemini_model', model);
+  }
+  if (body.bible_versions !== undefined) {
+    const list = Array.isArray(body.bible_versions) ? body.bible_versions : [];
+    const clean = [];
+    const seen = {};
+    list.forEach(function (v) {
+      const id = String(v && v.id !== undefined ? v.id : '').trim();
+      const label = String(v && v.label !== undefined ? v.label : '').trim().slice(0, 30);
+      if (!/^\d{1,8}$/.test(id) || !label || seen[id] || clean.length >= 3) return;
+      seen[id] = true;
+      clean.push({ id: id, label: label });
+    });
+    writeSetting('bible_versions', JSON.stringify(clean));
+  }
+  return { ok: true };
+}
+
+/* ---------- 영상 선택 관리 — Sermons 탭 ---------- */
+
+const SERMONS_SHEET = 'Sermons';
+// Sermons 탭 열 번호 (scripts/lib/sheets.mjs 의 SERMON_HEADERS 와 같은 순서)
+const COL = { video_id: 1, category: 2, title: 3, published_at: 4, url: 5, status: 6, transcript_manual: 7, result_json: 8, updated_at: 9, note: 10 };
+const MARKABLE = { redo: '앱에서 다시 정리를 요청했습니다', skip: '자동 정리에서 제외했습니다', pending: '', listed: '' };
+
+function getSermonsSheet() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SERMONS_SHEET);
+  if (!sh) throw new Error('Sermons 탭이 아직 없습니다. 먼저 "지금 동기화"를 한 번 실행하세요.');
+  return sh;
+}
+
+// 큰 열(result_json, transcript_manual)은 읽지 않고, 목록에 필요한 열만 읽습니다.
+function videosList() {
+  const sh = getSermonsSheet();
+  const last = sh.getLastRow();
+  if (last < 2) return { ok: true, videos: [] };
+  const n = last - 1;
+  const a = sh.getRange(2, COL.video_id, n, COL.status).getValues();
+  const b = sh.getRange(2, COL.updated_at, n, 2).getValues();
+  const videos = [];
+  for (let i = 0; i < n; i++) {
+    const id = String(a[i][0] || '').trim();
+    if (!id) continue;
+    videos.push({
+      video_id: id,
+      category: String(a[i][1] || ''),
+      title: String(a[i][2] || ''),
+      published_at: String(a[i][3] || '').slice(0, 10),
+      status: String(a[i][5] || ''),
+      updated_at: String(b[i][0] || ''),
+      note: String(b[i][1] || '').slice(0, 160),
+    });
+  }
+  videos.sort(function (x, y) { return String(y.published_at).localeCompare(String(x.published_at)); });
+  return { ok: true, videos: videos };
+}
+
+function videosMark(body) {
+  const status = String(body.status || '');
+  if (!Object.prototype.hasOwnProperty.call(MARKABLE, status)) return { ok: false, error: '바꿀 수 없는 상태입니다.' };
+  const ids = (Array.isArray(body.ids) ? body.ids : []).map(function (x) { return String(x || '').trim(); }).filter(Boolean).slice(0, 200);
+  if (!ids.length) return { ok: false, error: '선택한 영상이 없습니다.' };
+  const want = {};
+  ids.forEach(function (id) { want[id] = true; });
+  const sh = getSermonsSheet();
+  const last = sh.getLastRow();
+  if (last < 2) return { ok: true, changed: 0 };
+  const idCol = sh.getRange(2, COL.video_id, last - 1, 1).getValues();
+  const stamp = new Date().toISOString();
+  let changed = 0;
+  for (let i = 0; i < idCol.length; i++) {
+    const id = String(idCol[i][0] || '').trim();
+    if (!want[id]) continue;
+    const row = i + 2;
+    sh.getRange(row, COL.status).setNumberFormat('@').setValues([[status]]);
+    sh.getRange(row, COL.updated_at, 1, 2).setNumberFormat('@').setValues([[stamp, MARKABLE[status]]]);
+    changed++;
+  }
+  return { ok: true, changed: changed };
 }

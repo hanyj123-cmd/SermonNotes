@@ -155,3 +155,21 @@ export async function updateSermonRow(sheets, spreadsheetId, rowNumber, patch) {
     requestBody: { valueInputOption: 'RAW', data },
   });
 }
+
+export const SETTINGS_TAB = 'Settings';
+export const SETTINGS_HEADERS = ['key', 'value'];
+
+/** Settings 탭(앱의 관리 화면에서 저장한 값)을 { key: value } 로 읽습니다. 탭이 없으면 빈 객체. */
+export async function readSettings(sheets, spreadsheetId) {
+  try {
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${SETTINGS_TAB}!A2:B` });
+    const out = {};
+    for (const r of res.data.values || []) {
+      const k = String(r[0] || '').trim();
+      if (k) out[k] = String(r[1] ?? '');
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}

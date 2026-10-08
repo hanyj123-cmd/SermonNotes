@@ -8,19 +8,41 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Noto+Serif+KR:wght@500;700&display=swap" rel="stylesheet" />
+  <meta name="theme-color" content="#dfe8e6" />
+  <script>
+    // 저장해 둔 글자 크기를 화면이 그려지기 전에 적용합니다 (깜빡임 방지)
+    try { var fs = parseInt(localStorage.getItem('sn-fs'), 10); if (fs >= 10 && fs <= 20) document.documentElement.style.setProperty('--fs', String(fs)); } catch (e) {}
+  </script>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="#/" aria-label="말씀 노트 처음으로">
-        <span class="brand-mark" aria-hidden="true">✝</span>
-        <span class="brand-name">말씀 노트</span>
-      </a>
-      <p class="brand-sub">설교를 다시 읽고, 삶에 적용하고, 함께 나누는 자리</p>
-      <div class="header-tools">
-        <div id="account" class="account"></div>
-        <a class="admin-link" href="#/admin">재생목록 관리</a>
+      <div class="header-bar">
+        <div class="brand-block">
+          <a class="brand" href="#/" aria-label="말씀 노트 처음으로">
+            <span class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 31" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 29.5V13.5C3 8 8.2 3.6 12 1.2C15.8 3.6 21 8 21 13.5V29.5Z" />
+                <path d="M12 11v13M7.8 15.2h8.4" />
+              </svg>
+            </span>
+            <span class="brand-name">말씀 노트</span>
+          </a>
+          <p class="brand-sub">설교를 다시 읽고, 삶에 적용하고, 함께 나누는 자리</p>
+        </div>
+        <div class="header-tools">
+          <div class="header-row">
+            <div id="account" class="account"></div>
+            <a class="admin-link" href="#/admin">재생목록 관리</a>
+          </div>
+          <div class="fontctl" role="group" aria-label="글자 크기">
+            <button type="button" class="fs-btn" id="fs-down" aria-label="글자 작게">가−</button>
+            <input type="range" id="fs-range" min="10" max="20" step="1" value="14" aria-label="글자 크기" />
+            <button type="button" class="fs-btn" id="fs-up" aria-label="글자 크게">가+</button>
+            <output id="fs-out" for="fs-range">14pt</output>
+          </div>
+        </div>
       </div>
     </div>
   </header>
@@ -36,6 +58,9 @@
 
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="config.js"></script>
+  <script src="content.js"></script>
+  <script src="admin-extra.js"></script>
+  <script src="handout.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

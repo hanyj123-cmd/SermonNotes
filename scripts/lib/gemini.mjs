@@ -1,6 +1,7 @@
 // Gemini API 호출 + 결과 검증
 import { GoogleGenAI } from '@google/genai';
 import { SYSTEM_PROMPT, buildUserMessage, buildVideoMessage } from './prompt.mjs';
+import { normalizePassages } from './bible-books.mjs';
 
 export const DEFAULT_MODEL = 'gemini-3.8-flash';
 const MAX_TRANSCRIPT_CHARS = 150_000;
@@ -17,22 +18,33 @@ export function extractJson(text) {
 const asArray = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()) : []);
 const asString = (v) => (typeof v === 'string' ? v : '');
 
-/** 모델 응답을 앱이 기대하는 모양으로 정규화합니다. 필수 항목이 비어 있으면 오류. */
+const clip = (v, n) => asString(v).trim().slice(0, n);
+const splitParagraphs = (text) => asString(text).split(/\n{2,}/).map((x) => x.trim()).filter(Boolean);
+
+/** 모델 응답을 앱이 기대하는 모양으로 정규화합니다. 필수 항목이 비어 있으면 오류. (결과 구조 v2) */
 export function normalizeResult(raw) {
   const sg = raw.small_group || {};
   const result = {
+    schema: 2,
+    title: clip(raw.title, 200),
     scripture: asArray(raw.scripture),
+    passages: normalizePassages(raw.passages),
     preacher: asString(raw.preacher),
     theme: asString(raw.theme),
     summary_short: asString(raw.summary_short),
     outline: Array.isArray(raw.outline)
       ? raw.outline
-          .map((o) => ({
-            heading: asString(o?.heading),
-            scripture: asString(o?.scripture),
-            content: asString(o?.content),
-            key_quote: asString(o?.key_quote),
-          }))
+          .map((o) => {
+            // 새 형식(paragraphs) 우선, 옛 형식(content 한 덩어리)도 받아 줍니다
+            const paragraphs = Array.isArray(o?.paragraphs) ? asArray(o.paragraphs).map((x) => x.trim()) : splitParagraphs(o?.content);
+            return {
+              heading: asString(o?.heading),
+              scripture: asString(o?.scripture),
+              paragraphs,
+              content: paragraphs.join('\n\n') || asString(o?.content),
+              key_summary: asString(o?.key_summary) || asString(o?.key_quote),
+            };
+          })
           .filter((o) => o.heading || o.content)
       : [],
     gospel_connection: asString(raw.gospel_connection),
@@ -49,6 +61,12 @@ export function normalizeResult(raw) {
       application: asArray(sg.application),
       prayer: asArray(sg.prayer),
     },
+    worship_songs: Array.isArray(raw.worship_songs)
+      ? raw.worship_songs
+          .map((x) => ({ title: clip(x?.title, 100), artist: clip(x?.artist, 80), kind: clip(x?.kind, 20), reason: clip(x?.reason, 300) }))
+          .filter((x) => x.title)
+          .slice(0, 4)
+      : [],
     caveats: asString(raw.caveats),
   };
   if (!result.outline.length) throw new Error('설교 정리(outline)가 비어 있습니다');

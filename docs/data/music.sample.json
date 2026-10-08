@@ -1,0 +1,17 @@
+{
+ "updated": "2026-10-01T10:00:00Z",
+ "tracks": [
+  {
+   "id": "sample00001",
+   "title": "(샘플) 조용한 기도 음악 1시간",
+   "channel": "샘플 채널",
+   "minutes": 60
+  },
+  {
+   "id": "sample00002",
+   "title": "(샘플) Prayer Instrumental Worship",
+   "channel": "Sample Channel",
+   "minutes": 45
+  }
+ ]
+}

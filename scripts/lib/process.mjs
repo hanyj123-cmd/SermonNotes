@@ -13,6 +13,7 @@ export async function processRow(row, deps) {
   const {
     ai,
     update,
+    enrich = null, // (result) => 찬양 영상·성경 본문 같은 부가 정보를 붙임 (실패해도 정리는 유지)
     supadataKey = '',
     geminiVideo = true,
     obtain = defaultObtain,
@@ -43,6 +44,13 @@ export async function processRow(row, deps) {
       material.kind === 'video'
         ? await ai.summarizeVideo({ ...meta, videoUrl: `https://www.youtube.com/watch?v=${row.video_id}` })
         : await ai.summarize({ ...meta, transcript: material.text });
+    if (enrich) {
+      try {
+        await enrich(result);
+      } catch (e) {
+        log.warn(`   부가 정보(찬양 영상·성경 본문)를 붙이지 못했습니다: ${e.message}`);
+      }
+    }
     const json = JSON.stringify(result);
     if (json.length > CELL_LIMIT) throw new Error(`결과가 너무 깁니다 (${json.length}자)`);
     await update({

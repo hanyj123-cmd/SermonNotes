@@ -9,7 +9,7 @@ const CATEGORIES = [
 ];
 
 const app = document.getElementById('app');
-const state = { sermons: [], updated: null, demo: new URLSearchParams(location.search).has('demo'), query: '', noteIds: new Set() };
+const state = { sermons: [], updated: null, demo: new URLSearchParams(location.search).has('demo'), query: '', noteIds: new Set(), music: null };
 
 /* ---------- 작은 DOM 헬퍼 (innerHTML 미사용 → 내용이 코드로 해석되지 않음) ---------- */
 function h(tag, attrs = {}, ...children) {
@@ -21,19 +21,12 @@ function h(tag, attrs = {}, ...children) {
     else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
     else el.setAttribute(k, v === true ? '' : v);
   }
-  for (const c of children.flat()) {
+  for (const c of children.flat(Infinity)) {
     if (c == null || c === false) continue;
     el.append(c.nodeType ? c : document.createTextNode(String(c)));
   }
   return el;
 }
-
-const paragraphs = (text) =>
-  String(text || '')
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .map((p) => h('p', { text: p }));
 
 const catLabel = (key) => CATEGORIES.find((c) => c.key === key)?.label || key;
 const thumbUrl = (id) => `https://i.ytimg.com/vi/${encodeURIComponent(id)}/mqdefault.jpg`;
@@ -80,6 +73,16 @@ async function load() {
   const data = await res.json();
   state.sermons = Array.isArray(data.sermons) ? data.sermons : [];
   state.updated = data.updated || null;
+  // 기도 배경음악 목록 (없어도 괜찮습니다)
+  try {
+    const mr = await fetch(`data/${state.demo ? 'music.sample.json' : 'music.json'}?t=${Date.now()}`);
+    if (mr.ok) {
+      const m = await mr.json();
+      state.music = Array.isArray(m.tracks) ? m : null;
+    }
+  } catch {
+    state.music = null;
+  }
 }
 
 /* ---------- 라우팅: #/c/<구분>  #/v/<영상ID> ---------- */
@@ -91,7 +94,10 @@ function route() {
     currentNotes.flush();
     currentNotes = null;
   }
+  teardownHandout();
+  document.body.classList.toggle('handout-mode', kind === 'h');
   if (kind === 'admin') return renderAdminRoute();
+  if (kind === 'h' && arg) return renderHandout(decodeURIComponent(arg));
   if (kind === 'v' && arg) return renderDetail(decodeURIComponent(arg));
   const firstWithData = CATEGORIES.find((c) => state.sermons.some((s) => s.category === c.key));
   const cat = CATEGORIES.some((c) => c.key === arg) ? arg : (firstWithData || CATEGORIES[0]).key;
@@ -238,7 +244,7 @@ function renderDetail(id) {
   }
   const r = s.result || {};
   const sg = r.small_group || {};
-  document.title = `${s.title} · 말씀 노트`;
+  document.title = `${r.title || s.title} · 말씀 노트`;
 
   const ytUrl = safeYoutube(s.url, s.id);
 
@@ -250,6 +256,14 @@ function renderDetail(id) {
     arr?.length ? h('div', { class: 'sg-group' }, h('h3', { text: title }), h('ol', { class: 'q' }, arr.map((q) => h('li', { text: q })))) : null;
 
   const sections = [];
+
+  // 추천 찬양 (맨 앞)
+  const worship = renderWorshipSection(r.worship_songs);
+  if (worship) sections.push(worship);
+
+  // 성경 본문 (여러 역본을 나란히)
+  const passage = renderBibleBlock(r.bible);
+  if (passage) sections.push(passage);
 
   // 설교 정리
   sections.push(
@@ -263,11 +277,11 @@ function renderDetail(id) {
           { class: 'point' },
           h('h3', { text: o.heading }),
           o.scripture ? h('p', { class: 'ref', text: o.scripture }) : null,
-          paragraphs(o.content),
-          o.key_quote ? h('blockquote', { class: 'quote', text: o.key_quote }) : null,
+          h('div', { class: 'md' }, outlineParas(o).map((t) => mdBlocks(t))),
+          outlineSummary(o) ? h('div', { class: 'keybox' }, h('strong', { class: 'keybox-label', text: '핵심 요약' }), h('p', {}, inlineMd(outlineSummary(o)))) : null,
         ),
       ),
-      r.gospel_connection ? h('div', { class: 'gospel' }, h('h3', { text: '복음과의 연결' }), h('p', { text: r.gospel_connection })) : null,
+      r.gospel_connection ? h('div', { class: 'gospel' }, h('h3', { text: '복음과의 연결' }), h('div', { class: 'md' }, mdBlocks(r.gospel_connection))) : null,
     ),
   );
 
@@ -281,7 +295,7 @@ function renderDetail(id) {
         h(
           'div',
           { class: 'apps' },
-          r.applications.map((a, i) => h('div', { class: 'app-item' }, h('h3', { text: a.title }), h('p', { text: a.detail }), notes ? notes.checkRow(i) : null)),
+          r.applications.map((a, i) => h('div', { class: 'app-item' }, h('h3', {}, inlineMd(a.title)), h('div', { class: 'md' }, mdBlocks(a.detail)), notes ? notes.checkRow(i) : null)),
         ),
       ),
     );
@@ -294,7 +308,7 @@ function renderDetail(id) {
         'section',
         { class: 'block', id: 'meditate' },
         h('h2', { text: '묵상 질문' }),
-        h('ol', { class: 'q' }, r.meditation_questions.map((q, i) => h('li', {}, h('span', { text: q }), notes ? notes.answerBox(i) : null))),
+        h('ol', { class: 'q' }, r.meditation_questions.map((q, i) => h('li', {}, h('span', {}, inlineMd(q)), notes ? notes.answerBox(i) : null))),
       ),
     );
   }
@@ -318,6 +332,10 @@ function renderDetail(id) {
     ),
   );
 
+  // 기도 배경음악
+  const music = renderMusicSection(state.music);
+  if (music) sections.push(music);
+
   // 내 메모 (로그인 전에는 안내 문구만 보입니다)
   if (NOTES_ENABLED) {
     sections.push(
@@ -332,7 +350,15 @@ function renderDetail(id) {
     );
   }
 
-  if (r.caveats) sections.push(h('p', { class: 'caveats', text: `참고: ${r.caveats}` }));
+  sections.push(
+    h(
+      'footer',
+      { class: 'sermon-foot' },
+      h('p', { text: `참고: ${footnoteText(s.category)}` }),
+      r.caveats ? h('p', { class: 'caveats', text: `유의: ${r.caveats}` }) : null,
+      h('p', { class: 'ai-notice', text: AI_NOTICE }),
+    ),
+  );
 
   app.replaceChildren(
     h('a', { class: 'back', href: `#/c/${s.category}`, text: `← ${catLabel(s.category)} 목록` }),
@@ -340,20 +366,20 @@ function renderDetail(id) {
       'div',
       { class: 'detail-head' },
       h('div', { class: 'meta' }, h('span', { class: 'chip', text: catLabel(s.category) }), formatDate(s.published_at), r.preacher ? ` · ${r.preacher}` : ''),
-      h('h1', { text: s.title }),
+      h('h1', { text: r.title || s.title }),
       r.scripture?.length ? h('p', { class: 'meta', text: `본문 ${r.scripture.join(', ')}` }) : null,
-      r.theme ? h('div', { class: 'detail-theme', text: r.theme }) : null,
+      r.summary_short || r.theme ? h('div', { class: 'detail-theme', text: r.summary_short || r.theme }) : null,
       h(
         'div',
         { class: 'actions' },
         h('a', { class: 'btn primary', href: ytUrl, target: '_blank', rel: 'noopener noreferrer' }, '▶ 영상 보기'),
-        h('button', { class: 'btn', type: 'button', onclick: () => window.print() }, '인쇄 / PDF'),
+        h('a', { class: 'btn', href: `#/h/${encodeURIComponent(s.id)}` }, '핸드아웃 (PDF)'),
       ),
     ),
     h(
       'nav',
       { class: 'secnav', 'aria-label': '섹션 이동' },
-      [['outline', '설교 정리'], ['apply', '삶의 적용'], ['meditate', '묵상'], ['group', '소그룹'], ['mynote', '내 메모']]
+      [['worship', '추천 찬양'], ['passage', '본문'], ['outline', '설교 정리'], ['apply', '삶의 적용'], ['meditate', '묵상'], ['group', '소그룹'], ['music', '기도 음악'], ['mynote', '내 메모']]
         .filter(([sid]) => sections.some((el) => el.id === sid))
         .map(([sid, label]) =>
           h('a', {
@@ -564,21 +590,25 @@ function renderAdminPanel(password) {
       syncInfo.textContent = `상태를 확인하지 못했습니다: ${e.message || e}`;
     }
   }
-  syncBtn.addEventListener('click', async () => {
+  // 동기화 실행 요청. 성공하면 true (선택한 영상 정리에서도 같이 씁니다)
+  async function requestSync(count) {
     syncBtn.disabled = true;
     syncInfo.textContent = '실행을 요청하는 중…';
     try {
-      const r = await adminPost({ action: 'sync_run', password, max_new: syncMax.value });
-      if (passwordRejected(r)) return;
+      const r = await adminPost({ action: 'sync_run', password, max_new: String(count) });
+      if (passwordRejected(r)) return false;
       if (!r.ok) throw new Error(r.error || '실행하지 못했습니다.');
       syncInfo.textContent = '⏳ 실행을 요청했습니다. 잠시 뒤 상태가 표시됩니다…';
       // GitHub가 실행을 등록하기까지 몇 초 걸립니다. 그 사이 이전 기록이 보이지 않게 잠시 기다립니다.
       syncTimer = setTimeout(refreshSync, 6000);
+      return true;
     } catch (e) {
       syncInfo.textContent = `오류: ${e.message || e}`;
       syncBtn.disabled = false;
+      return false;
     }
-  });
+  }
+  syncBtn.addEventListener('click', () => requestSync(syncMax.value));
 
   const rowFor = (p) => {
     const cat = h('select', { class: 'search admin-cat', 'aria-label': '구분' }, categoryOptions(p.category));
@@ -630,10 +660,13 @@ function renderAdminPanel(password) {
       'section',
       { class: 'point admin-sync' },
       h('h2', { text: '지금 동기화' }),
-      h('p', { class: 'meta', text: '새 영상을 찾아 설교 정리를 만듭니다. 자동으로는 매일 아침에도 실행됩니다. 영상 1편에 몇 분씩 걸립니다.' }),
+      h('p', { class: 'meta', text: '새 영상을 찾아 설교 정리를 만듭니다. 자동으로는 매일 아침 7:30(토론토)에 실행되고, 전에 실패한 영상은 그때 먼저 다시 시도합니다. 아직 영상이 올라오지 않은 예약 라이브는 건너뜁니다. 영상 1편에 몇 분씩 걸립니다.' }),
       h('div', { class: 'admin-row' }, h('label', { class: 'meta', text: '한 번에 정리할 영상' }), syncMax, syncBtn),
       syncInfo,
     ),
+    renderVideoManager(password, passwordRejected, requestSync),
+    renderModelSection(password, passwordRejected),
+    renderBibleSection(password, passwordRejected),
     h(
       'section',
       { class: 'point admin-add' },
@@ -939,8 +972,55 @@ function createNotes(s) {
   return { answerBox, checkRow, memoBox, status, load, flush };
 }
 
+/* ---------- 글자 크기 (10~20pt) ---------- */
+const FS_KEY = 'sn-fs';
+const FS_MIN = 10;
+const FS_MAX = 20;
+const FS_DEFAULT = 14;
+const clampFs = (v) => {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.min(FS_MAX, Math.max(FS_MIN, n)) : FS_DEFAULT;
+};
+function savedFs() {
+  try {
+    const n = parseInt(localStorage.getItem(FS_KEY), 10);
+    if (n >= FS_MIN && n <= FS_MAX) return n; // 범위 밖·잘못된 값은 무시 (index.html 의 초기 적용과 같은 기준)
+  } catch {
+    /* 저장소를 못 쓰는 환경 */
+  }
+  return FS_DEFAULT;
+}
+function initFontControl() {
+  const range = document.getElementById('fs-range');
+  const out = document.getElementById('fs-out');
+  const down = document.getElementById('fs-down');
+  const up = document.getElementById('fs-up');
+  if (!range || !out || !down || !up) return;
+  const apply = (v, save) => {
+    const n = clampFs(v);
+    document.documentElement.style.setProperty('--fs', String(n));
+    range.value = String(n);
+    range.setAttribute('aria-valuetext', `${n}포인트`);
+    out.textContent = `${n}pt`;
+    down.disabled = n <= FS_MIN;
+    up.disabled = n >= FS_MAX;
+    if (save) {
+      try {
+        localStorage.setItem(FS_KEY, String(n));
+      } catch {
+        /* 저장하지 못해도 이번 화면에서는 적용됩니다 */
+      }
+    }
+  };
+  apply(savedFs(), false);
+  range.addEventListener('input', () => apply(range.value, true));
+  down.addEventListener('click', () => apply(Number(range.value) - 1, true));
+  up.addEventListener('click', () => apply(Number(range.value) + 1, true));
+}
+
 /* ---------- 시작 ---------- */
 (async function init() {
+  initFontControl();
   let loadError = null;
   try {
     await load();

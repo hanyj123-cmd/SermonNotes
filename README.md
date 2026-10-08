@@ -72,7 +72,10 @@ docs/data/sermons.json 커밋 → GitHub Pages 웹앱이 읽어서 표시
 5. **Actions → 설교 자막 정리 동기화 → Run workflow** 를 눌러 첫 실행을 합니다. 처음에는 `max_new` 를 2 정도로 두고 결과를 확인해 보세요.
 6. 몇 분 뒤 `https://<계정>.github.io/<저장소 이름>/` 에서 확인합니다.
 
-이후에는 매일 오전(UTC 11시)에 자동으로 새 영상을 확인합니다. 시간은 `.github/workflows/sync.yml` 의 `cron` 에서 바꿀 수 있습니다.
+이후에는 매일 아침 7:30(토론토 시간)에 자동으로 새 영상을 확인합니다.
+- GitHub 예약은 UTC만 지원하고 토론토는 서머타임이 있어서, `sync.yml` 에 두 개(11:30·12:30 UTC)를 등록하고 `scripts/gate.mjs` 가 토론토 시간 07:20~08:20 에만 실행하게 합니다. 직접 실행(앱의 "지금 동기화" 버튼 등)은 시간과 상관없이 항상 실행됩니다.
+- 이전에 실패(`error` / `no_transcript`)한 영상은 최근 7일 이내 영상이면 새 영상보다 먼저 다시 시도합니다 (`RETRY_DAYS` 로 조절).
+- 라이브 예약·방송 중·업로드 처리 중인 영상은 시트에 넣지 않거나 건너뛰고, 영상이 올라온 뒤 다음 실행에서 처리합니다.
 
 ## 사용 방법
 
@@ -86,8 +89,23 @@ docs/data/sermons.json 커밋 → GitHub Pages 웹앱이 읽어서 표시
 | `error` | 정리 실패 | `note` 칸의 사유 확인 후 `redo` |
 | `redo` | 다시 만들기 | 다음 실행 때 다시 정리됨 (프롬프트를 고친 뒤 재생성할 때도 사용) |
 | `skip` | 건너뛰기 | 정리하지 않음 (광고 영상 등) |
+| `listed` | 선택 대기 | 오래된 영상. 앱 관리 화면에서 골라야 정리됨 (시트에서 `redo` 로 바꿔도 됨) |
 
 시트 내용을 바로 웹앱에 반영하고 싶을 때(예: 일부 행을 `skip` 으로 바꾼 뒤)는 Actions를 다시 실행하면 됩니다.
+
+## 앱 안에서 하는 일 (관리 화면)
+
+화면 위쪽 "재생목록 관리"(관리자 비밀번호)에서 합니다.
+
+- **영상 선택해서 정리하기** — 새벽기도 · 수요예배 · 주일예배 탭별로 영상 목록을 보고, 체크한 영상만 AI로 정리합니다(한 번에 최대 10편). "자동 정리에서 제외", "대기로 되돌리기"도 여기서 합니다. 새로 올라온 영상(14일 이내)은 자동으로 정리되고, 그보다 오래된 영상은 `listed`(선택 대기) 상태로 들어와 여기서 골라야 정리됩니다 (`AUTO_WITHIN_DAYS` 로 조절).
+- **AI 모델** — Gemini 모델을 목록에서 고르거나 직접 입력합니다. 다음 동기화부터 적용됩니다. (시트의 `Settings` 탭에 저장)
+- **성경 본문 (3개 역본)** — 설교 본문 구절을 고른 역본 3개로 나란히 보여 줍니다. 쓸 수 있는 역본은 YouVersion 성경 API 키(`BIBLE_API_KEY`)의 이용 허락에 따라 달라서, 동기화 후 만들어지는 목록(`docs/data/bibles.json`)에 있는 것만 고를 수 있습니다. **개역개정·표준새번역(대한성서공회)은 무료 API로 가져올 수 없으면 목록에 나타나지 않습니다.**
+
+## 설교 화면 · 핸드아웃
+
+- 설교 화면: 추천 찬양(영상이 있으면 앱 안에서 재생) → 성경 본문 3역본 → 설교 정리(3대지, 핵심 요약) → 복음과의 연결 → 삶의 적용 → 묵상 → 소그룹 → 기도 배경음악 → 내 메모.
+- **기도 배경음악**: 동기화 때 유튜브에서 길고 잔잔한 기도 음악을 찾아 `docs/data/music.json` 에 저장합니다(주 1회 갱신). 곡을 누르면 앱 안에서 재생됩니다.
+- **핸드아웃**: 설교 화면의 "핸드아웃 (PDF)" → 미리보기에서 용지(Letter 기본 / A4)와 포함할 구역을 고르고 "인쇄 / PDF로 저장". 성경 본문이 매우 길면 맨 뒤 부록으로 보냅니다. 쪽 나누기는 paged.js(`docs/vendor/`, MIT)를 씁니다.
 
 ## 알아 두실 점
 
@@ -111,12 +129,18 @@ npm run serve        # docs/ 폴더를 로컬에서 열기
 ```
 docs/                  웹사이트 (GitHub Pages)
   index.html style.css app.js
+  content.js           설교 내용 그리기(마크다운·성경 3역본·찬양·음악) 공통 도구
+  admin-extra.js       관리 화면: 영상 선택 · 모델 · 역본
+  handout.js handout.css   핸드아웃 미리보기·인쇄 서식
+  vendor/              paged.js (쪽 나누기)
   data/sermons.json    Actions가 만들어 주는 실제 데이터
-  data/sermons.sample.json   ?demo 화면용 샘플
+  data/sermons.sample.json  music.sample.json   ?demo 화면용 샘플
+  data/music.json  bibles.json   Actions가 만드는 기도 음악 · 선택 가능한 역본 목록
 scripts/
   sync.mjs             전체 파이프라인
   lib/prompt.mjs       신학 기준·출력 형식 프롬프트  ← 가장 자주 고치게 될 파일
   lib/sheets.mjs  lib/youtube.mjs  lib/gemini.mjs
+  lib/bible.mjs  lib/bible-books.mjs  lib/media.mjs   성경 본문 · 찬양/음악 영상 찾기
   selftest.mjs         `npm test`
 .github/workflows/sync.yml   자동 실행 설정
 ```

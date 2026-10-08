@@ -51,6 +51,47 @@ export async function fetchPlaylistVideos(playlistId, apiKey, maxVideos = 30) {
   return videos;
 }
 
+/**
+ * videos.list 항목 하나가 "지금 정리할 수 있는 영상"인지 판단합니다.
+ * 라이브 예약·프리미어 대기, 방송 중, 업로드 처리 중, 비공개·삭제는 건너뜁니다.
+ */
+export function classifyVideo(item) {
+  if (!item) return { ready: false, reason: '영상을 찾을 수 없음 (삭제 또는 비공개)' };
+  const live = item.snippet?.liveBroadcastContent;
+  if (live === 'upcoming') return { ready: false, reason: '예정된 라이브/프리미어 (아직 영상이 없음)' };
+  if (live === 'live') return { ready: false, reason: '지금 라이브 중 (방송이 끝난 뒤 처리)' };
+  const privacy = item.status?.privacyStatus;
+  if (privacy === 'private') return { ready: false, reason: '비공개 영상' };
+  const upload = item.status?.uploadStatus;
+  if (upload === 'uploaded') return { ready: false, reason: '업로드 처리 중' };
+  if (upload === 'failed' || upload === 'rejected' || upload === 'deleted') return { ready: false, reason: `사용할 수 없는 영상 (${upload})` };
+  if (item.contentDetails?.duration === 'P0D') return { ready: false, reason: '아직 재생 시간이 없는 영상 (방송 직후 처리 중)' };
+  return { ready: true, reason: '' };
+}
+
+/**
+ * 영상들의 상태를 한꺼번에 조회합니다. { video_id → { ready, reason } }
+ * 조회에 실패하면 빈 Map을 돌려줍니다 (모르는 영상은 막지 않고 진행).
+ */
+export async function fetchVideoStates(videoIds, apiKey, fetchImpl = fetch) {
+  const ids = [...new Set(videoIds)];
+  const states = new Map();
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    const params = new URLSearchParams({ part: 'snippet,status,contentDetails', id: chunk.join(','), key: apiKey });
+    try {
+      const res = await fetchImpl(`https://www.googleapis.com/youtube/v3/videos?${params}`);
+      if (!res.ok) throw new Error(`YouTube API 오류 (${res.status})`);
+      const data = await res.json();
+      const byId = new Map((data.items || []).map((it) => [it.id, it]));
+      for (const id of chunk) states.set(id, classifyVideo(byId.get(id)));
+    } catch (e) {
+      console.warn(`⚠️  영상 상태를 확인하지 못했습니다 (그냥 진행합니다): ${e.message}`);
+    }
+  }
+  return states;
+}
+
 function decodeEntities(s) {
   return s
     .replace(/&amp;#39;|&#39;/g, "'")
