@@ -1,6 +1,6 @@
 {
- "updated": "2026-10-08T15:30:49.061Z",
- "count": 16,
+ "updated": "2026-10-08T16:28:03.815Z",
+ "count": 17,
  "sermons": [
   {
    "id": "dAtaD-X_yFE",
@@ -269,15 +269,34 @@
    "complete": true
   },
   {
+   "id": "uCKqcQ5tUas",
+   "category": "user",
+   "title": "부르심(03) - 내가 여기 있습니다",
+   "date": "2026-06-28",
+   "url": "https://www.youtube.com/watch?v=uCKqcQ5tUas",
+   "preacher": "송태근 목사",
+   "scripture": "이사야6:1-8",
+   "book": "이사야",
+   "bookIdx": 23,
+   "summary_short": "세상의 절대 권력이 무너지고 절망이 가득한 시대 속에서, 우리는 영원한 하늘 보좌에 앉으신 주님을 바라보고 십자가 은혜로 정결함을 입어 주님의 부르심에 \"내가 여기 있나이다\"로 응답해야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
    "id": "9q4pWa2xUTc",
    "category": "user",
-   "title": "예배이름",
+   "title": "부르심(02) - 이제 가라!",
    "date": "2026-06-21",
    "url": "https://www.youtube.com/watch?v=9q4pWa2xUTc",
    "preacher": "송태근 목사",
-   "scripture": "부르심(02) - 이제 가라!",
-   "book": "",
-   "bookIdx": 0,
+   "scripture": "출애굽기 3:1-12",
+   "book": "출애굽기",
+   "bookIdx": 2,
    "summary_short": "모세의 80년 인생과 호렙산 떨기나무 사건을 통해, 하나님은 우리의 인간적 조건이 아니라 오직 하나님의 부르심과 임재로 우리를 일꾼 삼으십니다.",
    "modes": [
     "review",
