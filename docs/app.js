@@ -846,6 +846,11 @@ function savedFs() {
   return FS_DEFAULT;
 }
 function initFontControl() {
+  const ytToggle = document.getElementById('yt-open');
+  if (ytToggle) {
+    ytToggle.checked = ytOpenPref();
+    ytToggle.addEventListener('change', () => setYtOpenPref(ytToggle.checked));
+  }
   const range = document.getElementById('fs-range');
   const out = document.getElementById('fs-out');
   const down = document.getElementById('fs-down');

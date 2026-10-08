@@ -389,3 +389,6 @@ ol.q li > span { display: block; }
 .bible-audio { margin-top: 16px; padding: 12px 14px; background: var(--lime-soft); border-left: 4px solid var(--lime-line); border-radius: 0 var(--radius) var(--radius) 0; }
 .bible-audio .actions { margin: 6px 0; }
 .audio-item + .audio-item { margin-top: 10px; }
+
+.yt-open { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; cursor: pointer; }
+.yt-open input { width: 18px; height: 18px; accent-color: var(--blue); }

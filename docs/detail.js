@@ -283,13 +283,19 @@ async function renderDetail(id, modeArg) {
   playerBox.hidden = true;
   const watchBtn = h('button', { class: 'btn primary', type: 'button', 'aria-expanded': 'false' }, '▶ 영상 보기');
   watchBtn.addEventListener('click', () => {
+    if (vid && playerBox.hidden && ytOpenPref()) {
+      window.open(ytUrl, '_blank', 'noopener'); // 이 기기에서는 항상 YouTube에서 열기 (프리미엄 광고 없이)
+      return;
+    }
     const open = playerBox.hidden;
     playerBox.hidden = !open;
     watchBtn.setAttribute('aria-expanded', String(open));
     watchBtn.textContent = open ? '영상 닫기' : '▶ 영상 보기';
     if (open) {
-      if (vid) playerBox.replaceChildren(embedPlayer(vid, d.title), h('p', { class: 'meta', text: PLAYER_HELP }), h('a', { class: 'btn small', href: ytUrl, target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기'));
-      else playerBox.replaceChildren(h('a', { class: 'btn', href: ytUrl, target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기'));
+      if (vid) {
+        startPlayback(vid, d.title, playerBox);
+        playerBox.append(h('a', { class: 'btn small', href: ytUrl, target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기'));
+      } else playerBox.replaceChildren(h('a', { class: 'btn', href: ytUrl, target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기'));
     } else {
       playerBox.replaceChildren();
     }

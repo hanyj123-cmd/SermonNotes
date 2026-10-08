@@ -160,6 +160,36 @@ function embedPlayer(id, title, opts) {
   });
 }
 
+/* 프리미엄 광고: 퍼가기(임베드) 재생은 브라우저가 제3자 쿠키를 막으면 프리미엄 로그인이 적용되지 않아 광고가 나옵니다.
+   그런 기기에서는 "항상 YouTube에서 열기"를 켜 두면 재생 버튼이 유튜브(앱/사이트)를 바로 열어 프리미엄이 그대로 적용됩니다. */
+const YT_OPEN_KEY = 'sn-yt-open';
+function ytOpenPref() {
+  try {
+    return localStorage.getItem(YT_OPEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+function setYtOpenPref(on) {
+  try {
+    localStorage.setItem(YT_OPEN_KEY, on ? '1' : '0');
+  } catch {
+    /* 저장하지 못해도 이번 화면에서는 적용됩니다 */
+  }
+  document.querySelectorAll('.yt-open-toggle').forEach((el) => {
+    el.checked = on;
+  });
+}
+/** 재생 시작: 선택에 따라 YouTube를 새 탭으로 열거나, 이 화면 안에서 재생합니다. 새 탭을 열었으면 true */
+function startPlayback(id, title, stage) {
+  if (ytOpenPref()) {
+    window.open(ytWatch(id), '_blank', 'noopener');
+    return true;
+  }
+  stage.replaceChildren(embedPlayer(id, title), h('p', { class: 'meta', text: PLAYER_HELP }), h('button', { class: 'btn small', type: 'button', onclick: () => { setYtOpenPref(true); toast('앞으로 재생 버튼은 YouTube를 바로 엽니다 (화면 맨 아래에서 바꿀 수 있어요)'); } }, '광고가 나와요 → 앞으로 항상 YouTube에서 열기'));
+  return false;
+}
+
 const PLAYER_HELP = '광고가 나오거나 프리미엄 로그인이 적용되지 않으면 "YouTube에서 열기"를 눌러 주세요. 이 화면의 영상은 이 브라우저에서 로그인한 유튜브 계정을 따릅니다.';
 
 /* ---------- 성경 본문: 4역본 전환 보기 ---------- */
@@ -212,7 +242,7 @@ function renderBibleAudio(bible, gae) {
   const wrap = h('div', { class: 'bible-audio' }, h('p', { class: 'meta', text: '개역개정 낭독을 들어 보세요. 유튜브에 올라온 음원(예: 드라마바이블)으로 연결합니다.' }));
   items.forEach((a) => {
     const stage = h('div', { class: 'audio-stage' });
-    const play = h('button', { class: 'btn primary', type: 'button', onclick: (e) => { stage.replaceChildren(embedPlayer(a.video_id, `${a.reference} 낭독`), h('p', { class: 'meta', text: PLAYER_HELP })); e.currentTarget.hidden = true; } }, `🎧 ${a.reference} 듣기`);
+    const play = h('button', { class: 'btn primary', type: 'button', onclick: (e) => { if (!startPlayback(a.video_id, `${a.reference} 낭독`, stage)) e.currentTarget.hidden = true; } }, `🎧 ${a.reference} 듣기`);
     wrap.append(h('div', { class: 'audio-item' }, h('div', { class: 'actions' }, play, h('a', { class: 'btn', href: ytWatch(a.video_id), target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기')), a.title ? h('p', { class: 'meta', text: `${a.title}${a.channel ? ` · ${a.channel}` : ''}` }) : null, stage));
   });
   if (!items.length && chapterRef) wrap.append(h('div', { class: 'actions' }, h('a', { class: 'btn', href: ytSearch(`드라마바이블 ${chapterRef}`), target: '_blank', rel: 'noopener noreferrer' }, `🎧 ${chapterRef} 듣기 (YouTube에서 찾기)`)));
@@ -274,8 +304,7 @@ function renderWorshipSection(songs, { title = '찬양', intro = '말씀을 묵�
               class: 'btn primary',
               type: 'button',
               onclick: (e) => {
-                stage.replaceChildren(embedPlayer(vid, `${s.title} 찬양`), h('p', { class: 'meta', text: PLAYER_HELP }));
-                e.currentTarget.hidden = true;
+                if (!startPlayback(vid, `${s.title} 찬양`, stage)) e.currentTarget.hidden = true;
               },
             }, '▶ 듣기')
           : null;
@@ -309,8 +338,7 @@ function renderMusicSection(music, seed) {
     class: 'btn primary',
     type: 'button',
     onclick: (e) => {
-      stage.replaceChildren(embedPlayer(t.id, t.title), h('p', { class: 'meta', text: PLAYER_HELP }));
-      e.currentTarget.hidden = true;
+      if (!startPlayback(t.id, t.title, stage)) e.currentTarget.hidden = true;
     },
   }, '▶ 듣기');
   return h(
