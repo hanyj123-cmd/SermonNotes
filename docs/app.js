@@ -1,15 +1,18 @@
 // 말씀 노트 — 정적 웹앱 (빌드 도구 없음)
-// 데이터: data/sermons.json (GitHub Actions가 Google Sheets에서 만들어 커밋)
-// 화면 확인용 샘플: 주소 뒤에 ?demo 를 붙이면 data/sermons.sample.json 을 불러옵니다.
-
-const CATEGORIES = [
-  { key: 'dawn', label: '새벽기도' },
-  { key: 'wednesday', label: '수요예배' },
-  { key: 'sunday', label: '주일예배' },
-];
+// 데이터: data/sermons.json (목록) + data/s/<영상ID>.json (설교별 내용) — GitHub Actions가 Google Sheets에서 만들어 커밋
+// 화면 확인용 샘플: 주소 뒤에 ?demo 를 붙이면 data/sample/ 의 샘플을 불러옵니다.
+// 화면 구성: 메뉴 [토론토영락교회 설교] [사용자 영상]  ·  detail.js(상세 4모드) · notes.js(개인 기록) · handout.js(핸드아웃)
 
 const app = document.getElementById('app');
-const state = { sermons: [], updated: null, demo: new URLSearchParams(location.search).has('demo'), query: '', noteIds: new Set(), music: null };
+const state = {
+  sermons: [],
+  updated: null,
+  demo: new URLSearchParams(location.search).has('demo'),
+  filter: { q: '', month: '', preacher: '', book: '' },
+  noteIds: new Set(),
+  music: null,
+  details: new Map(),
+};
 
 /* ---------- 작은 DOM 헬퍼 (innerHTML 미사용 → 내용이 코드로 해석되지 않음) ---------- */
 function h(tag, attrs = {}, ...children) {
@@ -28,8 +31,6 @@ function h(tag, attrs = {}, ...children) {
   return el;
 }
 
-const catLabel = (key) => CATEGORIES.find((c) => c.key === key)?.label || key;
-const thumbUrl = (id) => `https://i.ytimg.com/vi/${encodeURIComponent(id)}/mqdefault.jpg`;
 const safeYoutube = (url, id) => (/^https:\/\/(www\.)?youtube\.com\//.test(url || '') ? url : `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`);
 
 function formatDate(iso) {
@@ -67,13 +68,13 @@ async function copyText(text) {
 
 /* ---------- 데이터 ---------- */
 async function load() {
-  const file = state.demo ? 'data/sermons.sample.json' : 'data/sermons.json';
-  const res = await fetch(`${file}?t=${Date.now()}`);
+  const res = await fetch(`${dataBase()}sermons.json?t=${Date.now()}`);
   if (!res.ok) throw new Error(`데이터를 불러오지 못했습니다 (${res.status})`);
   const data = await res.json();
   state.sermons = Array.isArray(data.sermons) ? data.sermons : [];
   state.updated = data.updated || null;
-  // 기도 배경음악 목록 (없어도 괜찮습니다)
+  state.details = new Map(); // 새로 불러왔으니 설교별 내용도 다시 받습니다
+  // 묵상 음악 목록 (없어도 괜찮습니다)
   try {
     const mr = await fetch(`data/${state.demo ? 'music.sample.json' : 'music.json'}?t=${Date.now()}`);
     if (mr.ok) {
@@ -85,32 +86,149 @@ async function load() {
   }
 }
 
-/* ---------- 라우팅: #/c/<구분>  #/v/<영상ID> ---------- */
+/* ---------- 라우팅: #/c/<구분>  #/u  #/v/<영상ID>[/<모드>]  #/h/<영상ID>[/<모드>]  #/admin ---------- */
 function route() {
-  const [, kind, arg] = location.hash.split('/');
+  const [, kind, arg, arg2] = location.hash.split('/');
   window.scrollTo(0, 0);
-  // 다른 화면으로 넘어가기 전에, 아직 저장되지 않은 노트가 있으면 먼저 저장합니다.
+  // 다른 화면으로 넘어가기 전에, 아직 저장되지 않은 기록이 있으면 먼저 저장합니다.
   if (currentNotes) {
     currentNotes.flush();
     currentNotes = null;
   }
   teardownHandout();
   document.body.classList.toggle('handout-mode', kind === 'h');
+  setActiveMenu(kind === 'u' ? 'user' : kind === 'admin' ? '' : 'church');
   if (kind === 'admin') return renderAdminRoute();
-  if (kind === 'h' && arg) return renderHandout(decodeURIComponent(arg));
-  if (kind === 'v' && arg) return renderDetail(decodeURIComponent(arg));
-  const firstWithData = CATEGORIES.find((c) => state.sermons.some((s) => s.category === c.key));
-  const cat = CATEGORIES.some((c) => c.key === arg) ? arg : (firstWithData || CATEGORIES[0]).key;
+  if (kind === 'h' && arg) return renderHandout(decodeURIComponent(arg), arg2);
+  if (kind === 'v' && arg) return renderDetail(decodeURIComponent(arg), arg2);
+  if (kind === 'u') return renderUserRoute();
+  const cat = CATEGORIES.some((c) => c.key === arg) ? arg : CATEGORIES[0].key;
   renderList(cat);
 }
 
-/* ---------- 목록 ---------- */
-function renderList(cat) {
-  const counts = Object.fromEntries(CATEGORIES.map((c) => [c.key, state.sermons.filter((s) => s.category === c.key).length]));
+function setActiveMenu(which) {
+  document.querySelectorAll('.menu-link').forEach((a) => {
+    if (a.dataset.menu === which) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
+  });
+}
 
+/* ---------- 목록: 필터 + 줄 목록 ---------- */
+const preacherKey = (p) => String(p || '').replace(/\s*(담임|부|협동|원로|객원|초청)?\s*(목사|전도사|강도사|장로|선교사|교수|박사)님?\s*$/, '').trim();
+
+// 현재 목록(items)에서 고를 수 있는 값들로 선택 상자를 만들고, 바뀌면 onChange 를 부릅니다
+function filterBar(items, onChange) {
+  const f = state.filter;
+  const months = [...new Set(items.map((s) => String(s.date || '').slice(0, 7)).filter((m) => /^\d{4}-\d{2}$/.test(m)))].sort().reverse();
+  const preachers = [...new Set(items.map((s) => preacherKey(s.preacher)).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
+  const books = [...new Map(items.filter((s) => s.book).map((s) => [s.book, s.bookIdx || 999])).entries()].sort((a, b) => a[1] - b[1]).map(([name]) => name);
+  const select = (key, label, options, fmt) => {
+    const sel = h('select', { class: 'search filter-select', 'aria-label': label }, h('option', { value: '', text: `${label} 전체` }), options.map((o) => h('option', { value: o, text: fmt ? fmt(o) : o })));
+    sel.value = options.includes(f[key]) ? f[key] : '';
+    f[key] = sel.value;
+    sel.addEventListener('change', () => {
+      f[key] = sel.value;
+      onChange();
+    });
+    return sel;
+  };
+  const search = h('input', { class: 'search', type: 'search', placeholder: '제목, 본문, 설교자로 검색', 'aria-label': '검색', value: f.q });
+  search.addEventListener('input', () => {
+    f.q = search.value;
+    onChange();
+  });
+  const reset = h('button', { class: 'btn small', type: 'button' }, '필터 지우기');
+  reset.addEventListener('click', () => {
+    state.filter = { q: '', month: '', preacher: '', book: '' };
+    onChange(true);
+  });
+  return h(
+    'div',
+    { class: 'filters' },
+    h('div', { class: 'filter-row' }, select('month', '날짜', months, (m) => `${m.slice(0, 4)}년 ${Number(m.slice(5))}월`), select('preacher', '설교자', preachers), select('book', '성경 본문', books)),
+    h('div', { class: 'filter-row' }, search, reset),
+  );
+}
+
+const matchesFilter = (s) => {
+  const f = state.filter;
+  if (f.month && String(s.date || '').slice(0, 7) !== f.month) return false;
+  if (f.preacher && preacherKey(s.preacher) !== f.preacher) return false;
+  if (f.book && s.book !== f.book) return false;
+  const q = f.q.trim().toLowerCase();
+  if (q && ![s.title, s.summary_short, s.preacher, s.scripture].join(' ').toLowerCase().includes(q)) return false;
+  return true;
+};
+
+const PAGE_STEP = 40;
+
+function sermonRow(s) {
+  const [y, m, d] = /^\d{4}-\d{2}-\d{2}/.test(s.date || '') ? s.date.slice(0, 10).split('-').map(Number) : [0, 0, 0];
+  const partial = s.modes && s.modes.length < MODES.length;
+  return h(
+    'li',
+    {},
+    h(
+      'a',
+      { class: 'row', href: `#/v/${encodeURIComponent(s.id)}` },
+      h('div', { class: 'row-date' }, y ? [h('span', { class: 'rd-md', text: `${m}.${d}` }), h('span', { class: 'rd-y', text: String(y) })] : null),
+      h(
+        'div',
+        { class: 'row-main' },
+        h('div', { class: 'meta' }, s.scripture ? h('span', { class: 'chip', text: s.scripture }) : null, s.preacher ? h('span', { class: 'row-preacher', text: s.preacher }) : null, partial ? h('span', { class: 'chip soft', text: '일부 모드 준비 중' }) : null, state.noteIds.has(s.id) ? h('span', { class: 'chip note-chip', text: '내 기록' }) : null),
+        h('h2', { class: 'row-title', text: s.title }),
+        s.summary_short ? h('p', { class: 'row-summary', text: s.summary_short }) : null,
+      ),
+    ),
+  );
+}
+
+// 필터 + 목록을 한 덩어리로 만듭니다 (church 목록과 사용자 영상 목록이 함께 씁니다)
+function sermonBrowser(items, emptyNode) {
+  const list = h('ul', { class: 'rows' });
+  const more = h('div', { class: 'more' });
+  let shown = PAGE_STEP;
+  const count = h('p', { class: 'meta result-count', role: 'status' });
+  const bar = h('div', {});
+
+  function fill() {
+    const rows = items.filter(matchesFilter);
+    count.textContent = rows.length === items.length ? `${rows.length}편` : `${items.length}편 중 ${rows.length}편`;
+    list.replaceChildren();
+    more.replaceChildren();
+    if (!rows.length) {
+      list.append(h('li', {}, items.length ? h('div', { class: 'empty' }, h('p', {}, h('strong', { text: '조건에 맞는 설교가 없습니다.' }))) : emptyNode));
+      return;
+    }
+    rows.slice(0, shown).forEach((s) => list.append(sermonRow(s)));
+    if (rows.length > shown) {
+      const btn = h('button', { class: 'btn', type: 'button' }, `더 보기 (${rows.length - shown}편 남음)`);
+      btn.addEventListener('click', () => {
+        shown += PAGE_STEP;
+        fill();
+      });
+      more.append(btn);
+    }
+  }
+  function drawBar(resetShown) {
+    if (resetShown) shown = PAGE_STEP;
+    // 필터 선택 상자는 현재 목록 기준으로 다시 만들되, 입력 중인 검색칸은 유지합니다
+    bar.replaceChildren(filterBar(items, (full) => (full === true ? drawBar(true) : (shown = PAGE_STEP, fill()))));
+    fill();
+  }
+  drawBar();
+  return h('div', {}, bar, count, list, more);
+}
+
+function renderList(cat) {
+  if (state.lastCat !== cat) {
+    state.filter = { q: '', month: '', preacher: '', book: '' };
+    state.lastCat = cat;
+  }
+  const counts = Object.fromEntries(CATEGORIES.map((c) => [c.key, state.sermons.filter((s) => s.category === c.key).length]));
   const tabs = h(
     'div',
-    { class: 'tabs', role: 'tablist' },
+    { class: 'tabs', role: 'tablist', 'aria-label': '예배 구분' },
     CATEGORIES.map((c) =>
       h(
         'button',
@@ -119,7 +237,6 @@ function renderList(cat) {
           role: 'tab',
           'aria-selected': String(c.key === cat),
           onclick: () => {
-            state.query = '';
             location.hash = `#/c/${c.key}`;
           },
         },
@@ -128,274 +245,138 @@ function renderList(cat) {
       ),
     ),
   );
-
-  const list = h('ul', { class: 'list' });
-  const search = h('input', {
-    class: 'search',
-    type: 'search',
-    placeholder: '제목, 본문, 주제로 검색',
-    'aria-label': '검색',
-    value: state.query,
-    oninput: (e) => {
-      state.query = e.target.value;
-      fillList();
-    },
-  });
-
-  function fillList() {
-    const q = state.query.trim().toLowerCase();
-    const items = state.sermons
-      .filter((s) => s.category === cat)
-      .filter((s) => {
-        if (!q) return true;
-        const r = s.result || {};
-        return [s.title, r.theme, r.summary_short, r.preacher, ...(r.scripture || [])].join(' ').toLowerCase().includes(q);
-      });
-    list.replaceChildren();
-    if (!items.length) {
-      list.append(
-        h(
-          'li',
-          {},
-          h(
-            'div',
-            { class: 'empty' },
-            q
-              ? h('p', {}, h('strong', { text: '검색 결과가 없습니다.' }))
-              : [
-                  h('p', {}, h('strong', { text: `아직 ${catLabel(cat)} 정리가 없습니다.` })),
-                  h('p', { text: 'Google Sheet의 Playlists 탭에 재생목록을 넣고 GitHub Actions를 한 번 실행해 보세요.' }),
-                ],
-          ),
-        ),
-      );
-      return;
-    }
-    for (const s of items) {
-      const r = s.result || {};
-      list.append(
-        h(
-          'li',
-          {},
-          h(
-            'a',
-            { class: 'card', href: `#/v/${encodeURIComponent(s.id)}` },
-            h('img', { class: 'thumb', src: thumbUrl(s.id), alt: '', loading: 'lazy', onerror: (e) => (e.target.style.visibility = 'hidden') }),
-            h(
-              'div',
-              { class: 'card-body' },
-              h(
-                'div',
-                { class: 'meta' },
-                (r.scripture || [])[0] ? h('span', { class: 'chip', text: r.scripture[0] }) : null,
-                state.noteIds.has(s.id) ? h('span', { class: 'chip note-chip', text: '📝 내 노트' }) : null,
-                formatDate(s.published_at),
-              ),
-              h('h2', { class: 'card-title', text: s.title }),
-              h('p', { class: 'card-summary', text: r.summary_short || r.theme || '' }),
-            ),
-          ),
-        ),
-      );
-    }
-  }
-
-  app.replaceChildren(tabs, search, list);
-  fillList();
+  const items = state.sermons.filter((s) => s.category === cat);
+  const empty = h('div', { class: 'empty' }, h('p', {}, h('strong', { text: `아직 ${catLabel(cat)} 정리가 없습니다.` })), h('p', { text: cat === 'youth' ? '청년부예배는 자동 수집이 없습니다. 관리 화면에서 "청년부예배"를 체크해 직접 실행해 보세요.' : 'Google Sheet의 Playlists 탭에 재생목록을 넣으면 정해진 시각에 자동으로 정리됩니다.' }));
+  app.replaceChildren(tabs, sermonBrowser(items, empty));
   document.title = `${catLabel(cat)} · 말씀 노트`;
 }
 
-/* ---------- 상세 ---------- */
-function sermonToText(s) {
-  const r = s.result;
-  const sg = r.small_group || {};
-  const lines = [];
-  const list = (arr) => (arr || []).forEach((x, i) => lines.push(`${i + 1}. ${x}`));
-  lines.push(`[${catLabel(s.category)}] ${s.title}`);
-  if (r.scripture?.length) lines.push(`본문: ${r.scripture.join(', ')}`);
-  lines.push('');
-  return { lines, list, sg, r };
+/* ---------- 사용자 영상 ---------- */
+const USER_STATUS = {
+  pending: ['정리 대기 중', 'wait'],
+  redo: ['정리 대기 중', 'wait'],
+  done: ['완료', 'ok'],
+  error: ['일부 실패', 'bad'],
+  no_transcript: ['자막 없음', 'bad'],
+};
+
+function renderUserRoute() {
+  document.title = '사용자 영상 · 말씀 노트';
+  const items = state.sermons.filter((s) => s.category === 'user');
+  const sections = [h('div', { class: 'page-head' }, h('h1', { text: '사용자 영상' }), h('p', { class: 'meta', text: '설교 영상의 유튜브 링크를 넣으면 AI가 같은 형식(설교리뷰 · QT 묵상 · 성경공부 · 소그룹 나눔)으로 정리해 줍니다. 여기 올린 영상과 정리는 로그인한 가족 모두가 볼 수 있습니다.' }))];
+
+  if (!NOTES_ENABLED) {
+    sections.push(h('div', { class: 'empty' }, h('p', { text: '로그인 기능이 아직 연결되지 않아 영상을 추가할 수 없습니다. (config.js 설정 필요)' })));
+  } else if (!auth.user) {
+    sections.push(h('p', { class: 'note-hint', text: '영상을 추가하려면 화면 위쪽에서 구글 로그인을 해 주세요.' }));
+  } else {
+    sections.push(buildUserForm());
+  }
+  const empty = h('div', { class: 'empty' }, h('p', {}, h('strong', { text: '아직 정리된 사용자 영상이 없습니다.' })));
+  sections.push(h('section', { class: 'block' }, h('h2', { text: '정리된 영상' }), sermonBrowser(items, empty)));
+  app.replaceChildren(...sections);
 }
 
-function smallGroupText(s) {
-  const { lines, list, sg } = sermonToText(s);
-  lines.push('◆ 소그룹 나눔 질문', '');
-  if (sg.icebreaker) lines.push('[마음 열기]', sg.icebreaker, '');
-  const sections = [
-    ['본문 관찰', sg.observation],
-    ['묵상과 해석', sg.reflection],
-    ['삶의 적용', sg.application],
-    ['기도와 결단', sg.prayer],
-  ];
-  for (const [name, arr] of sections) {
-    if (!arr?.length) continue;
-    lines.push(`[${name}]`);
-    list(arr);
-    lines.push('');
-  }
-  return lines.join('\n').trim();
+function buildUserForm() {
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const field = (label, input, hint) => h('label', { class: 'field' }, h('span', { class: 'field-label', text: label }), input, hint ? h('span', { class: 'meta', text: hint }) : null);
+  const url = h('input', { class: 'search', type: 'url', placeholder: 'https://www.youtube.com/watch?v=…', required: true, 'aria-label': '유튜브 주소' });
+  const date = h('input', { class: 'search', type: 'date', value: todayStr, 'aria-label': '설교 날짜' });
+  const title = h('input', { class: 'search', placeholder: '비워 두면 유튜브 영상 제목을 씁니다', 'aria-label': '설교 제목' });
+  const scripture = h('input', { class: 'search', placeholder: '예: 요한복음 3:16-21', 'aria-label': '성경 본문' });
+  const preacher = h('input', { class: 'search', placeholder: '예: 홍길동 목사', 'aria-label': '설교자' });
+  const msg = h('p', { class: 'meta', role: 'status' });
+  const btn = h('button', { class: 'btn primary', type: 'submit' }, 'AI로 정리하기');
+  const form = h(
+    'form',
+    { class: 'user-form point' },
+    h('h2', { text: '영상 추가' }),
+    field('유튜브 주소', url),
+    h('div', { class: 'form-grid' }, field('설교 날짜', date), field('설교자', preacher)),
+    field('설교 제목', title),
+    field('성경 본문', scripture, '본문을 적어 주면 성경 4역본(개역개정 · NIV · 표준새번역 · 메시지)이 함께 붙습니다.'),
+    h('div', { class: 'admin-row' }, btn),
+    msg,
+  );
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!url.value.trim()) return (msg.textContent = '유튜브 주소를 입력해 주세요.');
+    btn.disabled = true;
+    msg.textContent = '등록하는 중…';
+    try {
+      const r = await notesCall('user_video_add', { url: url.value.trim(), date: date.value, title: title.value.trim(), scripture: scripture.value.trim(), preacher: preacher.value.trim() });
+      if (!r.ok) throw new Error(r.error || '등록하지 못했습니다.');
+      msg.textContent = r.dispatched
+        ? `"${r.title}" 등록 완료. AI 정리를 시작했습니다. 보통 몇 분 걸리며, 끝나면 아래 "정리된 영상"에 나타납니다 (반영까지 1~2분 더).`
+        : `"${r.title}" 등록 완료. 자동 정리는 다음 정해진 시각(새벽기도회 수집 시간)에 시작됩니다.`;
+      url.value = '';
+      title.value = '';
+      scripture.value = '';
+      preacher.value = '';
+      mine.refresh();
+    } catch (err) {
+      msg.textContent = `오류: ${err.message || err}`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  const mine = buildMyVideos();
+  return h('div', {}, form, mine.node);
 }
 
-function renderDetail(id) {
-  const s = state.sermons.find((x) => x.id === id);
-  if (!s) {
-    app.replaceChildren(h('a', { class: 'back', href: '#/', text: '← 목록으로' }), h('div', { class: 'empty' }, h('p', { text: '해당 설교를 찾을 수 없습니다.' })));
-    return;
+// 내가 올린 영상의 처리 현황 (대기 중이면 20초마다 다시 확인)
+function buildMyVideos() {
+  const list = h('ul', { class: 'mine-list' });
+  const info = h('p', { class: 'meta', role: 'status' });
+  let timer = null;
+  async function refresh() {
+    clearTimeout(timer);
+    try {
+      const r = await notesCall('user_video_mine');
+      if (!r.ok) throw new Error(r.error || '목록을 불러오지 못했습니다.');
+      const videos = r.videos || [];
+      list.replaceChildren(...videos.map(mineRow));
+      info.textContent = videos.length ? '' : '아직 내가 올린 영상이 없습니다.';
+      if (videos.some((v) => v.status === 'pending' || v.status === 'redo') && document.body.contains(list)) timer = setTimeout(refresh, 20000);
+      else if (videos.some((v) => v.status === 'done') && document.body.contains(list)) {
+        // 정리가 끝난 영상이 있으면 목록 데이터를 새로 받아 둡니다 (반영 전이면 그대로)
+        const before = state.sermons.length;
+        await load().catch(() => {});
+        if (state.sermons.length !== before) toast('정리가 끝난 영상이 목록에 추가되었습니다');
+      }
+    } catch (e) {
+      info.textContent = `오류: ${e.message || e}`;
+    }
   }
-  const r = s.result || {};
-  const sg = r.small_group || {};
-  document.title = `${r.title || s.title} · 말씀 노트`;
-
-  const ytUrl = safeYoutube(s.url, s.id);
-
-  // 로그인했다면 이 설교의 개인 노트를 준비합니다 (로그인 전이면 null).
-  const notes = NOTES_ENABLED && auth.user ? createNotes(s) : null;
-  currentNotes = notes;
-
-  const questionGroup = (title, arr) =>
-    arr?.length ? h('div', { class: 'sg-group' }, h('h3', { text: title }), h('ol', { class: 'q' }, arr.map((q) => h('li', { text: q })))) : null;
-
-  const sections = [];
-
-  // 추천 찬양 (맨 앞)
-  const worship = renderWorshipSection(r.worship_songs);
-  if (worship) sections.push(worship);
-
-  // 성경 본문 (여러 역본을 나란히)
-  const passage = renderBibleBlock(r.bible);
-  if (passage) sections.push(passage);
-
-  // 설교 정리
-  sections.push(
-    h(
-      'section',
-      { class: 'block', id: 'outline' },
-      h('h2', { text: '설교 정리' }),
-      (r.outline || []).map((o) =>
-        h(
-          'div',
-          { class: 'point' },
-          h('h3', { text: o.heading }),
-          o.scripture ? h('p', { class: 'ref', text: o.scripture }) : null,
-          h('div', { class: 'md' }, outlineParas(o).map((t) => mdBlocks(t))),
-          outlineSummary(o) ? h('div', { class: 'keybox' }, h('strong', { class: 'keybox-label', text: '핵심 요약' }), h('p', {}, inlineMd(outlineSummary(o)))) : null,
-        ),
-      ),
-      r.gospel_connection ? h('div', { class: 'gospel' }, h('h3', { text: '복음과의 연결' }), h('div', { class: 'md' }, mdBlocks(r.gospel_connection))) : null,
-    ),
-  );
-
-  // 삶의 적용
-  if (r.applications?.length) {
-    sections.push(
-      h(
-        'section',
-        { class: 'block', id: 'apply' },
-        h('h2', { text: '삶의 적용 포인트' }),
-        h(
-          'div',
-          { class: 'apps' },
-          r.applications.map((a, i) => h('div', { class: 'app-item' }, h('h3', {}, inlineMd(a.title)), h('div', { class: 'md' }, mdBlocks(a.detail)), notes ? notes.checkRow(i) : null)),
-        ),
-      ),
+  function mineRow(v) {
+    const [label, cls] = USER_STATUS[v.status] || [v.status, 'wait'];
+    const open = v.status === 'done' ? h('a', { class: 'btn small', href: `#/v/${encodeURIComponent(v.video_id)}` }, '열기') : null;
+    const redo = v.status !== 'pending' && v.status !== 'redo' ? h('button', { class: 'btn small', type: 'button' }, '다시 정리') : null;
+    const remove = h('button', { class: 'btn small danger', type: 'button' }, '목록에서 빼기');
+    redo?.addEventListener('click', async () => {
+      const r = await notesCall('user_video_redo', { video_id: v.video_id });
+      toast(r.ok ? '다시 정리를 요청했습니다' : r.error || '요청하지 못했습니다');
+      refresh();
+    });
+    remove.addEventListener('click', async () => {
+      if (!confirm(`"${v.title}" 을(를) 내 목록에서 뺄까요?`)) return;
+      const r = await notesCall('user_video_remove', { video_id: v.video_id });
+      toast(r.ok ? '목록에서 뺐습니다' : r.error || '처리하지 못했습니다');
+      refresh();
+    });
+    return h(
+      'li',
+      { class: 'mine-item' },
+      h('div', { class: 'mine-main' }, h('strong', { text: v.title }), h('div', { class: 'meta' }, h('span', { class: `vid-status ${cls}`, text: label }), ` ${v.published_at || ''}${v.note && v.status !== 'done' ? ` · ${v.note}` : ''}`)),
+      h('div', { class: 'admin-row' }, open, redo, remove),
     );
   }
-
-  // 묵상
-  if (r.meditation_questions?.length) {
-    sections.push(
-      h(
-        'section',
-        { class: 'block', id: 'meditate' },
-        h('h2', { text: '묵상 질문' }),
-        h('ol', { class: 'q' }, r.meditation_questions.map((q, i) => h('li', {}, h('span', {}, inlineMd(q)), notes ? notes.answerBox(i) : null))),
-      ),
-    );
-  }
-
-  // 소그룹
-  sections.push(
-    h(
-      'section',
-      { class: 'block', id: 'group' },
-      h(
-        'div',
-        { class: 'block-head' },
-        h('h2', { text: '소그룹 나눔 질문' }),
-        h('button', { class: 'btn', type: 'button', onclick: () => copyText(smallGroupText(s)) }, '질문 복사'),
-      ),
-      sg.icebreaker ? h('div', { class: 'sg-group' }, h('h3', { text: '마음 열기' }), h('div', { class: 'sg-ice', text: sg.icebreaker })) : null,
-      questionGroup('본문 관찰', sg.observation),
-      questionGroup('묵상과 해석', sg.reflection),
-      questionGroup('삶의 적용', sg.application),
-      questionGroup('기도와 결단', sg.prayer),
-    ),
-  );
-
-  // 기도 배경음악
-  const music = renderMusicSection(state.music);
-  if (music) sections.push(music);
-
-  // 내 메모 (로그인 전에는 안내 문구만 보입니다)
-  if (NOTES_ENABLED) {
-    sections.push(
-      h(
-        'section',
-        { class: 'block', id: 'mynote' },
-        h('div', { class: 'block-head' }, h('h2', { text: '내 메모' }), notes ? notes.status : null),
-        notes
-          ? [notes.memoBox(), h('p', { class: 'meta', text: '내 구글 계정으로 자동 저장되며, 다른 로그인 사용자에게는 보이지 않습니다.' })]
-          : h('p', { class: 'note-hint', text: '화면 위쪽에서 구글 로그인을 하면, 이 설교에 대한 메모와 묵상 답변, 적용 체크를 나만의 노트로 남길 수 있어요.' }),
-      ),
-    );
-  }
-
-  sections.push(
-    h(
-      'footer',
-      { class: 'sermon-foot' },
-      h('p', { text: `참고: ${footnoteText(s.category)}` }),
-      r.caveats ? h('p', { class: 'caveats', text: `유의: ${r.caveats}` }) : null,
-      h('p', { class: 'ai-notice', text: AI_NOTICE }),
-    ),
-  );
-
-  app.replaceChildren(
-    h('a', { class: 'back', href: `#/c/${s.category}`, text: `← ${catLabel(s.category)} 목록` }),
-    h(
-      'div',
-      { class: 'detail-head' },
-      h('div', { class: 'meta' }, h('span', { class: 'chip', text: catLabel(s.category) }), formatDate(s.published_at), r.preacher ? ` · ${r.preacher}` : ''),
-      h('h1', { text: r.title || s.title }),
-      r.scripture?.length ? h('p', { class: 'meta', text: `본문 ${r.scripture.join(', ')}` }) : null,
-      r.summary_short || r.theme ? h('div', { class: 'detail-theme', text: r.summary_short || r.theme }) : null,
-      h(
-        'div',
-        { class: 'actions' },
-        h('a', { class: 'btn primary', href: ytUrl, target: '_blank', rel: 'noopener noreferrer' }, '▶ 영상 보기'),
-        h('a', { class: 'btn', href: `#/h/${encodeURIComponent(s.id)}` }, '핸드아웃 (PDF)'),
-      ),
-    ),
-    h(
-      'nav',
-      { class: 'secnav', 'aria-label': '섹션 이동' },
-      [['worship', '추천 찬양'], ['passage', '본문'], ['outline', '설교 정리'], ['apply', '삶의 적용'], ['meditate', '묵상'], ['group', '소그룹'], ['music', '기도 음악'], ['mynote', '내 메모']]
-        .filter(([sid]) => sections.some((el) => el.id === sid))
-        .map(([sid, label]) =>
-          h('a', {
-            href: `#${sid}`,
-            text: label,
-            onclick: (e) => {
-              e.preventDefault();
-              document.getElementById(sid)?.scrollIntoView({ behavior: 'smooth' });
-            },
-          }),
-        ),
-    ),
-    ...sections,
-  );
-  if (notes) notes.load();
+  const node = h('section', { class: 'block' }, h('h2', { text: '내가 올린 영상' }), list, info);
+  setTimeout(refresh, 0);
+  return { node, refresh };
 }
+
 
 /* ---------- 관리: 재생목록 추가·수정·삭제 (Apps Script 웹앱 경유) ---------- */
 const ADMIN_URL = (window.APP_CONFIG && window.APP_CONFIG.ADMIN_API_URL) || '';
@@ -506,6 +487,16 @@ function categoryOptions(selected) {
   return CATEGORIES.map((c) => h('option', { value: c.label, text: c.label, selected: c.label === selected }));
 }
 
+// 성경 본문은 설정 없이 웹사이트에서 자동으로 가져옵니다 (대한성서공회 · BibleGateway)
+function renderBibleInfo() {
+  return h(
+    'section',
+    { class: 'point' },
+    h('h2', { text: '성경 본문' }),
+    h('p', { class: 'meta', text: '개역개정 · 표준새번역은 대한성서공회, NIV · 메시지 성경은 BibleGateway 웹사이트에서 자동으로 가져옵니다. 제목의 성경 본문(예: 열왕기상 4, 5장)을 읽어 설교마다 붙고, 설정은 필요 없습니다. 웹사이트의 화면 구조가 바뀌어 읽지 못하게 되면 GitHub Actions의 "Run workflow"에서 bible_check 를 true 로 두고 실행해 점검할 수 있습니다.' }),
+  );
+}
+
 function renderAdminPanel(password) {
   const status = h('p', { class: 'meta', role: 'status' });
   const list = h('ul', { class: 'admin-list' });
@@ -591,11 +582,11 @@ function renderAdminPanel(password) {
     }
   }
   // 동기화 실행 요청. 성공하면 true (선택한 영상 정리에서도 같이 씁니다)
-  async function requestSync(count) {
+  async function requestSync(count, categories) {
     syncBtn.disabled = true;
     syncInfo.textContent = '실행을 요청하는 중…';
     try {
-      const r = await adminPost({ action: 'sync_run', password, max_new: String(count) });
+      const r = await adminPost({ action: 'sync_run', password, max_new: String(count), categories: categories || syncCategories() });
       if (passwordRejected(r)) return false;
       if (!r.ok) throw new Error(r.error || '실행하지 못했습니다.');
       syncInfo.textContent = '⏳ 실행을 요청했습니다. 잠시 뒤 상태가 표시됩니다…';
@@ -608,6 +599,16 @@ function renderAdminPanel(password) {
       return false;
     }
   }
+  // 이번에 확인할 구분 (청년부예배는 자동 수집이 없으므로 필요할 때 여기서 체크)
+  const catChecks = CATEGORIES.map((c) => {
+    const cb = h('input', { type: 'checkbox', value: c.key });
+    cb.checked = c.key !== 'youth';
+    return h('label', { class: 'ho-opt' }, cb, c.label);
+  });
+  const syncCategories = () => {
+    const keys = catChecks.map((l) => l.querySelector('input')).filter((cb) => cb.checked).map((cb) => cb.value);
+    return keys.length ? keys : ['none'];
+  };
   syncBtn.addEventListener('click', () => requestSync(syncMax.value));
 
   const rowFor = (p) => {
@@ -653,20 +654,21 @@ function renderAdminPanel(password) {
     h(
       'div',
       { class: 'admin-head' },
-      h('h1', { text: '재생목록 관리' }),
+      h('h1', { text: '관리' }),
       logout,
     ),
     h(
       'section',
       { class: 'point admin-sync' },
       h('h2', { text: '지금 동기화' }),
-      h('p', { class: 'meta', text: '새 영상을 찾아 설교 정리를 만듭니다. 자동으로는 매일 아침 7:30(토론토)에 실행되고, 전에 실패한 영상은 그때 먼저 다시 시도합니다. 아직 영상이 올라오지 않은 예약 라이브는 건너뜁니다. 영상 1편에 몇 분씩 걸립니다.' }),
+      h('p', { class: 'meta', text: '새 영상을 찾아 설교 정리를 만듭니다. 자동 수집 시각(토론토): 수요예배 매주 목요일 오전 7:00 · 주일예배 매주 일요일 밤 10:00 · 새벽기도회 매일 오전 11:00. 청년부예배는 자동 수집이 없어서 아래에서 체크하고 직접 실행합니다. 전에 실패한 영상은 같은 구분의 다음 실행 때 먼저 다시 시도하고, 아직 올라오지 않은 예약 라이브는 건너뜁니다. 영상 1편에 몇 분씩 걸립니다.' }),
+      h('div', { class: 'admin-row' }, h('span', { class: 'meta', text: '확인할 구분' }), catChecks),
       h('div', { class: 'admin-row' }, h('label', { class: 'meta', text: '한 번에 정리할 영상' }), syncMax, syncBtn),
       syncInfo,
     ),
     renderVideoManager(password, passwordRejected, requestSync),
     renderModelSection(password, passwordRejected),
-    renderBibleSection(password, passwordRejected),
+    renderBibleInfo(),
     h(
       'section',
       { class: 'point admin-add' },
@@ -823,160 +825,13 @@ function startGoogle(tries = 0) {
   renderAccountArea();
 }
 
-const localDate = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
 
-// 설교 한 편에 대한 내 노트: 메모 + 묵상 질문 답변 + 적용 체크. 입력하면 잠시 뒤 자동 저장합니다.
-function createNotes(s) {
-  const r = s.result || {};
-  const questions = r.meditation_questions || [];
-  const apps = r.applications || [];
-  const values = {
-    memo: '',
-    answers: questions.map(() => ''),
-    checks: apps.map(() => ({ done: false, date: '' })),
-  };
-  const fields = []; // 불러오기가 끝나기 전에는 입력을 막아, 기존 노트를 빈 값으로 덮어쓰지 않게 합니다.
-  const painters = [];
-  const answerEls = [];
-  let memoEl = null;
-  const status = h('span', { class: 'meta note-status', role: 'status' });
-  let ready = false;
-  let dirty = false;
-  let timer = null;
-  let saving = null;
-
-  const setStatus = (t) => {
-    status.textContent = t;
-  };
-
-  async function save() {
-    if (!ready || !dirty) return;
-    if (saving) await saving;
-    dirty = false;
-    setStatus('저장 중…');
-    saving = (async () => {
-      try {
-        const res = await notesCall('notes_save', {
-          video_id: s.id,
-          memo: values.memo,
-          answers: questions.map((q, i) => ({ q, a: values.answers[i] })),
-          checks: apps.map((a, i) => ({ t: a.title, done: values.checks[i].done, date: values.checks[i].date })),
-        });
-        if (!res.ok) throw new Error(res.error || '저장하지 못했습니다.');
-        state.noteIds.add(s.id);
-        setStatus(`저장됨 ${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`);
-      } catch (e) {
-        dirty = true;
-        setStatus(`저장 실패: ${e.message || e}`);
-      }
-    })();
-    await saving;
-    saving = null;
-  }
-
-  const touch = () => {
-    dirty = true;
-    setStatus('입력 중…');
-    clearTimeout(timer);
-    timer = setTimeout(save, 1200);
-  };
-  const flush = () => {
-    clearTimeout(timer);
-    return save();
-  };
-
-  function answerBox(i) {
-    const ta = h('textarea', { class: 'note-input', rows: '3', placeholder: '내 생각을 적어 보세요', 'aria-label': `묵상 질문 ${i + 1} 답변`, disabled: true });
-    ta.addEventListener('input', () => {
-      values.answers[i] = ta.value;
-      touch();
-    });
-    fields.push(ta);
-    answerEls[i] = ta;
-    return ta;
-  }
-
-  function checkRow(i) {
-    const cb = h('input', { type: 'checkbox', disabled: true, 'aria-label': '실천했어요' });
-    const dateEl = h('span', { class: 'meta check-date' });
-    const paint = () => {
-      const c = values.checks[i];
-      cb.checked = c.done;
-      dateEl.textContent = c.done && c.date ? `${c.date} 실천` : '';
-    };
-    cb.addEventListener('change', () => {
-      const c = values.checks[i];
-      c.done = cb.checked;
-      c.date = c.done ? c.date || localDate() : '';
-      paint();
-      touch();
-    });
-    fields.push(cb);
-    painters.push(paint);
-    return h('label', { class: 'check' }, cb, h('span', { text: ' 실천했어요' }), dateEl);
-  }
-
-  function memoBox() {
-    memoEl = h('textarea', {
-      class: 'note-input note-memo',
-      rows: '6',
-      placeholder: '이 설교를 들으며 떠오른 생각, 기도 제목, 나누고 싶은 말을 자유롭게 적어 보세요.',
-      'aria-label': '내 메모',
-      disabled: true,
-    });
-    memoEl.addEventListener('input', () => {
-      values.memo = memoEl.value;
-      touch();
-    });
-    fields.push(memoEl);
-    return memoEl;
-  }
-
-  async function load() {
-    setStatus('노트 불러오는 중…');
-    try {
-      const res = await notesCall('notes_get', { video_id: s.id });
-      if (!res.ok) throw new Error(res.error || '노트를 불러오지 못했습니다.');
-      const n = res.note;
-      if (n) {
-        values.memo = n.memo || '';
-        // 설교 정리가 다시 만들어져 질문 문구가 바뀌면 옛 답변은 시트에만 남고 화면에는 나오지 않습니다.
-        const aMap = new Map((n.answers || []).map((x) => [x.q, x.a]));
-        questions.forEach((q, i) => {
-          values.answers[i] = aMap.get(q) || '';
-        });
-        const cMap = new Map((n.checks || []).map((x) => [x.t, x]));
-        apps.forEach((a, i) => {
-          const c = cMap.get(a.title);
-          values.checks[i] = c ? { done: !!c.done, date: c.date || '' } : { done: false, date: '' };
-        });
-      }
-      if (memoEl) memoEl.value = values.memo;
-      answerEls.forEach((ta, i) => {
-        if (ta) ta.value = values.answers[i] || '';
-      });
-      painters.forEach((p) => p());
-      fields.forEach((el) => {
-        el.disabled = false;
-      });
-      ready = true;
-      setStatus('');
-    } catch (e) {
-      setStatus(`오류: ${e.message || e}`);
-    }
-  }
-
-  return { answerBox, checkRow, memoBox, status, load, flush };
-}
 
 /* ---------- 글자 크기 (10~20pt) ---------- */
 const FS_KEY = 'sn-fs';
 const FS_MIN = 10;
 const FS_MAX = 20;
-const FS_DEFAULT = 14;
+const FS_DEFAULT = 16;
 const clampFs = (v) => {
   const n = Math.round(Number(v));
   return Number.isFinite(n) ? Math.min(FS_MAX, Math.max(FS_MIN, n)) : FS_DEFAULT;
@@ -1042,10 +897,10 @@ function initFontControl() {
   renderAccountArea();
   startGoogle();
   if (auth.user) {
-    // 목록 화면에만 "내 노트" 표시를 다시 그립니다. 설교 화면에서 입력 중인 내용은 건드리지 않습니다.
+    // 목록 화면에만 "내 기록" 표시를 다시 그립니다. 설교 화면에서 입력 중인 내용은 건드리지 않습니다.
     fetchNoteIds().then(() => {
       const kind = location.hash.split('/')[1];
-      if (kind !== 'v' && kind !== 'admin') route();
+      if (kind !== 'v' && kind !== 'admin' && kind !== 'h') route();
     });
   }
 })();

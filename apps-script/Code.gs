@@ -11,16 +11,18 @@
 //   GITHUB_TOKEN      (선택) 앱에서 "지금 동기화"를 누를 때 쓰는 GitHub 토큰. 이 저장소의 Actions 읽기/쓰기 권한만 주세요.
 //   GITHUB_REPO       (선택) 예: hanyj123-cmd/SermonNotes
 //   GITHUB_REF        (선택) 실행할 브랜치. 비워 두면 main
-// Settings 탭(AI 모델·성경 역본)과 Sermons 탭(영상 선택 관리)은 이 코드가 직접 읽고 씁니다. 별도 설정은 필요 없습니다.
+// Settings 탭(AI 모델)과 Sermons 탭(영상 선택 관리 · 사용자 영상)은 이 코드가 직접 읽고 씁니다. 별도 설정은 필요 없습니다.
 
 const SHEET_NAME = 'Playlists';
 const HEADERS = ['category', 'playlist_url', 'max_videos'];
-const LABELS = ['새벽기도', '수요예배', '주일예배'];
+const LABELS = ['주일예배', '새벽기도', '수요예배', '청년부예배'];
 const DEFAULT_MAX = 30;
 const MAX_LIMIT = 100;
 
 const NOTES_SHEET = 'Notes';
-const NOTE_HEADERS = ['user_sub', 'email', 'video_id', 'memo', 'answers_json', 'checks_json', 'updated_at'];
+const NOTE_HEADERS = ['user_sub', 'email', 'video_id', 'memo', 'answers_json', 'checks_json', 'updated_at', 'fields_json'];
+const MAX_FIELDS = 80; // 모드별 개인 기록(묵상 답, 삶의 적용, 소그룹 메모 등) 칸 수
+const MAX_FIELD_LEN = 5000;
 const MAX_MEMO = 20000;
 const MAX_ANSWER = 5000;
 const MAX_ITEMS = 20;
@@ -31,6 +33,7 @@ const ALIASES = {
   dawn: '새벽기도', 새벽: '새벽기도', 새벽기도: '새벽기도',
   wednesday: '수요예배', wed: '수요예배', 수요: '수요예배', 수요예배: '수요예배',
   sunday: '주일예배', sun: '주일예배', 주일: '주일예배', 주일예배: '주일예배',
+  youth: '청년부예배', 청년: '청년부예배', 청년부: '청년부예배', 청년부예배: '청년부예배',
 };
 
 function toLabel(raw) {
@@ -60,6 +63,7 @@ function doPost(e) {
   const action = String(body.action || '');
 
   if (action.indexOf('notes_') === 0) return json(handleNotes(action, body));
+  if (action.indexOf('user_video_') === 0) return json(handleUserVideos(action, body));
 
   if (!passwordOk(body.password)) {
     return json({ ok: false, error: '비밀번호가 맞지 않습니다.' });
@@ -265,6 +269,10 @@ function getNotesSheet() {
     sh.getRange(1, 1, 1, NOTE_HEADERS.length).setValues([NOTE_HEADERS]);
     // 모든 칸을 '텍스트'로 고정: 긴 숫자 ID가 깨지거나, "=" 로 시작하는 메모가 수식으로 실행되는 것을 막습니다.
     sh.getRange(1, 1, sh.getMaxRows(), NOTE_HEADERS.length).setNumberFormat('@');
+  } else if (sh.getLastColumn() < NOTE_HEADERS.length) {
+    // 예전 버전에서 만든 Notes 탭에 새 열(fields_json)을 덧붙입니다
+    sh.getRange(1, 1, 1, NOTE_HEADERS.length).setValues([NOTE_HEADERS]);
+    sh.getRange(1, NOTE_HEADERS.length, sh.getMaxRows(), 1).setNumberFormat('@');
   }
   return sh;
 }
@@ -294,6 +302,15 @@ function parseJsonArray(text) {
   }
 }
 
+function parseJsonObject(text) {
+  try {
+    const v = JSON.parse(String(text || '{}'));
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  } catch (err) {
+    return {};
+  }
+}
+
 function notesGet(user, body) {
   const videoId = checkVideoId(body.video_id);
   const sh = getNotesSheet();
@@ -307,35 +324,68 @@ function notesGet(user, body) {
       answers: parseJsonArray(r[4]),
       checks: parseJsonArray(r[5]),
       updated_at: String(r[6] || ''),
+      fields: parseJsonObject(r[7]),
     },
   };
 }
 
+// 모드별 개인 기록(fields): { "qt.q.0": "…", "group.note.3": "…" } — 키는 영문·숫자·점·밑줄·하이픈만
+function cleanFields(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  let n = 0;
+  Object.keys(raw).forEach(function (k) {
+    if (n >= MAX_FIELDS || !/^[\w.-]{1,40}$/.test(k)) return;
+    const v = String(raw[k] === undefined || raw[k] === null ? '' : raw[k]).slice(0, MAX_FIELD_LEN);
+    if (v.trim() === '') return; // 비운 칸은 저장하지 않음
+    out[k] = v;
+    n++;
+  });
+  return out;
+}
+
+// 보낸 항목만 바꿉니다 (memo / answers / checks / fields 중 body 에 있는 것만 덮어씀)
 function notesSave(user, body) {
   const videoId = checkVideoId(body.video_id);
-  const memo = String(body.memo || '').slice(0, MAX_MEMO);
-  const answers = (Array.isArray(body.answers) ? body.answers : []).slice(0, MAX_ITEMS).map(function (x) {
-    return { q: String((x && x.q) || '').slice(0, 500), a: String((x && x.a) || '').slice(0, MAX_ANSWER) };
-  });
-  const checks = (Array.isArray(body.checks) ? body.checks : []).slice(0, MAX_ITEMS).map(function (x) {
-    const date = String((x && x.date) || '');
-    return {
-      t: String((x && x.t) || '').slice(0, 300),
-      done: !!(x && x.done),
-      date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '',
-    };
-  });
-  const answersJson = JSON.stringify(answers);
-  const checksJson = JSON.stringify(checks);
-  if (answersJson.length > MAX_CELL || checksJson.length > MAX_CELL) {
-    throw new Error('묵상 답변이 너무 깁니다. 조금 줄여 주세요.');
+  const sh = getNotesSheet();
+  const found = findNoteRow(sh, user.sub, videoId);
+  const prev = found ? sh.getRange(found, 1, 1, NOTE_HEADERS.length).getValues()[0] : [];
+
+  let memo = String(prev[3] || '');
+  if (body.memo !== undefined) memo = String(body.memo || '').slice(0, MAX_MEMO);
+
+  let answersJson = String(prev[4] || '[]');
+  if (body.answers !== undefined) {
+    const answers = (Array.isArray(body.answers) ? body.answers : []).slice(0, MAX_ITEMS).map(function (x) {
+      return { q: String((x && x.q) || '').slice(0, 500), a: String((x && x.a) || '').slice(0, MAX_ANSWER) };
+    });
+    answersJson = JSON.stringify(answers);
   }
 
-  const sh = getNotesSheet();
-  const row = findNoteRow(sh, user.sub, videoId) || sh.getLastRow() + 1;
+  let checksJson = String(prev[5] || '[]');
+  if (body.checks !== undefined) {
+    const checks = (Array.isArray(body.checks) ? body.checks : []).slice(0, MAX_ITEMS).map(function (x) {
+      const date = String((x && x.date) || '');
+      return {
+        t: String((x && x.t) || '').slice(0, 300),
+        done: !!(x && x.done),
+        date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '',
+      };
+    });
+    checksJson = JSON.stringify(checks);
+  }
+
+  let fieldsJson = String(prev[7] || '{}');
+  if (body.fields !== undefined) fieldsJson = JSON.stringify(cleanFields(body.fields));
+
+  if (answersJson.length > MAX_CELL || checksJson.length > MAX_CELL || fieldsJson.length > MAX_CELL) {
+    throw new Error('기록이 너무 깁니다. 조금 줄여 주세요.');
+  }
+
+  const row = found || sh.getLastRow() + 1;
   const range = sh.getRange(row, 1, 1, NOTE_HEADERS.length);
   range.setNumberFormat('@');
-  range.setValues([[user.sub, user.email, videoId, memo, answersJson, checksJson, new Date().toISOString()]]);
+  range.setValues([[user.sub, user.email, videoId, memo, answersJson, checksJson, new Date().toISOString(), fieldsJson]]);
   return { ok: true };
 }
 
@@ -351,7 +401,8 @@ function notesList(user) {
     const hasMemo = String(r[3] || '').trim() !== '';
     const hasAnswer = parseJsonArray(r[4]).some(function (x) { return x && String(x.a || '').trim() !== ''; });
     const hasCheck = parseJsonArray(r[5]).some(function (x) { return x && x.done; });
-    if (hasMemo || hasAnswer || hasCheck) items.push({ video_id: String(r[2]), updated_at: String(r[6] || '') });
+    const hasField = Object.keys(parseJsonObject(r[7])).length > 0;
+    if (hasMemo || hasAnswer || hasCheck || hasField) items.push({ video_id: String(r[2]), updated_at: String(r[6] || '') });
   });
   return { ok: true, items: items };
 }
@@ -389,7 +440,7 @@ function validate(body) {
   const category = toLabel(body.category);
   const url = String(body.playlist_url || '').trim();
   let max = parseInt(body.max_videos, 10);
-  if (LABELS.indexOf(category) < 0) return { error: '구분은 새벽기도 / 수요예배 / 주일예배 중 하나여야 합니다.' };
+  if (LABELS.indexOf(category) < 0) return { error: '구분은 주일예배 / 새벽기도 / 수요예배 / 청년부예배 중 하나여야 합니다.' };
   if (!/[?&]list=[\w-]+/.test(url) && !/^(PL|UU|OL|FL|LL)[\w-]{10,}$/.test(url)) {
     return { error: '재생목록 주소에 list= 가 없습니다. 재생목록 페이지의 주소를 넣어 주세요.' };
   }
@@ -500,6 +551,28 @@ function syncStatus() {
   return { ok: true, run: latestRun() };
 }
 
+const SYNC_CATEGORIES = ['sunday', 'dawn', 'wednesday', 'youth', 'all', 'user', 'none'];
+
+// 허용된 구분만 골라 쉼표로 잇습니다 (비어 있으면 '' = 청년부를 뺀 기본 구분)
+function cleanCategories(raw) {
+  const list = Array.isArray(raw) ? raw : String(raw || '').split(/[\s,]+/);
+  const out = [];
+  list.forEach(function (x) {
+    const k = String(x || '').trim().toLowerCase();
+    if (SYNC_CATEGORIES.indexOf(k) >= 0 && out.indexOf(k) < 0) out.push(k);
+  });
+  return out.join(',');
+}
+
+function dispatchSync(maxNew, categories) {
+  const inputs = { max_new: String(maxNew) };
+  if (categories) inputs.categories = categories;
+  ghRequest('post', '/actions/workflows/' + GH_WORKFLOW + '/dispatches', {
+    ref: prop('GITHUB_REF') || 'main',
+    inputs: inputs,
+  });
+}
+
 function syncRun(body) {
   let n = parseInt(body.max_new, 10);
   if (isNaN(n)) n = SYNC_DEFAULT;
@@ -507,14 +580,12 @@ function syncRun(body) {
   if (latestRun().state === 'running') {
     return { ok: false, error: '이미 실행 중입니다. 끝난 뒤에 다시 눌러 주세요.' };
   }
-  ghRequest('post', '/actions/workflows/' + GH_WORKFLOW + '/dispatches', {
-    ref: prop('GITHUB_REF') || 'main',
-    inputs: { max_new: String(n) },
-  });
-  return { ok: true, max_new: n };
+  const categories = cleanCategories(body.categories);
+  dispatchSync(n, categories);
+  return { ok: true, max_new: n, categories: categories };
 }
 
-/* ---------- 설정 (AI 모델 · 성경 역본) — Settings 탭 ---------- */
+/* ---------- 설정 (AI 모델) — Settings 탭 ---------- */
 
 const SETTINGS_SHEET = 'Settings';
 const SETTINGS_HEADERS = ['key', 'value'];
@@ -556,19 +627,9 @@ function writeSetting(key, value) {
   sh.getRange(row, 1, 1, 2).setNumberFormat('@').setValues([[key, value]]);
 }
 
-function parseVersions(raw) {
-  let arr;
-  try {
-    arr = JSON.parse(raw || '[]');
-  } catch (err) {
-    arr = [];
-  }
-  return Array.isArray(arr) ? arr : [];
-}
-
 function settingsGet() {
   const m = readSettingsMap();
-  return { ok: true, settings: { gemini_model: m.gemini_model || '', bible_versions: parseVersions(m.bible_versions) } };
+  return { ok: true, settings: { gemini_model: m.gemini_model || '' } };
 }
 
 function settingsSet(body) {
@@ -577,19 +638,6 @@ function settingsSet(body) {
     if (model && !MODEL_PATTERN.test(model)) return { ok: false, error: '모델 이름이 올바르지 않습니다. 예: gemini-3.8-flash' };
     writeSetting('gemini_model', model);
   }
-  if (body.bible_versions !== undefined) {
-    const list = Array.isArray(body.bible_versions) ? body.bible_versions : [];
-    const clean = [];
-    const seen = {};
-    list.forEach(function (v) {
-      const id = String(v && v.id !== undefined ? v.id : '').trim();
-      const label = String(v && v.label !== undefined ? v.label : '').trim().slice(0, 30);
-      if (!/^\d{1,8}$/.test(id) || !label || seen[id] || clean.length >= 3) return;
-      seen[id] = true;
-      clean.push({ id: id, label: label });
-    });
-    writeSetting('bible_versions', JSON.stringify(clean));
-  }
   return { ok: true };
 }
 
@@ -597,7 +645,7 @@ function settingsSet(body) {
 
 const SERMONS_SHEET = 'Sermons';
 // Sermons 탭 열 번호 (scripts/lib/sheets.mjs 의 SERMON_HEADERS 와 같은 순서)
-const COL = { video_id: 1, category: 2, title: 3, published_at: 4, url: 5, status: 6, transcript_manual: 7, result_json: 8, updated_at: 9, note: 10 };
+const COL = { video_id: 1, category: 2, title: 3, published_at: 4, url: 5, status: 6, transcript_manual: 7, result_json: 8, updated_at: 9, note: 10, preacher: 11, scripture: 12, mode_qt: 13, mode_study: 14, mode_group: 15, bible_json: 16, owner: 17 };
 const MARKABLE = { redo: '앱에서 다시 정리를 요청했습니다', skip: '자동 정리에서 제외했습니다', pending: '', listed: '' };
 
 function getSermonsSheet() {
@@ -614,6 +662,7 @@ function videosList() {
   const n = last - 1;
   const a = sh.getRange(2, COL.video_id, n, COL.status).getValues();
   const b = sh.getRange(2, COL.updated_at, n, 2).getValues();
+  const c = sh.getLastColumn() >= COL.scripture ? sh.getRange(2, COL.preacher, n, 2).getValues() : [];
   const videos = [];
   for (let i = 0; i < n; i++) {
     const id = String(a[i][0] || '').trim();
@@ -626,6 +675,8 @@ function videosList() {
       status: String(a[i][5] || ''),
       updated_at: String(b[i][0] || ''),
       note: String(b[i][1] || '').slice(0, 160),
+      preacher: String((c[i] && c[i][0]) || ''),
+      scripture: String((c[i] && c[i][1]) || ''),
     });
   }
   videos.sort(function (x, y) { return String(y.published_at).localeCompare(String(x.published_at)); });
@@ -654,4 +705,202 @@ function videosMark(body) {
     changed++;
   }
   return { ok: true, changed: changed };
+}
+
+/* ---------- 사용자 영상 — 구글 로그인한 가족이 직접 유튜브 링크를 넣는 영상 ---------- */
+// 교회 재생목록과 별개로, Sermons 탭에 category = user 인 행으로 들어갑니다. 정리 방식은 같습니다.
+
+const SERMON_SHEET_HEADERS = [
+  'video_id', 'category', 'title', 'published_at', 'url', 'status', 'transcript_manual', 'result_json', 'updated_at', 'note',
+  'preacher', 'scripture', 'mode_qt', 'mode_study', 'mode_group', 'bible_json', 'owner',
+];
+const USER_MAX_PENDING = 10;
+
+function ensureSermonsSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(SERMONS_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(SERMONS_SHEET);
+    sh.getRange(1, 1, 1, SERMON_SHEET_HEADERS.length).setValues([SERMON_SHEET_HEADERS]);
+  } else if (sh.getLastColumn() < SERMON_SHEET_HEADERS.length) {
+    const have = sh.getRange(1, 1, 1, Math.max(1, sh.getLastColumn())).getValues()[0];
+    const same = have.every(function (h, i) { return !h || h === SERMON_SHEET_HEADERS[i]; });
+    if (same) sh.getRange(1, 1, 1, SERMON_SHEET_HEADERS.length).setValues([SERMON_SHEET_HEADERS]);
+  }
+  return sh;
+}
+
+// 유튜브 주소(watch?v= · youtu.be · shorts · live · embed) 또는 11자리 영상 ID → 영상 ID, 아니면 ''
+function parseVideoId(input) {
+  const s = String(input || '').trim();
+  if (/^[\w-]{11}$/.test(s)) return s;
+  const m = /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:[^#\s]*&)?v=|embed\/|shorts\/|live\/|v\/))([\w-]{11})(?![\w-])/.exec(s);
+  return m ? m[1] : '';
+}
+
+function todayString() {
+  return Utilities.formatDate(new Date(), 'America/Toronto', 'yyyy-MM-dd');
+}
+
+function youtubeTitle(videoId) {
+  try {
+    const res = UrlFetchApp.fetch(
+      'https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + videoId),
+      { muteHttpExceptions: true }
+    );
+    if (res.getResponseCode() !== 200) return '';
+    return String(JSON.parse(res.getContentText()).title || '');
+  } catch (err) {
+    return '';
+  }
+}
+
+// 사용자 영상 행 찾기: { row, values } — owner/status 등은 열 단위로 읽어 큰 열을 피합니다
+function readUserRows(sh) {
+  const last = sh.getLastRow();
+  if (last < 2) return [];
+  const n = last - 1;
+  const a = sh.getRange(2, COL.video_id, n, COL.status).getValues();
+  const b = sh.getRange(2, COL.updated_at, n, 4).getValues(); // updated_at, note, preacher, scripture
+  const o = sh.getLastColumn() >= COL.owner ? sh.getRange(2, COL.owner, n, 1).getValues() : [];
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const id = String(a[i][0] || '').trim();
+    if (!id) continue;
+    out.push({
+      row: i + 2,
+      video_id: id,
+      category: String(a[i][1] || ''),
+      title: String(a[i][2] || ''),
+      published_at: String(a[i][3] || '').slice(0, 10),
+      status: String(a[i][5] || ''),
+      updated_at: String(b[i][0] || ''),
+      note: String(b[i][1] || '').slice(0, 200),
+      preacher: String(b[i][2] || ''),
+      scripture: String(b[i][3] || ''),
+      owner: String((o[i] && o[i][0]) || '').toLowerCase(),
+    });
+  }
+  return out;
+}
+
+function handleUserVideos(action, body) {
+  let user;
+  try {
+    user = body.session ? verifySession(body.session) : verifyIdToken(body.id_token);
+  } catch (err) {
+    return authError(err);
+  }
+  try {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      if (action === 'user_video_add') return userVideoAdd(user, body);
+      if (action === 'user_video_mine') return userVideoMine(user);
+      if (action === 'user_video_redo') return userVideoChange(user, body, 'redo');
+      if (action === 'user_video_remove') return userVideoChange(user, body, 'skip');
+    } finally {
+      lock.releaseLock();
+    }
+    return { ok: false, error: '알 수 없는 작업입니다.' };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message ? err.message : err) };
+  }
+}
+
+function dispatchUserRun() {
+  try {
+    dispatchSync(5, 'user');
+    return { dispatched: true };
+  } catch (err) {
+    return { dispatched: false, dispatch_error: String(err && err.message ? err.message : err) };
+  }
+}
+
+function userVideoAdd(user, body) {
+  const id = parseVideoId(body.url);
+  if (!id) return { ok: false, error: '유튜브 영상 주소를 확인해 주세요. (예: https://www.youtube.com/watch?v=… 또는 https://youtu.be/…)' };
+
+  let title = String(body.title || '').trim().slice(0, 200);
+  const scripture = String(body.scripture || '').trim().slice(0, 60);
+  const preacher = String(body.preacher || '').trim().slice(0, 40);
+  let date = String(body.date || '').trim();
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: '날짜는 2026-10-08 처럼 입력해 주세요.' };
+  if (!date) date = todayString();
+
+  const sh = ensureSermonsSheet();
+  const rows = readUserRows(sh);
+  const email = String(user.email || '').toLowerCase();
+
+  const existing = rows.filter(function (r) { return r.video_id === id; })[0];
+  if (existing) {
+    if (existing.status === 'pending' || existing.status === 'redo') {
+      return { ok: false, exists: true, error: '이미 정리 대기 중인 영상입니다. 잠시 후 [사용자 영상]에서 확인해 주세요.' };
+    }
+    if (existing.status === 'done' && existing.category !== 'user') {
+      return { ok: false, exists: true, error: '이 영상은 이미 [토론토영락교회 설교]에 정리되어 있습니다.' };
+    }
+    if (existing.status === 'done') {
+      return { ok: false, exists: true, error: '이미 정리된 영상입니다. [사용자 영상]에서 찾아 보세요.' };
+    }
+  }
+
+  const pending = rows.filter(function (r) { return r.owner === email && (r.status === 'pending' || r.status === 'redo'); }).length;
+  if (pending >= USER_MAX_PENDING) return { ok: false, error: '정리 대기 중인 영상이 너무 많습니다. 몇 편이 끝난 뒤에 다시 넣어 주세요.' };
+
+  if (!title) title = youtubeTitle(id);
+  if (!title) return { ok: false, error: '영상 제목을 가져오지 못했습니다. 제목을 직접 입력해 주세요.' };
+
+  const stamp = new Date().toISOString();
+  if (existing) {
+    // 예전에 실패·제외된 영상을 다시 넣은 경우: 입력값을 새로 고치고 다시 정리
+    sh.getRange(existing.row, COL.category, 1, 1).setNumberFormat('@').setValues([['user']]);
+    sh.getRange(existing.row, COL.title, 1, 3).setNumberFormat('@').setValues([[title, date, 'https://www.youtube.com/watch?v=' + id]]);
+    sh.getRange(existing.row, COL.status).setNumberFormat('@').setValues([['redo']]);
+    sh.getRange(existing.row, COL.updated_at, 1, 2).setNumberFormat('@').setValues([[stamp, '사용자 영상으로 다시 요청했습니다']]);
+    sh.getRange(existing.row, COL.preacher, 1, 2).setNumberFormat('@').setValues([[preacher, scripture]]);
+    sh.getRange(existing.row, COL.owner).setNumberFormat('@').setValues([[email]]);
+  } else {
+    const row = new Array(SERMON_SHEET_HEADERS.length).fill('');
+    row[COL.video_id - 1] = id;
+    row[COL.category - 1] = 'user';
+    row[COL.title - 1] = title;
+    row[COL.published_at - 1] = date;
+    row[COL.url - 1] = 'https://www.youtube.com/watch?v=' + id;
+    row[COL.status - 1] = 'pending';
+    row[COL.updated_at - 1] = stamp;
+    row[COL.note - 1] = '사용자 영상 — 정리 대기 중';
+    row[COL.preacher - 1] = preacher;
+    row[COL.scripture - 1] = scripture;
+    row[COL.owner - 1] = email;
+    const next = Math.max(2, sh.getLastRow() + 1);
+    sh.getRange(next, 1, 1, row.length).setNumberFormat('@').setValues([row]);
+  }
+  const d = dispatchUserRun();
+  return { ok: true, video_id: id, title: title, dispatched: d.dispatched, dispatch_error: d.dispatch_error || '' };
+}
+
+function userVideoMine(user) {
+  const sh = ensureSermonsSheet();
+  const email = String(user.email || '').toLowerCase();
+  const mine = readUserRows(sh)
+    .filter(function (r) { return r.category === 'user' && r.owner === email && r.status !== 'skip'; })
+    .sort(function (x, y) { return String(y.updated_at).localeCompare(String(x.updated_at)); })
+    .map(function (r) {
+      return { video_id: r.video_id, title: r.title, published_at: r.published_at, status: r.status, note: r.note, scripture: r.scripture, preacher: r.preacher, updated_at: r.updated_at };
+    });
+  return { ok: true, videos: mine.slice(0, 100) };
+}
+
+// 내가 올린 영상만 "다시 정리"(redo) 또는 "목록에서 빼기"(skip)
+function userVideoChange(user, body, status) {
+  const id = checkVideoId(body.video_id);
+  const sh = ensureSermonsSheet();
+  const email = String(user.email || '').toLowerCase();
+  const r = readUserRows(sh).filter(function (x) { return x.video_id === id && x.category === 'user'; })[0];
+  if (!r || r.owner !== email) return { ok: false, error: '내가 올린 영상만 바꿀 수 있습니다.' };
+  sh.getRange(r.row, COL.status).setNumberFormat('@').setValues([[status]]);
+  sh.getRange(r.row, COL.updated_at, 1, 2).setNumberFormat('@').setValues([[new Date().toISOString(), status === 'redo' ? '다시 정리를 요청했습니다' : '목록에서 뺐습니다']]);
+  if (status === 'redo') return Object.assign({ ok: true }, dispatchUserRun());
+  return { ok: true };
 }

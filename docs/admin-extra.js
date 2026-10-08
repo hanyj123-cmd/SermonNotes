@@ -1,4 +1,4 @@
-// 관리 화면 추가 기능: AI 모델 선택 · 성경 역본 선택 · 영상 선택 관리
+// 관리 화면 추가 기능: AI 모델 선택 · 영상 선택 관리
 // (app.js 보다 먼저 불러옵니다. 함수는 관리 화면이 열릴 때 app.js 의 도구(h, adminPost 등)를 가져다 씁니다.)
 
 // 모델 이름은 Gemini API 공식 모델 문서(ai.google.dev/gemini-api/docs/models)에서 확인한 것입니다.
@@ -27,7 +27,9 @@ const VIDEO_STATUS = {
 const statusLabelOf = (s) => (VIDEO_STATUS[s] || [s || '대기', 'wait'])[0];
 const statusClassOf = (s) => (VIDEO_STATUS[s] || [, 'wait'])[1];
 
-const CATEGORY_RAW = { dawn: 'dawn', 새벽: 'dawn', 새벽기도: 'dawn', wednesday: 'wednesday', wed: 'wednesday', 수요: 'wednesday', 수요예배: 'wednesday', sunday: 'sunday', sun: 'sunday', 주일: 'sunday', 주일예배: 'sunday' };
+const CATEGORY_RAW = { dawn: 'dawn', 새벽: 'dawn', 새벽기도: 'dawn', wednesday: 'wednesday', wed: 'wednesday', 수요: 'wednesday', 수요예배: 'wednesday', sunday: 'sunday', sun: 'sunday', 주일: 'sunday', 주일예배: 'sunday', youth: 'youth', 청년: 'youth', 청년부: 'youth', 청년부예배: 'youth', user: 'user', 사용자영상: 'user' };
+// 영상 관리 탭: 교회 4구분 + 사용자 영상
+const MANAGER_TABS = [...CATEGORIES, { key: 'user', label: '사용자 영상' }];
 const categoryKeyOf = (raw) => CATEGORY_RAW[String(raw || '').trim().toLowerCase().replace(/\s+/g, '')] || '';
 
 /* ---------- AI 모델 ---------- */
@@ -89,73 +91,6 @@ function renderModelSection(password, onPasswordRejected) {
   );
 }
 
-/* ---------- 성경 역본 (3개) ---------- */
-function renderBibleSection(password, onPasswordRejected) {
-  const info = h('p', { class: 'meta', role: 'status' });
-  const slots = [0, 1, 2].map((i) => h('select', { class: 'search admin-bible', 'aria-label': `성경 역본 ${i + 1}` }));
-  const save = h('button', { class: 'btn primary', type: 'button' }, '저장');
-  let list = [];
-  const fill = (saved) => {
-    slots.forEach((sel, i) => {
-      const known = new Set(list.map((b) => b.id));
-      const extra = saved.filter((v) => !known.has(String(v.id)));
-      sel.replaceChildren(
-        h('option', { value: '', text: i === 0 ? '(사용 안 함)' : '(없음)' }),
-        ...list.map((b) => h('option', { value: b.id, text: `${b.title}${b.abbreviation ? ` (${b.abbreviation})` : ''}${b.language === 'en' ? ' · 영어' : ''}` })),
-        ...extra.map((v) => h('option', { value: String(v.id), text: `${v.label} (저장됨)` })),
-      );
-      sel.value = saved[i] ? String(saved[i].id) : '';
-    });
-  };
-  save.addEventListener('click', async () => {
-    const chosen = [];
-    slots.forEach((sel) => {
-      if (!sel.value || chosen.some((c) => c.id === sel.value)) return;
-      const opt = sel.options[sel.selectedIndex];
-      const b = list.find((x) => x.id === sel.value);
-      chosen.push({ id: sel.value, label: b ? b.title : opt.textContent.replace(/ \(저장됨\)$/, '') });
-    });
-    info.textContent = '저장 중…';
-    try {
-      const r = await adminPost({ action: 'settings_set', password, bible_versions: chosen });
-      if (onPasswordRejected(r)) return;
-      if (!r.ok) throw new Error(r.error || '저장하지 못했습니다.');
-      info.textContent = chosen.length ? `저장했습니다. 다음 동기화 때 ${chosen.map((c) => c.label).join(' · ')} 본문이 설교마다 붙습니다.` : '성경 본문 표시를 껐습니다.';
-    } catch (e) {
-      info.textContent = `오류: ${e.message || e}`;
-    }
-  });
-  (async () => {
-    let saved = [];
-    try {
-      const r = await adminPost({ action: 'settings_get', password });
-      if (onPasswordRejected(r)) return;
-      if (r.ok) saved = r.settings.bible_versions || [];
-    } catch {
-      /* 저장된 값을 못 읽어도 목록은 보여 줍니다 */
-    }
-    try {
-      const res = await fetch(`data/bibles.json?t=${Date.now()}`);
-      if (res.ok) list = (await res.json()).bibles || [];
-    } catch {
-      list = [];
-    }
-    fill(saved);
-    if (!list.length) {
-      info.textContent = '선택할 수 있는 역본 목록이 아직 없습니다. GitHub에 BIBLE_API_KEY 를 등록하고 "지금 동기화"를 한 번 실행하면 나타납니다.';
-    }
-  })();
-  return h(
-    'section',
-    { class: 'point admin-bible-box' },
-    h('h2', { text: '성경 본문 (3개 역본)' }),
-    h('p', { class: 'meta', text: '설교 본문 구절을 고른 역본 3개로 나란히 보여 줍니다. 쓸 수 있는 역본은 성경 API 키의 이용 허락에 따라 달라서, 목록에 있는 것만 고를 수 있습니다. 개역개정·표준새번역(대한성서공회)은 목록에 없으면 고를 수 없습니다.' }),
-    h('div', { class: 'admin-bible-slots' }, slots),
-    h('div', { class: 'admin-row' }, save),
-    info,
-  );
-}
-
 /* ---------- 영상 선택 관리 ---------- */
 function renderVideoManager(password, onPasswordRejected, requestSync) {
   const status = h('p', { class: 'meta', role: 'status' });
@@ -172,7 +107,7 @@ function renderVideoManager(password, onPasswordRejected, requestSync) {
   const btnAll = h('button', { class: 'btn small', type: 'button' }, '이 목록 모두 선택');
   const btnNone = h('button', { class: 'btn small', type: 'button' }, '선택 해제');
   let videos = [];
-  let current = CATEGORIES[0].key;
+  let current = MANAGER_TABS[0].key;
   const selected = new Set();
 
   const matches = (v) => {
@@ -191,7 +126,7 @@ function renderVideoManager(password, onPasswordRejected, requestSync) {
   };
   const drawTabs = () => {
     tabs.replaceChildren(
-      ...CATEGORIES.map((c) => {
+      ...MANAGER_TABS.map((c) => {
         const count = videos.filter((v) => categoryKeyOf(v.category) === c.key).length;
         const b = h('button', { class: 'vid-tab', type: 'button', role: 'tab', 'aria-selected': String(c.key === current) }, `${c.label} `, h('span', { class: 'count', text: String(count) }));
         b.addEventListener('click', () => {
@@ -268,7 +203,7 @@ function renderVideoManager(password, onPasswordRejected, requestSync) {
     btnAi.disabled = true;
     try {
       if (!(await mark('redo', (n) => `${n}편을 정리 대상으로 표시했습니다. 동기화를 시작합니다…`))) return;
-      const started = await requestSync(ids.length);
+      const started = await requestSync(ids.length, ['none']); // 재생목록은 다시 훑지 않고 선택한 영상만 정리
       status.textContent = started ? `${ids.length}편 정리를 시작했습니다. 위의 "지금 동기화" 상태에서 진행을 볼 수 있습니다. (영상 1편에 몇 분 걸립니다)` : '정리 대상으로 표시는 했지만 동기화를 시작하지 못했습니다. 위 "지금 동기화"를 눌러 주세요.';
       selected.clear();
       await reload();

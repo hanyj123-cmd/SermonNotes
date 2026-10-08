@@ -2,12 +2,14 @@
 // 메인 파이프라인
 //   1) Google Sheets의 Playlists 탭에서 재생목록 읽기
 //   2) YouTube에서 새 영상 찾아 Sermons 탭에 추가 (status = pending)
-//   3) pending / redo 영상의 자막을 가져와 Gemini로 정리 → Sermons 탭에 저장
-//   4) status = done 인 행을 docs/data/sermons.json 으로 내보내기 (웹앱이 읽는 파일)
+//   3) pending / redo 영상의 자막을 가져와 Gemini로 4가지 모드(설교리뷰·QT 묵상·성경공부·소그룹 나눔)로 정리 → Sermons 탭에 저장
+//   4) 성경 본문 4역본(웹사이트에서 읽음) 붙이기
+//   5) 결과를 docs/data/ 로 내보내기: sermons.json(목록) + s/<영상ID>.json(설교별 상세)
 //
 // 사용법:
 //   node scripts/sync.mjs                 전체 실행
-//   node scripts/sync.mjs --export-only   시트 내용만 sermons.json 으로 내보내기 (API 키 불필요)
+//   node scripts/sync.mjs --export-only   시트 내용만 내보내기 (API 키 불필요)
+// 환경변수 ONLY_CATEGORIES=sunday,wednesday  : 이번 실행에서 확인할 구분 (기본: sunday,dawn,wednesday. 청년부는 youth 를 직접 적어야 함, all = 전부)
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -26,18 +28,21 @@ import {
   PLAYLIST_HEADERS,
   SERMONS_TAB,
   SERMON_HEADERS,
+  CATEGORY_KEYS,
 } from './lib/sheets.mjs';
 import { extractPlaylistId, fetchPlaylistVideos, fetchVideoStates } from './lib/youtube.mjs';
 import { buildQueue } from './lib/queue.mjs';
 import { attachSongVideos, buildPrayerMusic, musicIsStale } from './lib/media.mjs';
-import { listBibles, parseBibleVersions, attachBible, needsBible } from './lib/bible.mjs';
+import { fetchBibleBlock, bibleIsCurrent } from './lib/bible-web.mjs';
 import { processRow, CELL_LIMIT } from './lib/process.mjs';
 import { createGemini, DEFAULT_MODEL } from './lib/gemini.mjs';
+import { parseTitle, parseScripture, bookOf } from './lib/title.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const OUTPUT_PATH = path.resolve(__dirname, '../docs/data/sermons.json');
-const MUSIC_PATH = path.resolve(__dirname, '../docs/data/music.json');
-const BIBLES_PATH = path.resolve(__dirname, '../docs/data/bibles.json');
+const DATA_DIR = path.resolve(__dirname, '../docs/data');
+const OUTPUT_PATH = path.join(DATA_DIR, 'sermons.json');
+const DETAIL_DIR = path.join(DATA_DIR, 's');
+const MUSIC_PATH = path.join(DATA_DIR, 'music.json');
 
 const args = new Set(process.argv.slice(2));
 const exportOnly = args.has('--export-only');
@@ -50,56 +55,111 @@ function need(name) {
 
 const now = () => new Date().toISOString();
 
-export async function exportJson(sermons) {
-  const done = sermons
-    .filter((s) => s.status === 'done' && s.result_json)
-    .map((s) => {
-      let result;
-      try {
-        result = JSON.parse(s.result_json);
-      } catch {
-        return null;
-      }
-      return {
-        id: s.video_id,
-        category: s.category,
-        title: s.title,
-        published_at: s.published_at,
-        url: s.url,
-        result,
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => String(b.published_at).localeCompare(String(a.published_at)));
-
-  const payload = { updated: now(), count: done.length, sermons: done };
-  await fs.mkdir(path.dirname(OUTPUT_PATH), { recursive: true });
-  await fs.writeFile(OUTPUT_PATH, JSON.stringify(payload, null, 1) + '\n', 'utf8');
-  console.log(`📦 docs/data/sermons.json 저장 (${done.length}편)`);
+/** ONLY_CATEGORIES → 이번 실행의 대상 구분 목록 */
+export function parseCategories(raw) {
+  const v = String(raw || '').trim().toLowerCase();
+  if (!v) return ['sunday', 'dawn', 'wednesday']; // 청년부는 필요할 때만 직접 지정
+  const tokens = v.split(/[\s,]+/).filter(Boolean);
+  if (tokens.includes('all')) return [...CATEGORY_KEYS];
+  const list = tokens.filter((c) => CATEGORY_KEYS.includes(c));
+  if (list.length) return list;
+  // "user"(사용자 영상만) · "none" 은 재생목록을 확인하지 않고 사용자 영상·다시 정리 표시한 것만 처리합니다
+  return tokens.some((t) => t === 'user' || t === 'none') ? [] : ['sunday', 'dawn', 'wednesday'];
 }
 
-async function backfillBible(sheets, spreadsheetId, sermons, versions, appKey) {
-  let n = 0;
-  for (const row of sermons) {
-    if (n >= 20) break; // 한 번에 너무 많이 하지 않도록
-    if (row.status !== 'done' || !row.result_json) continue;
-    let result;
-    try {
-      result = JSON.parse(row.result_json);
-    } catch {
+const parseJson = (s) => {
+  if (!s) return null;
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+};
+
+/** 시트의 한 행 → 앱이 읽는 목록 항목 + 상세. 새 형식(schema 3)의 설교리뷰가 없으면 null */
+export function toExport(s) {
+  const result = parseJson(s.result_json);
+  if (!result || result.schema !== 3 || !result.review?.outline?.length) return null;
+  const p = parseTitle(s.title);
+  const date = p.date || String(s.published_at || '').slice(0, 10);
+  const scripture = String(s.scripture || '').trim() || p.scripture || (result.scripture || []).join(', ');
+  const preacher = String(s.preacher || '').trim() || p.preacher || result.preacher || '';
+  const first = bookOf(scripture);
+  const qt = parseJson(s.mode_qt);
+  const study = parseJson(s.mode_study);
+  const group = parseJson(s.mode_group);
+  const bible = parseJson(s.bible_json);
+  const modes = ['review', ...(qt ? ['qt'] : []), ...(study ? ['study'] : []), ...(group ? ['group'] : [])];
+  const title = result.title || p.title || s.title;
+  const index = {
+    id: s.video_id,
+    category: s.category,
+    title,
+    date,
+    url: s.url,
+    preacher,
+    scripture,
+    book: first?.name || '',
+    bookIdx: first?.idx || 0,
+    summary_short: result.summary_short || result.theme || '',
+    modes,
+    complete: s.status === 'done',
+  };
+  const detail = { ...index, theme: result.theme || '', result, qt, study, group, bible };
+  return { index, detail };
+}
+
+export async function exportJson(sermons, { dataDir = DATA_DIR, quiet = false } = {}) {
+  const items = [];
+  let legacy = 0;
+  for (const s of sermons) {
+    if (s.status !== 'done' && s.status !== 'error') continue;
+    const e = toExport(s);
+    if (!e) {
+      if (s.status === 'done' && s.result_json) legacy++;
       continue;
     }
-    if (!needsBible(result, versions)) continue;
+    items.push(e);
+  }
+  items.sort((a, b) => String(b.index.date).localeCompare(String(a.index.date)) || String(a.index.title).localeCompare(String(b.index.title), 'ko'));
+
+  const detailDir = path.join(dataDir, 's');
+  await fs.mkdir(detailDir, { recursive: true });
+  const keep = new Set();
+  for (const { index, detail } of items) {
+    keep.add(`${index.id}.json`);
+    await fs.writeFile(path.join(detailDir, `${index.id}.json`), JSON.stringify(detail) + '\n', 'utf8');
+  }
+  for (const f of await fs.readdir(detailDir)) if (f.endsWith('.json') && !keep.has(f)) await fs.unlink(path.join(detailDir, f));
+
+  const payload = { updated: now(), count: items.length, sermons: items.map((i) => i.index) };
+  await fs.writeFile(path.join(dataDir, 'sermons.json'), JSON.stringify(payload, null, 1) + '\n', 'utf8');
+  if (!quiet) {
+    console.log(`📦 docs/data/sermons.json + s/ 상세 ${items.length}편 저장`);
+    if (legacy) console.warn(`⚠️  예전 형식으로 정리된 설교 ${legacy}편은 화면에 나오지 않습니다. 앱의 영상 관리에서 선택해 "다시 정리"하면 새 형식(4가지 모드)으로 바뀝니다.`);
+  }
+  return { count: items.length, legacy };
+}
+
+/** 이미 정리된 설교 중 성경 본문이 없거나 본문 범위가 바뀐 것에 4역본을 붙입니다 */
+async function backfillBible(sheets, spreadsheetId, sermons, limit = 12) {
+  let n = 0;
+  for (const row of sermons) {
+    if (n >= limit) break;
+    if (row.status !== 'done' || !row.result_json) continue;
+    const info = parseTitle(row.title);
+    const scripture = String(row.scripture || '').trim() || info.scripture;
+    const passages = scripture ? parseScripture(scripture) : [];
+    if (!passages.length) continue;
+    const current = parseJson(row.bible_json);
+    if (bibleIsCurrent(current, passages)) continue;
     n++;
-    const before = result.bible;
-    await attachBible(result, versions, appKey, { log: (m) => console.warn(`   ${m}`) });
-    if (result.bible && result.bible !== before) {
-      const json = JSON.stringify(result);
-      if (json.length <= CELL_LIMIT) {
-        await updateSermonRow(sheets, spreadsheetId, row.rowNumber, { result_json: json, updated_at: now() });
-        console.log(`📖 성경 본문 추가: ${row.title}`);
-      }
-    }
+    const block = await fetchBibleBlock(passages, { log: (m) => console.warn(`   ${m}`) });
+    if (!block) continue;
+    const json = JSON.stringify(block);
+    if (json.length > CELL_LIMIT) continue;
+    await updateSermonRow(sheets, spreadsheetId, row.rowNumber, { bible_json: json, updated_at: now() });
+    console.log(`📖 성경 본문 추가: ${row.title} (${block.versions.map((v) => v.label).join(' · ')})`);
   }
 }
 
@@ -124,22 +184,6 @@ async function refreshMusic(youtubeKey) {
   }
 }
 
-async function refreshBibleList(appKey) {
-  if (!appKey) return;
-  const current = await readJsonFile(BIBLES_PATH);
-  const age = Date.now() - Date.parse(current?.updated || '');
-  if (current?.bibles?.length && age < 7 * 86400000) return;
-  try {
-    const bibles = await listBibles(appKey);
-    if (!bibles.length) throw new Error('사용할 수 있는 역본이 없습니다');
-    await fs.mkdir(path.dirname(BIBLES_PATH), { recursive: true });
-    await fs.writeFile(BIBLES_PATH, JSON.stringify({ updated: now(), bibles }, null, 1) + '\n', 'utf8');
-    console.log(`📚 선택할 수 있는 성경 역본 ${bibles.length}개 목록을 갱신했습니다.`);
-  } catch (e) {
-    console.warn(`⚠️  성경 역본 목록을 가져오지 못했습니다: ${e.message}`);
-  }
-}
-
 async function main() {
   const spreadsheetId = need('SHEET_ID');
   const sheets = createSheetsClient(need('GOOGLE_SERVICE_ACCOUNT_JSON'));
@@ -156,14 +200,13 @@ async function main() {
   }
 
   const youtubeKey = need('YOUTUBE_API_KEY');
+  const categories = parseCategories(process.env.ONLY_CATEGORIES);
+  console.log(`🗂  이번 실행의 구분: ${categories.join(', ') || '(재생목록 확인 없음)'} (+ 사용자 영상·다시 정리 표시한 것)`);
   // 앱의 관리 화면에서 고른 설정(Settings 탭)이 있으면 그것을, 없으면 환경변수·기본값을 씁니다.
   const settings = await readSettings(sheets, spreadsheetId);
   const modelName = /^[\w.-]{3,60}$/.test(settings.gemini_model || '') ? settings.gemini_model : process.env.GEMINI_MODEL || DEFAULT_MODEL;
   console.log(`🤖 Gemini 모델: ${modelName}`);
   const ai = createGemini(need('GEMINI_API_KEY'), modelName);
-  const bibleKey = process.env.BIBLE_API_KEY || '';
-  const bibleVersions = parseBibleVersions(settings.bible_versions);
-  console.log(`📖 성경 본문: ${bibleKey && bibleVersions.length ? bibleVersions.map((v) => v.label).join(' · ') : '사용 안 함 (BIBLE_API_KEY와 역본 선택이 필요합니다)'}`);
   const maxPerRun = Math.max(1, parseInt(process.env.MAX_NEW_PER_RUN || '5', 10) || 5);
   // 자막이 없는 영상 처리 방식 (선택): Supadata 키가 있으면 먼저 쓰고, 그래도 안 되면 Gemini가 영상을 직접 듣습니다.
   const supadataKey = process.env.SUPADATA_API_KEY || '';
@@ -173,9 +216,9 @@ async function main() {
   );
 
   // 1) 재생목록 → 새 영상 등록
-  const playlists = await readPlaylists(sheets, spreadsheetId);
-  if (!playlists.length) {
-    console.warn(`⚠️  ${PLAYLISTS_TAB} 탭에 재생목록이 없습니다. A열=구분, B열=재생목록 URL 을 입력하세요.`);
+  const playlists = (await readPlaylists(sheets, spreadsheetId)).filter((pl) => categories.includes(pl.category));
+  if (!playlists.length && categories.length) {
+    console.warn(`⚠️  ${PLAYLISTS_TAB} 탭에 이번 실행 대상(${categories.join(', ')})의 재생목록이 없습니다. A열=구분, B열=재생목록 URL 을 입력하세요.`);
   }
   const known = new Set(sermons.map((s) => s.video_id));
   const candidates = [];
@@ -193,9 +236,20 @@ async function main() {
       for (const v of videos) {
         if (known.has(v.video_id)) continue;
         known.add(v.video_id);
-        // 최근 AUTO_WITHIN_DAYS일 안에 올라온 영상만 자동 정리하고, 오래된 영상은 "목록만"으로 두어 앱에서 골라 돌립니다.
-        const isOld = v.published_at && v.published_at < autoCutoff;
-        candidates.push({ ...v, category: pl.category, status: isOld ? 'listed' : 'pending', updated_at: now(), note: isOld ? '오래된 영상 — 앱에서 선택해 정리할 수 있습니다' : '' });
+        // 영상 제목 "[YYYY.MM.DD] 제목 (성경본문) - 설교자" 에서 날짜·본문·설교자를 바로 읽어 둡니다 (목록·필터용)
+        const p = parseTitle(v.title);
+        const when = p.date || v.published_at;
+        // 최근 AUTO_WITHIN_DAYS일 안의 영상만 자동 정리하고, 오래된 영상은 "목록만"으로 두어 앱에서 골라 돌립니다.
+        const isOld = when && when < autoCutoff;
+        candidates.push({
+          ...v,
+          category: pl.category,
+          preacher: p.preacher,
+          scripture: p.scripture,
+          status: isOld ? 'listed' : 'pending',
+          updated_at: now(),
+          note: isOld ? '오래된 영상 — 앱에서 선택해 정리할 수 있습니다' : '',
+        });
       }
     } catch (e) {
       console.error(`❌ 재생목록 조회 실패 (${pl.category}): ${e.message}`);
@@ -220,11 +274,11 @@ async function main() {
     console.log('새 영상이 없습니다.');
   }
 
-  // 2) 정리할 영상 선택: redo → 최근 실패한 것 → pending(최신순). 아직 영상이 없는 것은 건너뜁니다.
+  // 2) 정리할 영상 선택: redo → 사용자 영상 → 최근 실패한 것 → pending(최신순). 아직 영상이 없는 것은 건너뜁니다.
   const retryDays = Math.max(0, parseInt(process.env.RETRY_DAYS || '7', 10) || 7);
-  const pool = buildQueue(sermons, { maxPerRun: Infinity, retryDays });
+  const pool = buildQueue(sermons, { maxPerRun: Infinity, retryDays, categories });
   const states = await fetchVideoStates(pool.queue.map((r) => r.video_id), youtubeKey);
-  const { queue, skipped } = buildQueue(sermons, { maxPerRun, retryDays, states });
+  const { queue, skipped } = buildQueue(sermons, { maxPerRun, retryDays, states, categories });
   for (const { row, reason } of skipped) console.log(`⏭  건너뜀 (${reason}): ${row.title}`);
   const retried = queue.filter((r) => r.status === 'error' || r.status === 'no_transcript').length;
 
@@ -238,29 +292,26 @@ async function main() {
       update: (patch) => updateSermonRow(sheets, spreadsheetId, row.rowNumber, patch),
       supadataKey,
       geminiVideo,
-      enrich: async (result) => {
-        await attachSongVideos(result, youtubeKey, { state: mediaState, log: (m) => console.warn(`   ${m}`) });
-        await attachBible(result, bibleVersions, bibleKey, { log: (m) => console.warn(`   ${m}`) });
-      },
+      enrichSongs: (songs) => attachSongVideos(songs, youtubeKey, { state: mediaState, log: (m) => console.warn(`   ${m}`) }),
+      fetchBible: (passages) => fetchBibleBlock(passages, { log: (m) => console.warn(`   ${m}`) }),
     });
   }
 
-  // 이미 정리된 설교에도 성경 본문을 붙입니다 (역본을 새로 골랐거나 아직 없는 경우)
-  if (bibleKey && bibleVersions.length) {
-    await backfillBible(sheets, spreadsheetId, sermons, bibleVersions, bibleKey);
-    sermons = await readSermons(sheets, spreadsheetId);
-  }
+  // 이미 정리된 설교에도 성경 본문을 붙입니다 (아직 없거나 본문 범위가 바뀐 경우)
+  sermons = await readSermons(sheets, spreadsheetId);
+  await backfillBible(sheets, spreadsheetId, sermons);
 
-  // 기도 배경음악 목록, 성경 역본 목록 갱신 (선택 화면용)
+  // 기도 배경음악 목록 갱신 (QT 묵상 화면용)
   await refreshMusic(youtubeKey);
-  await refreshBibleList(bibleKey);
 
   // 3) 내보내기
   sermons = await readSermons(sheets, spreadsheetId);
   await exportJson(sermons);
 }
 
-main().catch((e) => {
-  console.error('\n💥', e.message || e);
-  process.exit(1);
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((e) => {
+    console.error('\n💥', e.message || e);
+    process.exit(1);
+  });
+}

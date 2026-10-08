@@ -1,0 +1,459 @@
+// Apps Script(Code.gs)를 가짜 Google 서비스 위에서 실행해 노트 분리·로그인 검증을 점검합니다.
+import fs from 'node:fs';
+import vm from 'node:vm';
+import crypto from 'node:crypto';
+
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const code = fs.readFileSync(path.join(root, 'apps-script/Code.gs'), 'utf8');
+let fails = 0; const check = (n, c, x = '') => { console.log(c ? '✓' : '✗', n, c ? '' : x); if (!c) fails++; };
+
+function makeEnv(props) {
+  const sheets = new Map();
+  const formats = [];
+  const mkSheet = (name) => {
+    const rows = [];
+    const sh = {
+      name, rows,
+      getLastRow: () => rows.length,
+      getLastColumn: () => rows.reduce((m, r) => Math.max(m, (r || []).length), 0),
+      getMaxRows: () => 1000,
+      getRange(r, c, nr = 1, nc = 1) {
+        const range = {
+          getValues: () => Array.from({ length: nr }, (_, i) => Array.from({ length: nc }, (_, j) => (rows[r - 1 + i]?.[c - 1 + j] ?? ''))),
+          setValues: (v) => { v.forEach((row, i) => { rows[r - 1 + i] = rows[r - 1 + i] || []; row.forEach((x, j) => { rows[r - 1 + i][c - 1 + j] = x; }); }); },
+          setNumberFormat: (f) => { formats.push({ sheet: name, r, c, nr, nc, f }); return range; },
+        };
+        return range;
+      },
+      appendRow: (arr) => { rows.push(arr); },
+      deleteRow: (n) => { rows.splice(n - 1, 1); },
+    };
+    return sh;
+  };
+  const ss = {
+    getSheetByName: (n) => sheets.get(n) || null,
+    insertSheet: (n) => { const s = mkSheet(n); sheets.set(n, s); return s; },
+  };
+  const cache = new Map();
+  // 가짜 토큰: "tok:" + JSON. 진짜 구글처럼 aud/iss/exp/sub/email 을 돌려줍니다.
+  const tokenInfo = (t) => { try { return JSON.parse(t.slice(4)); } catch { return null; } };
+  let fetches = 0;
+  const oembed = [];
+  let oembedTitle = '[2026.10.04] 믿음의 길 (창세기 12:1-9) - 홍길동 목사';
+  const ghCalls = [];
+  let ghHandler = () => ({ code: 200, body: {} });
+  const ctx = {
+    SpreadsheetApp: { getActiveSpreadsheet: () => ss },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => props[k] ?? null, setProperty: (k, v) => { props[k] = v; } }) },
+    CacheService: { getScriptCache: () => ({ get: (k) => cache.get(k) ?? null, put: (k, v) => cache.set(k, v) }) },
+    LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
+    Utilities: {
+      DigestAlgorithm: { SHA_256: 'sha256' },
+      Charset: { UTF_8: 'UTF-8' },
+      computeDigest: (_a, text) => Array.from(crypto.createHash('sha256').update(text).digest()).map((b) => (b > 127 ? b - 256 : b)),
+      computeHmacSha256Signature: (text, key) => Array.from(crypto.createHmac('sha256', key).update(text).digest()).map((b) => (b > 127 ? b - 256 : b)),
+      base64EncodeWebSafe: (data) => (Array.isArray(data) ? Buffer.from(data.map((b) => b & 255)) : Buffer.from(String(data), 'utf8')).toString('base64').replace(/\+/g, '-').replace(/\//g, '_'),
+      base64DecodeWebSafe: (str) => Array.from(Buffer.from(String(str).replace(/-/g, '+').replace(/_/g, '/'), 'base64')).map((b) => (b > 127 ? b - 256 : b)),
+      newBlob: (bytes) => ({ getDataAsString: () => Buffer.from(bytes.map((b) => b & 255)).toString('utf8') }),
+      getUuid: () => crypto.randomUUID(),
+      formatDate: (d, tz, fmt) => d.toISOString().slice(0, 10),
+    },
+    UrlFetchApp: {
+      fetch: (url, opts) => {
+        if (String(url).startsWith('https://api.github.com/')) {
+          ghCalls.push({ url, opts });
+          const r = ghHandler(url, opts);
+          return { getResponseCode: () => r.code, getContentText: () => JSON.stringify(r.body || {}) };
+        }
+        if (String(url).startsWith('https://www.youtube.com/oembed')) {
+          oembed.push(url);
+          return { getResponseCode: () => (oembedTitle ? 200 : 404), getContentText: () => JSON.stringify({ title: oembedTitle }) };
+        }
+        fetches++;
+        const tok = decodeURIComponent(url.split('id_token=')[1]);
+        const info = tokenInfo(tok);
+        return { getResponseCode: () => (info ? 200 : 400), getContentText: () => JSON.stringify(info || { error: 'invalid_token' }) };
+      },
+    },
+    ContentService: { MimeType: { JSON: 'json' }, createTextOutput: (t) => ({ setMimeType() { return { getContent: () => t }; } }) },
+    console,
+  };
+  vm.createContext(ctx);
+  vm.runInContext(code, ctx);
+  const post = (body) => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(body) } }).getContent());
+  return { post, ss, sheets, formats, ghCalls, oembed, setOembed: (t) => { oembedTitle = t; }, setGh: (f) => { ghHandler = f; }, get fetches() { return fetches; } };
+}
+
+const CID = 'cid.apps.googleusercontent.com';
+const exp = Math.floor(Date.now() / 1000) + 3000;
+const tok = (o) => 'tok:' + JSON.stringify({ aud: CID, iss: 'https://accounts.google.com', email_verified: 'true', exp: String(exp), ...o });
+const A = tok({ sub: '110000000000000000001', email: 'a@x.com' });
+const B = tok({ sub: '110000000000000000002', email: 'b@x.com' });
+const props = { GOOGLE_CLIENT_ID: CID, ALLOWED_EMAILS: 'a@x.com, B@X.com', ADMIN_PASSWORD: 'pw' };
+const env = makeEnv(props);
+const { post } = env;
+const VID = 'sampleSun001';
+
+// 저장 / 분리
+let r = post({ action: 'notes_save', id_token: A, video_id: VID, memo: '=A의 비밀 메모', answers: [{ q: '질문1', a: 'A의 답' }], checks: [{ t: '적용1', done: true, date: '2026-10-05' }] });
+check('A 저장 성공', r.ok === true, JSON.stringify(r));
+r = post({ action: 'notes_get', id_token: B, video_id: VID });
+check('B는 A의 노트를 볼 수 없음', r.ok && r.note === null, JSON.stringify(r));
+r = post({ action: 'notes_save', id_token: B, video_id: VID, memo: 'B의 메모', answers: [], checks: [] });
+check('B 저장 성공', r.ok === true);
+r = post({ action: 'notes_get', id_token: A, video_id: VID });
+check('A는 자기 노트만 봄(B의 것과 섞이지 않음)', r.note.memo === '=A의 비밀 메모' && r.note.answers[0].a === 'A의 답' && r.note.checks[0].done === true);
+r = post({ action: 'notes_get', id_token: B, video_id: VID });
+check('B는 자기 노트만 봄', r.note.memo === 'B의 메모');
+
+// 같은 사람이 다시 저장하면 새 줄이 아니라 같은 줄 갱신
+post({ action: 'notes_save', id_token: A, video_id: VID, memo: '수정됨', answers: [], checks: [] });
+const rows = env.sheets.get('Notes').rows;
+check('다시 저장해도 줄이 늘지 않음 (헤더 + A + B = 3줄)', rows.length === 3, String(rows.length));
+check('수정 내용 반영', post({ action: 'notes_get', id_token: A, video_id: VID }).note.memo === '수정됨');
+
+// 목록: 본인 것만
+post({ action: 'notes_save', id_token: A, video_id: 'otherVideo01', memo: '다른 영상 메모', answers: [], checks: [] });
+const la = post({ action: 'notes_list', id_token: A }).items.map((x) => x.video_id).sort();
+const lb = post({ action: 'notes_list', id_token: B }).items.map((x) => x.video_id);
+check('목록: A는 2개, B는 1개', la.length === 2 && lb.length === 1 && lb[0] === VID, JSON.stringify({ la, lb }));
+post({ action: 'notes_save', id_token: B, video_id: 'emptyOne0001', memo: '   ', answers: [{ q: 'q', a: '' }], checks: [{ t: 't', done: false, date: '' }] });
+check('내용이 비어 있는 노트는 목록에서 제외', post({ action: 'notes_list', id_token: B }).items.length === 1);
+
+// 로그인 검증 실패 케이스
+check('토큰 없음 → auth', post({ action: 'notes_get', video_id: VID }).code === 'auth');
+check('가짜/깨진 토큰 → auth', post({ action: 'notes_get', id_token: 'garbage', video_id: VID }).code === 'auth');
+check('다른 앱용 토큰(aud 불일치) → auth', post({ action: 'notes_get', id_token: tok({ sub: '1', email: 'a@x.com', aud: 'evil.apps.googleusercontent.com' }), video_id: VID }).code === 'auth');
+check('이메일 미인증 → auth', post({ action: 'notes_get', id_token: tok({ sub: '1', email: 'a@x.com', email_verified: 'false' }), video_id: VID }).code === 'auth');
+check('만료된 토큰 → auth', post({ action: 'notes_get', id_token: tok({ sub: '1', email: 'a@x.com', exp: String(Math.floor(Date.now() / 1000) - 5) }), video_id: VID }).code === 'auth');
+check('발급처(iss) 이상 → auth', post({ action: 'notes_get', id_token: tok({ sub: '1', email: 'a@x.com', iss: 'https://evil.example' }), video_id: VID }).code === 'auth');
+const stranger = post({ action: 'notes_save', id_token: tok({ sub: '999', email: 'stranger@x.com' }), video_id: VID, memo: '침입', answers: [], checks: [] });
+check('허용 목록에 없는 계정 → forbidden', stranger.code === 'forbidden' && stranger.ok === false, JSON.stringify(stranger));
+check('허용 목록에 없는 계정의 내용은 시트에 저장되지 않음', !env.sheets.get('Notes').rows.some((r) => r && (String(r[0]) === '999' || String(r[3]).includes('침입'))));
+check('허용 목록은 대소문자 무시(B@X.com 허용)', post({ action: 'notes_get', id_token: B, video_id: VID }).ok === true);
+
+// 입력 검증
+check('잘못된 영상 ID 거절', post({ action: 'notes_get', id_token: A, video_id: '../../x' }).ok === false);
+const longAns = post({ action: 'notes_save', id_token: A, video_id: VID, memo: 'x'.repeat(30000), answers: Array.from({ length: 30 }, () => ({ q: 'q', a: 'y'.repeat(9000) })), checks: [] });
+check('답변 전체가 시트 셀 한도를 넘으면 저장 거절 + 안내', longAns.ok === false && /너무 깁니다/.test(longAns.error), JSON.stringify(longAns).slice(0, 120));
+const storedAfter = post({ action: 'notes_get', id_token: A, video_id: VID }).note;
+check('거절된 저장은 기존 노트를 건드리지 않음', storedAfter.memo === '수정됨');
+const longMemo = post({ action: 'notes_save', id_token: A, video_id: VID, memo: 'x'.repeat(30000), answers: [], checks: [] });
+check('메모는 20000자까지만 저장', longMemo.ok === true && post({ action: 'notes_get', id_token: A, video_id: VID }).note.memo.length === 20000);
+
+// 텍스트 서식 고정(수식 실행·숫자 변환 방지)
+const fm = env.formats.filter((f) => f.sheet === 'Notes');
+check('Notes 탭은 텍스트 서식(@)으로 고정', fm.length > 0 && fm.every((f) => f.f === '@'));
+
+// 캐시: 같은 토큰 반복 요청 시 구글 확인 호출 절약
+const before = env.fetches;
+post({ action: 'notes_get', id_token: A, video_id: VID }); post({ action: 'notes_get', id_token: A, video_id: VID });
+check('같은 토큰은 캐시되어 구글 재확인 안 함', env.fetches === before, `${before} → ${env.fetches}`);
+
+// 관리 기능은 기존대로 비밀번호 필요, 구글 로그인으로는 열리지 않음
+check('관리: 비밀번호 없으면 거절', post({ action: 'add', category: '새벽기도', playlist_url: 'https://youtube.com/playlist?list=PLabcdefghijk' }).ok === false);
+check('관리: 구글 토큰만으로는 거절', post({ action: 'add', id_token: A, category: '새벽기도', playlist_url: 'https://youtube.com/playlist?list=PLabcdefghijk' }).ok === false);
+check('관리: 맞는 비밀번호는 통과', post({ action: 'check', password: 'pw' }).ok === true);
+const add = post({ action: 'add', password: 'pw', category: 'dawn', playlist_url: 'https://www.youtube.com/playlist?list=PLabcdefghijk', max_videos: 10 });
+check('관리: 추가 성공 + 구분 별칭을 한국어로 정규화', add.ok && env.sheets.get('Playlists').rows[1][0] === '새벽기도');
+
+// 허용 목록 비어 있으면 로그인한 누구나 (설정 안내와 일치)
+const open = makeEnv({ GOOGLE_CLIENT_ID: CID });
+check('ALLOWED_EMAILS 비어 있으면 로그인 계정 누구나 허용', open.post({ action: 'notes_get', id_token: tok({ sub: '5', email: 'z@x.com' }), video_id: VID }).ok === true);
+const noCid = makeEnv({});
+check('GOOGLE_CLIENT_ID 미설정이면 전부 거절', noCid.post({ action: 'notes_get', id_token: A, video_id: VID }).code === 'auth');
+
+
+/* ====== 30일 로그인 유지(앱 세션 토큰) ====== */
+const b64url = (buf) => Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
+const signWith = (secret, payload) => { const body = b64url(JSON.stringify(payload)); return `${body}.${b64url(crypto.createHmac('sha256', secret).update(body).digest())}`; };
+
+const login = post({ action: 'notes_login', id_token: A });
+check('로그인: 구글 토큰 확인 후 앱 세션 발급', login.ok && typeof login.session === 'string' && login.session.split('.').length === 2, JSON.stringify(login));
+check('로그인: 유효기간 약 30일', Math.abs(login.expires_at - (Math.floor(Date.now() / 1000) + 30 * 86400)) < 60);
+check('로그인: 사용자 정보(이메일) 반환', login.user.email === 'a@x.com');
+check('서명 비밀키가 자동 생성되어 저장됨', typeof props.SESSION_SECRET === 'string' && props.SESSION_SECRET.length > 60);
+
+const fetchesBefore = env.fetches;
+const viaSession = post({ action: 'notes_get', session: login.session, video_id: VID });
+check('세션으로 노트 읽기 (구글 토큰 없이)', viaSession.ok && viaSession.note && viaSession.note.memo.length > 0, JSON.stringify(viaSession).slice(0, 120));
+check('세션 확인에는 구글 서버를 호출하지 않음', env.fetches === fetchesBefore);
+check('세션으로 저장 가능', post({ action: 'notes_save', session: login.session, video_id: VID, memo: '세션으로 저장', answers: [], checks: [] }).ok === true);
+check('A의 세션은 B의 노트를 못 봄', post({ action: 'notes_get', session: login.session, video_id: VID }).note.memo === '세션으로 저장' && post({ action: 'notes_get', id_token: B, video_id: VID }).note.memo === 'B의 메모');
+
+// 위조 방지
+const [bodyPart, sigPart] = login.session.split('.');
+const decoded = JSON.parse(Buffer.from(bodyPart.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+const forgedBody = b64url(JSON.stringify({ ...decoded, sub: '110000000000000000002', email: 'b@x.com' }));
+check('내용을 바꿔치기한 세션(B로 위조)은 거절', post({ action: 'notes_get', session: `${forgedBody}.${sigPart}`, video_id: VID }).code === 'auth');
+check('서명이 틀린 세션은 거절', post({ action: 'notes_get', session: `${bodyPart}.${sigPart.slice(0, -4)}AAAA`, video_id: VID }).code === 'auth');
+check('엉터리 세션은 거절', post({ action: 'notes_get', session: 'abc', video_id: VID }).code === 'auth' && post({ action: 'notes_get', session: 'a.b.c', video_id: VID }).code === 'auth');
+const expired = signWith(props.SESSION_SECRET, { sub: '110000000000000000001', email: 'a@x.com', name: 'A', exp: Math.floor(Date.now() / 1000) - 5 });
+check('만료된 세션은 거절', post({ action: 'notes_get', session: expired, video_id: VID }).code === 'auth');
+const validManual = signWith(props.SESSION_SECRET, { sub: '110000000000000000001', email: 'a@x.com', name: 'A', exp: Math.floor(Date.now() / 1000) + 100 });
+check('(확인용) 같은 방식으로 만든 유효 세션은 통과 → 위 거절 결과가 서명·만료 때문임을 보장', post({ action: 'notes_get', session: validManual, video_id: VID }).ok === true);
+
+// 접근 통제
+check('세션으로는 재생목록 관리 불가', post({ action: 'add', session: login.session, category: '새벽기도', playlist_url: 'https://www.youtube.com/playlist?list=PLabcdefghijk' }).ok === false);
+const refused = post({ action: 'notes_login', id_token: tok({ sub: '999', email: 'stranger@x.com' }) });
+check('허용되지 않은 계정은 로그인(세션 발급) 불가', refused.code === 'forbidden' && !refused.session);
+check('다른 앱용 구글 토큰으로는 로그인 불가', post({ action: 'notes_login', id_token: tok({ sub: '1', email: 'a@x.com', aud: 'evil' }) }).code === 'auth');
+check('구글 토큰 없이 로그인 불가', post({ action: 'notes_login' }).code === 'auth');
+
+// 두 번째 로그인해도 비밀키는 그대로 → 먼저 받은 세션 계속 유효
+const secretBefore = props.SESSION_SECRET;
+post({ action: 'notes_login', id_token: B });
+check('다시 로그인해도 비밀키 유지, 기존 세션 계속 유효', props.SESSION_SECRET === secretBefore && post({ action: 'notes_get', session: login.session, video_id: VID }).ok === true);
+
+// 계정 회수: 허용 목록에서 빼면 남아 있는 세션도 즉시 막힘
+const saveAllowed = props.ALLOWED_EMAILS;
+props.ALLOWED_EMAILS = 'b@x.com';
+check('허용 목록에서 뺀 계정은 기존 세션도 즉시 차단', post({ action: 'notes_get', session: login.session, video_id: VID }).code === 'forbidden');
+props.ALLOWED_EMAILS = saveAllowed;
+check('다시 허용하면 같은 세션으로 복구', post({ action: 'notes_get', session: login.session, video_id: VID }).ok === true);
+
+// 비상 로그아웃: 비밀키를 바꾸면 모든 세션 무효
+props.SESSION_SECRET = 'new-secret-' + 'x'.repeat(60);
+check('비밀키를 바꾸면 모든 세션 무효', post({ action: 'notes_get', session: login.session, video_id: VID }).code === 'auth');
+
+// 다른 배포(다른 비밀키)에서 만든 세션은 통하지 않음
+const other = makeEnv({ GOOGLE_CLIENT_ID: CID, ALLOWED_EMAILS: 'a@x.com' });
+const otherLogin = other.post({ action: 'notes_login', id_token: A });
+check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'notes_get', session: otherLogin.session, video_id: VID }).code === 'auth');
+
+
+// ---------- 지금 동기화 (GitHub Actions 실행) ----------
+{
+  const gp = { ADMIN_PASSWORD: 'pw', GITHUB_TOKEN: 'ghp_SECRET', GITHUB_REPO: 'me/Repo' };
+  const g = makeEnv(gp);
+  const run = (over) => ({ status: 'completed', conclusion: 'success', run_started_at: '2026-10-08T05:00:00Z', updated_at: '2026-10-08T05:03:00Z', event: 'schedule', html_url: 'https://github.com/me/Repo/actions/runs/1', ...over });
+  g.setGh((url, opts) => {
+    if (opts.method === 'get') return { code: 200, body: { workflow_runs: [g.__run] } };
+    return { code: 204, body: {} };
+  });
+  g.__run = run({});
+  let r = g.post({ action: 'sync_status' });
+  check('동기화: 비밀번호 없으면 거부 (GitHub 호출 없음)', r.ok === false && g.ghCalls.length === 0, JSON.stringify(r));
+  r = g.post({ action: 'sync_run', password: 'bad' });
+  check('동기화: 틀린 비밀번호 거부 (GitHub 호출 없음)', r.ok === false && g.ghCalls.length === 0);
+  r = g.post({ action: 'sync_status', password: 'pw' });
+  check('상태: 완료/성공', r.ok && r.run.state === 'success' && r.run.event === 'schedule', JSON.stringify(r));
+  check('상태: 토큰이 응답에 노출되지 않음', !JSON.stringify(r).includes('ghp_SECRET'));
+  check('상태 조회 요청: 올바른 주소·헤더', g.ghCalls[0].url === 'https://api.github.com/repos/me/Repo/actions/workflows/sync.yml/runs?per_page=1' && g.ghCalls[0].opts.headers.Authorization === 'Bearer ghp_SECRET' && g.ghCalls[0].opts.headers.Accept === 'application/vnd.github+json');
+  g.__run = run({ status: 'in_progress', conclusion: null });
+  check('상태: 실행 중', g.post({ action: 'sync_status', password: 'pw' }).run.state === 'running');
+  g.__run = run({ conclusion: 'failure' });
+  check('상태: 실패', g.post({ action: 'sync_status', password: 'pw' }).run.state === 'failed');
+  g.__run = null;
+  g.setGh(() => ({ code: 200, body: { workflow_runs: [] } }));
+  check('상태: 기록 없음', g.post({ action: 'sync_status', password: 'pw' }).run.state === 'none');
+
+  // 실행
+  g.ghCalls.length = 0;
+  g.setGh((url, opts) => (opts.method === 'get' ? { code: 200, body: { workflow_runs: [run({})] } } : { code: 204, body: {} }));
+  r = g.post({ action: 'sync_run', password: 'pw', max_new: '3' });
+  const post1 = g.ghCalls.find((c) => c.opts.method === 'post');
+  check('실행: 성공 응답', r.ok === true && r.max_new === 3, JSON.stringify(r));
+  check('실행 요청: 주소·ref·max_new', post1.url === 'https://api.github.com/repos/me/Repo/actions/workflows/sync.yml/dispatches' && JSON.parse(post1.opts.payload).ref === 'main' && JSON.parse(post1.opts.payload).inputs.max_new === '3', post1.opts.payload);
+  g.ghCalls.length = 0;
+  g.post({ action: 'sync_run', password: 'pw', max_new: '9999' });
+  check('실행: 개수 상한(30)으로 제한', JSON.parse(g.ghCalls.find((c) => c.opts.method === 'post').opts.payload).inputs.max_new === '30');
+  g.ghCalls.length = 0;
+  g.post({ action: 'sync_run', password: 'pw', max_new: 'abc' });
+  check('실행: 숫자가 아니면 기본값 5', JSON.parse(g.ghCalls.find((c) => c.opts.method === 'post').opts.payload).inputs.max_new === '5');
+  gp.GITHUB_REF = 'dev';
+  g.ghCalls.length = 0;
+  g.post({ action: 'sync_run', password: 'pw' });
+  check('실행: GITHUB_REF 속성 사용', JSON.parse(g.ghCalls.find((c) => c.opts.method === 'post').opts.payload).ref === 'dev');
+  delete gp.GITHUB_REF;
+
+  // 이미 실행 중이면 중복 실행 막기
+  g.ghCalls.length = 0;
+  g.setGh((url, opts) => (opts.method === 'get' ? { code: 200, body: { workflow_runs: [run({ status: 'queued', conclusion: null })] } } : { code: 204, body: {} }));
+  r = g.post({ action: 'sync_run', password: 'pw' });
+  check('실행 중이면 새로 시작하지 않음', r.ok === false && /이미 실행 중/.test(r.error) && !g.ghCalls.some((c) => c.opts.method === 'post'), JSON.stringify(r));
+
+  // 오류 안내
+  for (const [code, re] of [[401, /토큰/], [403, /Actions/], [404, /저장소 이름/], [500, /500/]]) {
+    g.setGh(() => ({ code, body: {} }));
+    const e = g.post({ action: 'sync_status', password: 'pw' });
+    check(`GitHub ${code} → 안내 문구`, e.ok === false && re.test(e.error), JSON.stringify(e));
+  }
+  g.setGh((url, opts) => (opts.method === 'get' ? { code: 200, body: { workflow_runs: [run({})] } } : { code: 422, body: { message: "No ref found for: dev" } }));
+  check('GitHub 422 → 브랜치 안내', /브랜치/.test(g.post({ action: 'sync_run', password: 'pw' }).error));
+
+  // 설정 누락 / 잘못된 저장소
+  const g2 = makeEnv({ ADMIN_PASSWORD: 'pw' });
+  check('토큰 미설정 → 설정 안내', /GITHUB_TOKEN/.test(g2.post({ action: 'sync_status', password: 'pw' }).error));
+  const g3 = makeEnv({ ADMIN_PASSWORD: 'pw', GITHUB_TOKEN: 't', GITHUB_REPO: '../evil/x?y' });
+  const e3 = g3.post({ action: 'sync_status', password: 'pw' });
+  check('저장소 이름 형식 오류 → 호출하지 않음', /형식/.test(e3.error) && g3.ghCalls.length === 0);
+}
+
+
+// ---------- 설정(AI 모델) / 영상 선택 관리 ----------
+{
+  const e = makeEnv({ ADMIN_PASSWORD: 'pw' });
+  check('설정: 비밀번호 없으면 거부', e.post({ action: 'settings_get' }).ok === false && e.post({ action: 'settings_set', gemini_model: 'x-model' }).ok === false);
+  let r = e.post({ action: 'settings_get', password: 'pw' });
+  check('설정: 처음에는 비어 있음 (Settings 탭 자동 생성)', r.ok && r.settings.gemini_model === '' && !!e.sheets.get('Settings'), JSON.stringify(r));
+  r = e.post({ action: 'settings_set', password: 'pw', gemini_model: 'gemini-3.8-flash' });
+  check('설정: 모델 저장', r.ok && e.post({ action: 'settings_get', password: 'pw' }).settings.gemini_model === 'gemini-3.8-flash');
+  e.post({ action: 'settings_set', password: 'pw', gemini_model: 'gemini-3.1-pro-preview' });
+  const rows = e.sheets.get('Settings').rows;
+  check('설정: 같은 항목은 줄이 늘지 않고 덮어씀 (헤더 + 1줄)', rows.length === 2 && rows[1][1] === 'gemini-3.1-pro-preview', JSON.stringify(rows));
+  check('설정: 이상한 모델 이름 거부', e.post({ action: 'settings_set', password: 'pw', gemini_model: 'bad model; rm -rf' }).ok === false && e.post({ action: 'settings_get', password: 'pw' }).settings.gemini_model === 'gemini-3.1-pro-preview');
+  // 영상 관리
+  check('영상 목록: Sermons 탭이 없으면 안내', /지금 동기화/.test(e.post({ action: 'videos_list', password: 'pw' }).error || ''));
+  const sh = e.ss.insertSheet('Sermons');
+  const big = 'x'.repeat(40000);
+  sh.rows.push(['video_id', 'category', 'title', 'published_at', 'url', 'status', 'transcript_manual', 'result_json', 'updated_at', 'note']);
+  sh.rows.push(['vidAAAAAAAA', 'dawn', '새벽 A', '2026-09-01', 'u', 'done', '', big, '2026-09-02T00:00:00Z', 'Supadata 자막']);
+  sh.rows.push(['vidBBBBBBBB', 'sunday', '주일 B', '2026-10-04', 'u', 'listed', '', '', '', '']);
+  sh.rows.push(['vidCCCCCCCC', 'dawn', '새벽 C', '2026-10-06', 'u', 'error', '', '', '2026-10-07T00:00:00Z', '오류 내용']);
+  sh.rows.push(['', '', '', '', '', '', '', '', '', '']);
+  r = e.post({ action: 'videos_list', password: 'pw' });
+  check('영상 목록: 최신순, 빈 줄 제외', r.ok && r.videos.map((v) => v.video_id).join() === 'vidCCCCCCCC,vidBBBBBBBB,vidAAAAAAAA', JSON.stringify(r.videos?.map((v) => v.video_id)));
+  check('영상 목록: 큰 결과(result_json)는 응답에 포함되지 않음', JSON.stringify(r).length < 2000 && !JSON.stringify(r).includes('xxxxxxxx'));
+  check('영상 목록: 상태·메모 전달', r.videos[0].status === 'error' && r.videos[0].note === '오류 내용' && r.videos[2].note === 'Supadata 자막');
+  check('영상 선택: 비밀번호 없으면 거부', e.post({ action: 'videos_mark', ids: ['vidBBBBBBBB'], status: 'redo' }).ok === false);
+  r = e.post({ action: 'videos_mark', password: 'pw', ids: ['vidBBBBBBBB', 'vidCCCCCCCC', 'nope'], status: 'redo' });
+  check('영상 선택: 선택한 영상만 redo 로 변경', r.ok && r.changed === 2 && sh.rows[2][5] === 'redo' && sh.rows[3][5] === 'redo' && sh.rows[1][5] === 'done', JSON.stringify([r, sh.rows.map((x) => x[5])]));
+  check('영상 선택: 메모에 요청 기록, 갱신 시각 기록', /다시 정리/.test(sh.rows[2][9]) && /^\d{4}-/.test(sh.rows[2][8]));
+  check('영상 선택: 결과(result_json)는 건드리지 않음', sh.rows[1][7] === big);
+  check('영상 선택: done 같은 상태로는 바꿀 수 없음', e.post({ action: 'videos_mark', password: 'pw', ids: ['vidAAAAAAAA'], status: 'done' }).ok === false && sh.rows[1][5] === 'done');
+  check('영상 선택: 선택이 비어 있으면 거부', e.post({ action: 'videos_mark', password: 'pw', ids: [], status: 'redo' }).ok === false);
+  e.post({ action: 'videos_mark', password: 'pw', ids: ['vidCCCCCCCC'], status: 'skip' });
+  check('영상 선택: 제외(skip) 처리', sh.rows[3][5] === 'skip');
+  e.post({ action: 'videos_mark', password: 'pw', ids: ['vidCCCCCCCC'], status: 'pending' });
+  check('영상 선택: 대기(pending)로 복원, 메모 비움', sh.rows[3][5] === 'pending' && sh.rows[3][9] === '');
+}
+
+
+// ---------- 모드별 개인 기록(fields) ----------
+{
+  const e = makeEnv({ GOOGLE_CLIENT_ID: CID, ALLOWED_EMAILS: 'a@x.com,b@x.com' });
+  const V = 'sampleSun001';
+  let r = e.post({ action: 'notes_save', id_token: A, video_id: V, memo: '메모', fields: { 'qt.life': '이번 주 적용', 'group.note.0': '소그룹 메모', 'bad key!': 'x', empty: '   ' } });
+  check('fields: 저장 성공', r.ok === true, JSON.stringify(r));
+  r = e.post({ action: 'notes_get', id_token: A, video_id: V });
+  check('fields: 읽기 (잘못된 키·빈 칸은 저장 안 됨)', r.note.fields['qt.life'] === '이번 주 적용' && r.note.fields['group.note.0'] === '소그룹 메모' && !('bad key!' in r.note.fields) && !('empty' in r.note.fields), JSON.stringify(r.note));
+  e.post({ action: 'notes_save', id_token: A, video_id: V, memo: '메모만 수정' });
+  r = e.post({ action: 'notes_get', id_token: A, video_id: V });
+  check('보낸 항목만 바뀜: 메모만 보내도 fields 는 그대로', r.note.memo === '메모만 수정' && r.note.fields['qt.life'] === '이번 주 적용');
+  e.post({ action: 'notes_save', id_token: A, video_id: V, fields: { 'qt.life': '고친 적용' } });
+  r = e.post({ action: 'notes_get', id_token: A, video_id: V });
+  check('fields 만 보내도 메모는 그대로', r.note.memo === '메모만 수정' && r.note.fields['qt.life'] === '고친 적용' && !r.note.fields['group.note.0']);
+  check('다른 사람은 내 fields 를 못 봄', e.post({ action: 'notes_get', id_token: B, video_id: V }).note === null);
+  const many = {};
+  for (let i = 0; i < 120; i++) many['k' + i] = 'v' + i;
+  e.post({ action: 'notes_save', id_token: A, video_id: V, fields: many });
+  check('fields 는 최대 80칸', Object.keys(e.post({ action: 'notes_get', id_token: A, video_id: V }).note.fields).length === 80);
+  e.post({ action: 'notes_save', id_token: A, video_id: V, fields: { long: 'z'.repeat(9000) } });
+  check('칸 하나는 5000자까지', e.post({ action: 'notes_get', id_token: A, video_id: V }).note.fields.long.length === 5000);
+  e.post({ action: 'notes_save', id_token: B, video_id: 'onlyFields01', fields: { 'qt.life': '내용' } });
+  check('목록: fields 만 있어도 "내 노트"로 표시', e.post({ action: 'notes_list', id_token: B }).items.some((x) => x.video_id === 'onlyFields01'));
+  // 예전 7열 Notes 탭 → 새 열 자동 추가
+  const old = makeEnv({ GOOGLE_CLIENT_ID: CID });
+  const sh = old.ss.insertSheet('Notes');
+  sh.rows.push(['user_sub', 'email', 'video_id', 'memo', 'answers_json', 'checks_json', 'updated_at']);
+  sh.rows.push(['110000000000000000001', 'a@x.com', V, '예전 메모', '[]', '[]', '2026-01-01T00:00:00Z']);
+  const g = old.post({ action: 'notes_get', id_token: A, video_id: V });
+  check('예전 Notes 탭도 읽힘 (fields 는 빈 객체) + 헤더에 fields_json 추가', g.ok && g.note.memo === '예전 메모' && Object.keys(g.note.fields).length === 0 && sh.rows[0][7] === 'fields_json', JSON.stringify([g, sh.rows[0]]));
+}
+
+// ---------- 사용자 영상 ----------
+{
+  const gp = { GOOGLE_CLIENT_ID: CID, ALLOWED_EMAILS: 'a@x.com,b@x.com', ADMIN_PASSWORD: 'pw', GITHUB_TOKEN: 't', GITHUB_REPO: 'me/Repo' };
+  const e = makeEnv(gp);
+  e.setGh(() => ({ code: 204, body: {} }));
+  const run = (over) => ({ code: 200, body: { workflow_runs: [] }, ...over });
+  e.setGh((url, opts) => (opts.method === 'get' ? run() : { code: 204, body: {} }));
+  const sh = () => e.sheets.get('Sermons');
+
+  check('사용자 영상: 로그인 없이는 거부', e.post({ action: 'user_video_add', url: 'https://youtu.be/abcdefghijk' }).code === 'auth');
+  check('사용자 영상: 비밀번호만으로는 거부', e.post({ action: 'user_video_add', password: 'pw', url: 'https://youtu.be/abcdefghijk' }).code === 'auth');
+  let r = e.post({ action: 'user_video_add', id_token: A, url: 'https://example.com/x' });
+  check('사용자 영상: 유튜브 주소가 아니면 거부', r.ok === false && /주소/.test(r.error));
+  r = e.post({ action: 'user_video_add', id_token: A, url: 'https://youtu.be/abcdefghijk', date: '10월 4일' });
+  check('사용자 영상: 날짜 형식 확인', r.ok === false && /날짜/.test(r.error));
+
+  e.ghCalls.length = 0;
+  r = e.post({ action: 'user_video_add', id_token: A, url: 'https://www.youtube.com/watch?v=abcdefghijk&t=30s', title: '내가 정한 제목', date: '2026-10-04', scripture: '요한복음 3:16-21', preacher: '김목사' });
+  check('사용자 영상: 수동 입력으로 추가', r.ok === true && r.video_id === 'abcdefghijk' && r.dispatched === true, JSON.stringify(r));
+  const row = sh().rows[1];
+  check('시트 행: category=user, pending, 입력값·소유자', row[0] === 'abcdefghijk' && row[1] === 'user' && row[2] === '내가 정한 제목' && row[3] === '2026-10-04' && row[5] === 'pending' && row[10] === '김목사' && row[11] === '요한복음 3:16-21' && row[16] === 'a@x.com', JSON.stringify(row));
+  check('시트 헤더가 17열', sh().rows[0].length === 17 && sh().rows[0][16] === 'owner');
+  const d = e.ghCalls.find((c) => c.opts.method === 'post');
+  check('GitHub 실행 요청: categories=user', d && JSON.parse(d.opts.payload).inputs.categories === 'user', d && d.opts.payload);
+  check('제목을 직접 넣으면 유튜브 제목 조회 안 함', e.oembed.length === 0);
+
+  r = e.post({ action: 'user_video_add', id_token: A, url: 'https://youtu.be/abcdefghijk' });
+  check('같은 영상은 중복 추가 안 됨 (대기 중 안내)', r.ok === false && r.exists === true && /대기/.test(r.error) && sh().rows.length === 2, JSON.stringify(r));
+
+  // 제목 비우면 유튜브에서 가져옴 / 날짜 비우면 오늘
+  r = e.post({ action: 'user_video_add', id_token: B, url: 'https://youtu.be/ZZZZZZZZZZZ?si=abc' });
+  check('제목을 비우면 유튜브 제목을 가져옴, 날짜는 오늘', r.ok && sh().rows[2][2].startsWith('[2026.10.04]') && /^\d{4}-\d{2}-\d{2}$/.test(sh().rows[2][3]) && sh().rows[2][16] === 'b@x.com', JSON.stringify(sh().rows[2]));
+  e.setOembed('');
+  r = e.post({ action: 'user_video_add', id_token: B, url: 'https://www.youtube.com/shorts/QQQQQQQQQQQ' });
+  check('제목을 가져오지 못하면 직접 입력 안내', r.ok === false && /제목/.test(r.error));
+  r = e.post({ action: 'user_video_add', id_token: B, url: 'https://www.youtube.com/live/LLLLLLLLLLL', title: '라이브' });
+  check('live/ 주소도 인식', r.ok && r.video_id === 'LLLLLLLLLLL');
+
+  // 내 영상만 보임
+  const mineA = e.post({ action: 'user_video_mine', id_token: A });
+  const mineB = e.post({ action: 'user_video_mine', id_token: B });
+  check('내 영상 목록: 본인 것만', mineA.videos.length === 1 && mineA.videos[0].video_id === 'abcdefghijk' && mineB.videos.length === 2, JSON.stringify([mineA, mineB]));
+  check('내 영상 목록: 소유자 이메일은 응답에 없음', !JSON.stringify(mineA).includes('a@x.com'));
+
+  // 다른 사람 영상은 바꿀 수 없음
+  r = e.post({ action: 'user_video_remove', id_token: B, video_id: 'abcdefghijk' });
+  check('남의 영상은 못 지움', r.ok === false && sh().rows[1][5] === 'pending');
+  r = e.post({ action: 'user_video_redo', id_token: A, video_id: 'abcdefghijk' });
+  check('내 영상 다시 정리 요청 → redo', r.ok && sh().rows[1][5] === 'redo');
+  r = e.post({ action: 'user_video_remove', id_token: A, video_id: 'abcdefghijk' });
+  check('내 영상 목록에서 빼기 → skip, 내 목록에서 사라짐', r.ok && sh().rows[1][5] === 'skip' && e.post({ action: 'user_video_mine', id_token: A }).videos.length === 0);
+  // skip 된 영상을 다시 넣으면 되살아남
+  r = e.post({ action: 'user_video_add', id_token: A, url: 'https://youtu.be/abcdefghijk', title: '다시 넣음', scripture: '시편 23편' });
+  check('빼 두었던 영상을 다시 넣으면 redo 로 되살아남 (줄은 그대로)', r.ok && sh().rows[1][5] === 'redo' && sh().rows[1][2] === '다시 넣음' && sh().rows[1][11] === '시편 23편' && sh().rows.length === 4, JSON.stringify(sh().rows[1]));
+  // 이미 정리된 교회 영상
+  sh().rows.push(['CHURCHVID01', 'dawn', '[2026.10.01] 새벽', '2026-10-01', 'u', 'done', '', '{}', '', '', '', '', '', '', '', '', '']);
+  r = e.post({ action: 'user_video_add', id_token: A, url: 'https://youtu.be/CHURCHVID01', title: 't' });
+  check('교회 설교로 이미 있는 영상 안내', r.ok === false && /토론토영락교회 설교/.test(r.error));
+
+  // 대기 한도
+  const lim = makeEnv({ GOOGLE_CLIENT_ID: CID, GITHUB_TOKEN: 't', GITHUB_REPO: 'me/Repo' });
+  lim.setGh(() => ({ code: 204, body: {} }));
+  let last;
+  for (let i = 0; i < 12; i++) last = lim.post({ action: 'user_video_add', id_token: A, url: `https://youtu.be/lim${String(i).padStart(8, '0')}`, title: 't' + i });
+  check('대기 중인 영상은 사람당 10편까지', last.ok === false && /너무 많습니다/.test(last.error) && lim.sheets.get('Sermons').rows.length === 11);
+
+  // GitHub 연결이 없어도 영상은 등록됨
+  const nogh = makeEnv({ GOOGLE_CLIENT_ID: CID });
+  r = nogh.post({ action: 'user_video_add', id_token: A, url: 'https://youtu.be/nogithub001', title: 't' });
+  check('GitHub 미연결이어도 등록은 되고, 자동 실행만 안 됨', r.ok && r.dispatched === false && /GITHUB_TOKEN/.test(r.dispatch_error) && nogh.sheets.get('Sermons').rows.length === 2, JSON.stringify(r));
+
+  // 관리자 목록에도 사용자 영상·설교자·본문이 보임
+  const vl = e.post({ action: 'videos_list', password: 'pw' });
+  check('영상 관리 목록에 category=user, 설교자·본문 포함', vl.ok && vl.videos.some((v) => v.category === 'user' && v.scripture === '시편 23편'), JSON.stringify(vl.videos?.slice(0, 2)));
+}
+
+// ---------- 동기화 실행: 구분 선택 ----------
+{
+  const g = makeEnv({ ADMIN_PASSWORD: 'pw', GITHUB_TOKEN: 't', GITHUB_REPO: 'me/Repo' });
+  g.setGh((url, opts) => (opts.method === 'get' ? { code: 200, body: { workflow_runs: [] } } : { code: 204, body: {} }));
+  const sent = () => JSON.parse(g.ghCalls.filter((c) => c.opts.method === 'post').pop().opts.payload).inputs;
+  g.post({ action: 'sync_run', password: 'pw', categories: ['youth', 'bogus', 'sunday'] });
+  check('구분 선택: 허용된 값만 전달', sent().categories === 'youth,sunday', JSON.stringify(sent()));
+  g.post({ action: 'sync_run', password: 'pw' });
+  check('구분 선택: 안 보내면 categories 입력 없음(기본 구분)', sent().categories === undefined);
+  g.post({ action: 'sync_run', password: 'pw', categories: 'all' });
+  check('구분 선택: all', sent().categories === 'all');
+  const pl = g.post({ action: 'add', password: 'pw', category: '청년부', playlist_url: 'https://www.youtube.com/playlist?list=PLabcdefghijk' });
+  check('재생목록: 청년부예배 구분을 추가할 수 있음', pl.ok && g.sheets.get('Playlists').rows[1][0] === '청년부예배', JSON.stringify(pl));
+}
+
+console.log(fails ? `\n${fails}개 실패` : '\n서버 로직 테스트 모두 통과');
+process.exit(fails ? 1 : 0);

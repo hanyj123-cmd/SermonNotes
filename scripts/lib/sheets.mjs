@@ -18,6 +18,13 @@ export const SERMON_HEADERS = [
   'result_json', // Gemini가 만든 결과 (JSON)
   'updated_at',
   'note',
+  'preacher', // 설교자 (영상 제목에서 읽거나, 사용자 영상은 직접 입력)
+  'scripture', // 성경 본문 표기 (예: 열왕기상 4, 5장)
+  'mode_qt', // QT 묵상 모드 결과 (JSON)
+  'mode_study', // 성경공부 모드 결과 (JSON)
+  'mode_group', // 소그룹 나눔 모드 결과 (JSON)
+  'bible_json', // 성경 본문 4역본 (JSON)
+  'owner', // 사용자 영상을 올린 사람의 이메일
 ];
 
 const CATEGORY_ALIASES = {
@@ -32,7 +39,14 @@ const CATEGORY_ALIASES = {
   sun: 'sunday',
   주일: 'sunday',
   주일예배: 'sunday',
+  youth: 'youth',
+  청년: 'youth',
+  청년부: 'youth',
+  청년부예배: 'youth',
 };
+
+// 화면 버튼 순서 (재생목록으로 수집하는 구분). 사용자 영상(user)은 재생목록이 없습니다.
+export const CATEGORY_KEYS = ['sunday', 'dawn', 'wednesday', 'youth'];
 
 export function normalizeCategory(raw) {
   const key = String(raw || '').trim().toLowerCase().replace(/\s+/g, '');
@@ -85,6 +99,17 @@ export async function ensureTab(sheets, spreadsheetId, title, headers) {
       valueInputOption: 'RAW',
       requestBody: { values: [headers] },
     });
+  } else if (first.length < headers.length) {
+    // 앞쪽 열 이름이 같을 때만, 새로 생긴 열의 이름을 뒤에 덧붙입니다 (기존 데이터는 그대로)
+    const same = first.every((h, i) => h === headers[i]);
+    if (same) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${title}!${colLetter(first.length + 1)}1:${colLetter(headers.length)}1`,
+        valueInputOption: 'RAW',
+        requestBody: { values: [headers.slice(first.length)] },
+      });
+    }
   }
 }
 

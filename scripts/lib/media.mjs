@@ -76,25 +76,34 @@ export async function findSongVideo(song, apiKey, fetchImpl = fetch) {
 }
 
 /**
- * result.worship_songs 의 각 곡에 video_id / video_title 을 붙입니다 (찾은 것만).
- * 할당량을 다 쓰면 나머지 곡은 건너뜁니다. 실패해도 설교 정리 자체에는 영향을 주지 않습니다.
+ * 곡 목록(배열, 또는 worship_songs 를 가진 객체)의 각 곡에 video_id / video_title 을 붙입니다 (찾은 것만).
+ * 같은 곡을 이미 찾았으면 다시 검색하지 않습니다. 할당량을 다 쓰면 나머지 곡은 건너뜁니다.
+ * 실패해도 설교 정리 자체에는 영향을 주지 않습니다.
  */
-export async function attachSongVideos(result, apiKey, { fetchImpl = fetch, log = () => {}, state = {} } = {}) {
-  if (!apiKey || !Array.isArray(result.worship_songs)) return result;
-  for (const song of result.worship_songs) {
-    if (song.video_id || state.quotaExhausted) continue;
+export async function attachSongVideos(holder, apiKey, { fetchImpl = fetch, log = () => {}, state = {} } = {}) {
+  const songs = Array.isArray(holder) ? holder : holder?.worship_songs;
+  if (!apiKey || !Array.isArray(songs)) return holder;
+  state.cache = state.cache || new Map();
+  for (const song of songs) {
+    if (song.video_id) continue;
+    const key = norm(`${song.title}|${song.artist}`);
+    if (state.cache.has(key)) {
+      const hit = state.cache.get(key);
+      if (hit) Object.assign(song, hit);
+      continue;
+    }
+    if (state.quotaExhausted) continue;
     try {
       const v = await findSongVideo(song, apiKey, fetchImpl);
-      if (v) {
-        song.video_id = v.video_id;
-        song.video_title = v.title;
-      }
+      const hit = v ? { video_id: v.video_id, video_title: v.title } : null;
+      state.cache.set(key, hit);
+      if (hit) Object.assign(song, hit);
     } catch (e) {
       if (e instanceof QuotaError) state.quotaExhausted = true;
       log(`찬양 영상 검색 실패 (${song.title}): ${e.message}`);
     }
   }
-  return result;
+  return holder;
 }
 
 export const PRAYER_QUERIES = [

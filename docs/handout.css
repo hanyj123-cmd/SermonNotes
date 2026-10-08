@@ -1,11 +1,12 @@
 /* 핸드아웃(인쇄용) 서식 — paged.js 가 쪽을 나눕니다. (색은 var() 대신 값을 직접 적습니다: paged.js 가 변수를 지우는 경우가 있어서) 쪽 크기·하단 문구는 handout.js 가 덧붙입니다.
-   모든 크기를 pt 로 정해 두어서, 화면의 글자 크기 설정과 상관없이 같은 모양으로 인쇄됩니다. */
+   모든 크기를 pt 로 정해 두어서, 화면의 글자 크기 설정과 상관없이 같은 모양으로 인쇄됩니다. 본문은 명조(Noto Serif KR)를 크고 또렷하게 씁니다. */
 
 .ho-doc {
   font-family: 'Noto Serif KR', 'Nanum Myeongjo', 'Noto Serif CJK KR', serif;
-  font-size: 10.5pt;
-  line-height: 1.75;
-  color: #1d2623;
+  font-weight: 500;
+  font-size: 12.5pt;
+  line-height: 1.85;
+  color: #0f1b2b;
   word-break: keep-all;
   overflow-wrap: break-word;
   -webkit-print-color-adjust: exact;
@@ -16,79 +17,99 @@
 .ho-doc strong { font-weight: 700; }
 
 /* 머리말 */
-.ho-head { padding: 0 0 14pt; margin-bottom: 6pt; border-bottom: 2.25pt double #b8995a; }
-.ho-kicker { display: flex; justify-content: space-between; align-items: baseline; font-family: 'Noto Sans KR', sans-serif; font-size: 8.5pt; letter-spacing: 0.04em; color: #8a6a2b; padding-bottom: 8pt; border-bottom: 0.5pt solid #cfc6b0; }
-.ho-title { font-size: 21pt; line-height: 1.38; font-weight: 700; color: #1d4a43; margin: 16pt 0 8pt; letter-spacing: -0.01em; }
-.ho-scripture { font-family: 'Noto Sans KR', sans-serif; font-size: 9.5pt; color: #5d6762; margin-bottom: 10pt; }
-.ho-summary { font-size: 11pt; line-height: 1.7; padding: 2pt 0 2pt 12pt; border-left: 2.5pt solid #b8995a; color: #1d2623; }
+.ho-head { padding: 0 0 14pt; margin-bottom: 6pt; border-bottom: 3pt solid #1b5fc4; position: relative; }
+.ho-head::after { content: ''; position: absolute; left: 0; right: 0; bottom: -3pt; border-bottom: 3pt solid #8fcf5a; width: 30%; }
+.ho-kicker { display: flex; justify-content: space-between; align-items: baseline; font-family: 'Noto Sans KR', sans-serif; font-size: 10pt; letter-spacing: 0.03em; color: #12408a; padding-bottom: 8pt; border-bottom: 0.75pt solid #cddcec; }
+.ho-title { font-size: 25pt; line-height: 1.38; font-weight: 700; color: #12408a; margin: 16pt 0 8pt; letter-spacing: -0.01em; }
+.ho-scripture { font-family: 'Noto Sans KR', sans-serif; font-size: 11.5pt; font-weight: 500; color: #3d4f66; margin-bottom: 10pt; }
+.ho-summary { font-size: 13.5pt; line-height: 1.7; padding: 3pt 0 3pt 13pt; border-left: 3.5pt solid #8fcf5a; color: #0f1b2b; }
 
 /* 소제목 */
-.ho-sec { margin-top: 20pt; }
-.ho-h2 { display: flex; align-items: center; gap: 10pt; font-size: 13pt; font-weight: 700; color: #1d4a43; margin-bottom: 10pt; break-after: avoid; page-break-after: avoid; }
-.ho-h2::after { content: ''; flex: 1; border-top: 0.75pt solid #b8995a; }
+.ho-sec { margin-top: 22pt; }
+.ho-h2 { display: flex; align-items: center; gap: 10pt; font-size: 16pt; font-weight: 700; color: #12408a; margin-bottom: 11pt; break-after: avoid; page-break-after: avoid; }
+.ho-h2::after { content: ''; flex: 1; border-top: 1pt solid #8fcf5a; }
 .ho-doc h3 { break-after: avoid; page-break-after: avoid; }
+.ho-sub { font-family: 'Noto Sans KR', sans-serif; font-size: 12pt; font-weight: 700; color: #12408a; margin: 10pt 0 5pt; padding-bottom: 2pt; border-bottom: 0.75pt solid #cddcec; }
 
-/* 추천 찬양 */
+/* 기도문 */
+.ho-prayer { padding: 8pt 14pt; background: #f5f9fe; border-left: 3.5pt solid #1b5fc4; }
+.ho-prayer p { text-align: left; margin-bottom: 8pt; }
+.ho-prayer p:last-child { margin-bottom: 0; }
+
+/* 찬양 */
 .ho-songs { list-style: none; display: block; }
-.ho-songs li { padding: 5pt 0; border-bottom: 0.5pt solid #cfc6b0; font-size: 10pt; line-height: 1.6; }
+.ho-songs li { padding: 5pt 0; border-bottom: 0.75pt solid #cddcec; font-size: 12pt; line-height: 1.65; }
 .ho-songs li:last-child { border-bottom: 0; }
-.ho-songs li::before { content: '♪'; color: #8a6a2b; margin-right: 6pt; }
-.ho-tag { font-family: 'Noto Sans KR', sans-serif; font-size: 7.5pt; color: #8a6a2b; border: 0.5pt solid #b8995a; border-radius: 8pt; padding: 0 6pt; margin-left: 6pt; }
-.ho-note { font-size: 9pt; color: #5d6762; padding-left: 15pt; }
+.ho-songs li::before { content: '♪'; color: #2f7a2d; margin-right: 6pt; }
+.ho-tag { font-family: 'Noto Sans KR', sans-serif; font-size: 9pt; color: #2f7a2d; border: 0.75pt solid #8fcf5a; border-radius: 8pt; padding: 0 7pt; margin-left: 7pt; }
+.ho-note { font-size: 11pt; color: #3d4f66; padding-left: 16pt; }
 
-/* 성경 본문: 역본을 나란히 */
-.ho-bible { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 9pt; line-height: 1.6; margin-bottom: 8pt; }
-.ho-bible caption { caption-side: top; text-align: left; font-family: 'Noto Sans KR', sans-serif; font-size: 8.5pt; font-weight: 700; color: #8a6a2b; padding-bottom: 4pt; }
-.ho-bible th { font-family: 'Noto Sans KR', sans-serif; font-size: 8pt; font-weight: 700; text-align: left; color: #1d4a43; padding: 3pt 8pt 3pt 0; border-bottom: 1pt solid #b8995a; }
-.ho-bible td { vertical-align: top; padding: 4pt 8pt 4pt 0; border-bottom: 0.5pt solid #e5dec9; text-align: left; }
-.ho-bible tr { break-inside: avoid; page-break-inside: avoid; }
-.ho-bible .ho-vn { width: 20pt; color: #8a6a2b; font-family: 'Noto Sans KR', sans-serif; font-size: 7.5pt; font-weight: 700; text-align: right; padding-right: 8pt; }
-.ho-ver { margin-bottom: 10pt; }
-.ho-ver h3 { font-size: 10pt; color: #1d4a43; border-bottom: 0.75pt solid #b8995a; margin-bottom: 4pt; }
-.ho-ref { font-family: 'Noto Sans KR', sans-serif; font-size: 8.5pt; font-weight: 700; color: #8a6a2b; margin-bottom: 2pt; }
-.ho-verse { font-size: 9.5pt; white-space: pre-line; }
-.ho-credit { font-family: 'Noto Sans KR', sans-serif; font-size: 7pt; line-height: 1.5; color: #5d6762; margin-top: 4pt; }
+/* 성경 본문 */
+.ho-ver { margin-bottom: 12pt; }
+.ho-ver h3 { font-family: 'Noto Sans KR', sans-serif; font-size: 11.5pt; color: #12408a; border-bottom: 1pt solid #8fcf5a; margin-bottom: 5pt; padding-bottom: 2pt; }
+.ho-passage + .ho-passage { margin-top: 8pt; }
+.ho-ref { font-family: 'Noto Sans KR', sans-serif; font-size: 11pt; font-weight: 700; color: #2f7a2d; margin-bottom: 3pt; }
+.ho-verse { font-size: 12pt; line-height: 1.9; margin-bottom: 2pt; }
+.ho-verse.en { font-family: Georgia, 'Noto Serif KR', serif; font-size: 11.5pt; line-height: 1.75; }
+.ho-vn { font-family: 'Noto Sans KR', sans-serif; font-size: 8pt; font-weight: 700; color: #1b5fc4; margin-right: 1pt; }
+.ho-credit { font-family: 'Noto Sans KR', sans-serif; font-size: 8.5pt; line-height: 1.5; color: #4a5c72; margin-top: 4pt; }
 
 /* 설교 정리 */
-.ho-point { margin-bottom: 14pt; }
-.ho-point-title { font-size: 12pt; line-height: 1.5; font-weight: 700; color: #1d2623; }
+.ho-point { margin-bottom: 15pt; }
+.ho-point-title { font-size: 14.5pt; line-height: 1.5; font-weight: 700; color: #0f1b2b; }
 .ho-point .ho-ref { margin: 1pt 0 6pt; break-after: avoid; page-break-after: avoid; }
 .ho-appendix { break-before: page; page-break-before: always; margin-top: 0; }
 .ho-keep { break-inside: avoid; page-break-inside: avoid; }
 .ho-line { break-inside: avoid; }
-.ho-md p { text-align: justify; margin-bottom: 7pt; orphans: 3; widows: 3; }
+.ho-md p { text-align: justify; margin-bottom: 8pt; orphans: 3; widows: 3; }
 .ho-md p:last-child { margin-bottom: 0; }
-.ho-md ul { margin: 0 0 7pt; padding-left: 14pt; }
-.ho-md li { margin-bottom: 2pt; text-align: justify; }
-.ho-md blockquote { margin: 0 0 7pt; padding: 4pt 10pt; border-left: 2pt solid #b8995a; background: #f7f1e3; color: #3d3a30; }
+.ho-md ul { margin: 0 0 8pt; padding-left: 15pt; }
+.ho-md li { margin-bottom: 3pt; text-align: justify; }
+.ho-md blockquote { margin: 0 0 8pt; padding: 5pt 11pt; border-left: 3pt solid #1b5fc4; background: #e8f0fc; color: #0f1b2b; }
 .ho-md blockquote p { margin: 0 0 3pt; }
 .ho-md blockquote p:last-child { margin: 0; }
-.ho-key { margin-top: 8pt; padding: 7pt 11pt; background: #f7f1e3; border-left: 3pt solid #b8995a; break-inside: avoid; page-break-inside: avoid; }
-.ho-key-label { display: block; font-family: 'Noto Sans KR', sans-serif; font-size: 7.5pt; letter-spacing: 0.06em; color: #8a6a2b; margin-bottom: 1pt; }
-.ho-key p { font-size: 10.5pt; line-height: 1.65; }
-.ho-gospel { margin-top: 6pt; padding: 8pt 12pt; border: 0.75pt solid #1d4a43; border-left-width: 3pt; break-inside: avoid; page-break-inside: avoid; }
-.ho-gospel h3 { font-size: 10.5pt; color: #1d4a43; margin-bottom: 3pt; }
+.ho-key { margin-top: 9pt; padding: 8pt 13pt; background: #eef8e2; border-left: 4pt solid #8fcf5a; break-inside: avoid; page-break-inside: avoid; }
+.ho-key-label { display: block; font-family: 'Noto Sans KR', sans-serif; font-size: 9pt; letter-spacing: 0.05em; color: #2f7a2d; margin-bottom: 1pt; }
+.ho-key p { font-size: 12.5pt; line-height: 1.7; }
+.ho-words { margin-top: 8pt; padding: 6pt 12pt; border: 0.75pt solid #cddcec; break-inside: avoid; page-break-inside: avoid; }
+.ho-words ul { margin: 2pt 0 0; padding-left: 14pt; font-size: 11.5pt; }
+.ho-summary-box { padding: 10pt 15pt; background: #f5f9fe; border-top: 3pt solid #1b5fc4; }
 
 /* 삶의 적용 */
-.ho-app { display: flex; align-items: flex-start; justify-content: space-between; gap: 14pt; padding: 7pt 0; border-bottom: 0.5pt solid #cfc6b0; break-inside: avoid; page-break-inside: avoid; }
+.ho-app { display: flex; align-items: flex-start; justify-content: space-between; gap: 14pt; padding: 8pt 0; border-bottom: 0.75pt solid #cddcec; break-inside: avoid; page-break-inside: avoid; }
 .ho-app:last-child { border-bottom: 0; }
 .ho-app-body { flex: 1; min-width: 0; }
-.ho-app h3 { font-size: 10.5pt; font-weight: 700; margin-bottom: 1pt; }
-.ho-app .ho-md p { color: #38423e; font-size: 10pt; }
-.ho-check { flex: none; display: inline-flex; align-items: center; gap: 5pt; font-family: 'Noto Sans KR', sans-serif; font-size: 8pt; color: #5d6762; padding-top: 3pt; white-space: nowrap; }
-.ho-box { display: inline-block; width: 9pt; height: 9pt; border: 1pt solid #1d4a43; border-radius: 1.5pt; }
+.ho-app h3 { font-size: 13pt; font-weight: 700; margin-bottom: 1pt; color: #12408a; }
+.ho-app .ho-md p { color: #2c3d52; font-size: 12pt; }
+.ho-mine { margin-top: 4pt; }
+.ho-mine-label { font-family: 'Noto Sans KR', sans-serif; font-size: 9.5pt; font-weight: 700; color: #12408a; }
+.ho-check { flex: none; display: inline-flex; align-items: center; gap: 5pt; font-family: 'Noto Sans KR', sans-serif; font-size: 9.5pt; color: #3d4f66; padding-top: 3pt; white-space: nowrap; }
+.ho-box { display: inline-block; width: 10pt; height: 10pt; border: 1.25pt solid #1b5fc4; border-radius: 2pt; }
 
-/* 묵상 · 소그룹 */
-.ho-q { padding-left: 17pt; }
-.ho-q > li { margin-bottom: 6pt; padding-left: 2pt; }
-.ho-q-lined > li { margin-bottom: 10pt; break-inside: avoid; page-break-inside: avoid; }
-.ho-q > li::marker { color: #8a6a2b; font-weight: 700; }
-.ho-lines { margin-top: 3pt; margin-left: -17pt; }
-.ho-line { height: 19pt; border-bottom: 0.5pt solid #cfc6b0; }
-.ho-sg { margin-bottom: 10pt; break-inside: avoid-page; }
-.ho-sg h3 { font-family: 'Noto Sans KR', sans-serif; font-size: 9pt; font-weight: 700; color: #1d4a43; margin-bottom: 4pt; padding-bottom: 2pt; border-bottom: 0.5pt solid #cfc6b0; }
-.ho-ice { padding: 6pt 11pt; background: #f7f1e3; border-left: 3pt solid #b8995a; }
+/* 질문 · 퀴즈 · 소그룹 */
+.ho-q { padding-left: 19pt; }
+.ho-q > li { margin-bottom: 8pt; padding-left: 2pt; }
+.ho-q-lined > li { margin-bottom: 12pt; break-inside: avoid; page-break-inside: avoid; }
+.ho-q > li::marker { color: #1b5fc4; font-weight: 700; }
+.ho-lines { margin-top: 3pt; }
+.ho-q .ho-lines { margin-left: -19pt; }
+.ho-line { height: 22pt; border-bottom: 0.75pt solid #b9cce3; }
+.ho-sg { margin-bottom: 12pt; }
+.ho-sg h3 { font-family: 'Noto Sans KR', sans-serif; font-size: 11.5pt; font-weight: 700; color: #12408a; margin-bottom: 5pt; padding-bottom: 2pt; border-bottom: 0.75pt solid #cddcec; }
+.ho-ice { padding: 7pt 13pt; background: #eef8e2; border-left: 4pt solid #8fcf5a; }
+.ho-model { margin-top: 5pt; padding: 6pt 12pt; background: #eef8e2; border-left: 3.5pt solid #8fcf5a; break-inside: avoid; page-break-inside: avoid; }
+.ho-qz { margin-bottom: 11pt; break-inside: avoid; page-break-inside: avoid; }
+.ho-qz-q { font-weight: 500; }
+.ho-opts { list-style: none; margin: 4pt 0 0 14pt; }
+.ho-opts li { margin-bottom: 2pt; }
+.ho-mark { color: #1b5fc4; font-weight: 700; }
+.ho-answers { padding-left: 0; list-style: none; }
+.ho-answers li { margin-bottom: 7pt; }
+.ho-steps { padding-left: 19pt; margin-top: 6pt; }
+.ho-steps > li { margin-bottom: 9pt; break-inside: avoid; page-break-inside: avoid; }
+.ho-plain { padding-left: 16pt; }
+.ho-plain li { margin-bottom: 3pt; }
 
 /* 각주 */
-.ho-foot { margin-top: 20pt; padding-top: 8pt; border-top: 0.5pt solid #cfc6b0; font-family: 'Noto Sans KR', sans-serif; font-size: 7.5pt; line-height: 1.6; color: #5d6762; }
+.ho-foot { margin-top: 22pt; padding-top: 8pt; border-top: 0.75pt solid #cddcec; font-family: 'Noto Sans KR', sans-serif; font-size: 9pt; line-height: 1.6; color: #4a5c72; }
 .ho-foot p { margin-bottom: 2pt; }
