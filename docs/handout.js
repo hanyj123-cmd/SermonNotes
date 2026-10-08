@@ -273,7 +273,7 @@ function loadPaged() {
 let handoutCss = null;
 async function loadHandoutCss() {
   if (handoutCss) return handoutCss;
-  const res = await fetch('handout.css?v=9.3');
+  const res = await fetch('handout.css?v=9.4');
   if (!res.ok) throw new Error(`핸드아웃 서식을 불러오지 못했습니다 (${res.status})`);
   handoutCss = await res.text();
   return handoutCss;

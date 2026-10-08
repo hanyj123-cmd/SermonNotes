@@ -88,12 +88,58 @@ const outlineSummary = (o) => o.key_summary || o.key_quote || '';
 const BOOK_START = /^(창세기|출애굽기|레위기|민수기|신명기|여호수아|사사기|룻기|사무엘|열왕기|역대|에스라|느헤미야|에스더|욥기|시편|잠언|전도서|아가|이사야|예레미야|에스겔|다니엘|호세아|요엘|아모스|오바댜|요나|미가|나훔|하박국|스바냐|학개|스가랴|말라기|마태|마가|누가|요한|사도행전|로마서|고린도|갈라디아서|에베소서|빌립보서|골로새서|데살로니가|디모데|디도서|빌레몬서|히브리서|야고보서|베드로|유다서|요한계시록|창|출|레|민|신|수|삿|룻|삼상|삼하|왕상|왕하|대상|대하|스|느|에|욥|시|잠|전|사|렘|애|겔|단|호|욜|암|옵|욘|미|나|합|습|학|슥|말|마|막|눅|요|행|롬|고전|고후|갈|엡|빌|골|살전|살후|딤전|딤후|딛|몬|히|약|벧전|벧후|요일|요이|요삼|유|계)\s*\d/;
 function tidyTitle(raw) {
   let s = String(raw || '').trim();
+  if (!s.startsWith('[')) return s; // [날짜]로 시작하는 유튜브 제목 형식일 때만 뗍니다
   const t0 = s;
   s = s.replace(/^\[\s*\d{4}\s*[.\-/]\s*\d{1,2}\s*[.\-/]\s*\d{1,2}\s*\]\s*/, '');
   s = s.replace(/\s[-–—]\s+[^-–—]+$/, '');
   const m = /\(([^()]+)\)\s*$/.exec(s);
   if (m && BOOK_START.test(m[1].trim())) s = s.slice(0, m.index).trim();
   return s.trim() || t0;
+}
+
+
+const CAT_TITLE_LABEL = { sunday: '주일예배', dawn: '새벽기도', wednesday: '수요예배', youth: '청년부예배' };
+const GENERIC_TITLE = /^(주일|새벽|수요|청년부?|청년\d?부)(오전|낮|저녁|\d부|\d차)?(예배|기도회|기도|말씀)?$/;
+const isGenericTitle = (t) => {
+  const k = String(t || '').replace(/\s+/g, '');
+  return !k || GENERIC_TITLE.test(k);
+};
+
+/** 설교자 이름 통일: "전대혁" · "전대혁 담임목사" · "토론토영락교회 전대혁" → "전대혁 목사" (전도사·강도사·장로·선교사·교수는 그 직함을 그대로 둠) */
+const PREACHER_ROLE = '(?:목사|전도사|강도사|장로|선교사|교수|박사)';
+const PREACHER_MOD = '(?:담임|부|협동|원로|객원|초청|수석|선임|청년부|청년1부)';
+function normalizeOnePreacher(raw) {
+  let s = String(raw || '').replace(/[()[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!s || !/[가-힣]/.test(s)) return s;
+  s = s.replace(/^(설교자|설교|강사|말씀)\s*[:：]\s*/, '').replace(/^(토론토\s*)?영락\s*교회\s*/, '').trim();
+  let role = '';
+  const lead = new RegExp(`^(?:${PREACHER_MOD}\\s*)*(${PREACHER_ROLE})\\s+`).exec(s);
+  if (lead) {
+    role = lead[1];
+    s = s.slice(lead[0].length);
+  }
+  const trail = new RegExp(`\\s*(?:${PREACHER_MOD}\\s*)*(${PREACHER_ROLE})\\s*님?$`).exec(s);
+  if (trail) {
+    role = role || trail[1];
+    s = s.slice(0, trail.index);
+  }
+  s = s.replace(/님$/, '').trim();
+  if (!s) return '';
+  return `${s} ${role && role !== '목사' ? role : '목사'}`;
+}
+function normalizePreacher(raw) {
+  const parts = String(raw || '').split(/\s*[,/·&]\s*|\s+및\s+/).filter((x) => x.trim());
+  return parts.map(normalizeOnePreacher).filter(Boolean).join(', ');
+}
+
+/** 설교 제목 통일: "주일예배 - 설교제목". 제목이 없으면(새벽기도 등) 성경 본문을 씁니다. 사용자 영상은 구분 이름을 붙이지 않습니다. */
+function displayTitle({ category, title, aiTitle = '', scripture = '' }) {
+  const label = CAT_TITLE_LABEL[category];
+  const t = String(title || '').trim();
+  if (label && /^(주일예배|새벽기도회?|수요예배|청년부예배)\s[-–—]\s\S/.test(t)) return t; // 이미 통일된 형식
+  const pick = (x) => (isGenericTitle(x) ? '' : String(x).trim());
+  const core = pick(t) || (category === 'dawn' ? '' : pick(aiTitle)) || String(scripture || '').trim() || t || String(aiTitle || '').trim();
+  return label && core ? `${label} - ${core}` : core;
 }
 
 const ytId = (v) => (/^[A-Za-z0-9_-]{11}$/.test(String(v || '')) ? String(v) : '');

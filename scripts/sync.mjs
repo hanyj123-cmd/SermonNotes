@@ -36,7 +36,7 @@ import { attachSongVideos, attachBibleAudio, buildPrayerMusic, musicIsStale } fr
 import { fetchBibleBlock, bibleIsCurrent } from './lib/bible-web.mjs';
 import { processRow, CELL_LIMIT } from './lib/process.mjs';
 import { createGemini, DEFAULT_MODEL } from './lib/gemini.mjs';
-import { parseTitle, parseScripture, bookOf, tidyTitle } from './lib/title.mjs';
+import { parseTitle, parseScripture, bookOf, tidyTitle, normalizePreacher, displayTitle } from './lib/title.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '../docs/data');
@@ -83,14 +83,14 @@ export function toExport(s) {
   const p = parseTitle(s.title);
   const date = p.date || String(s.published_at || '').slice(0, 10);
   const scripture = String(s.scripture || '').trim() || p.scripture || (result.scripture || []).join(', ');
-  const preacher = String(s.preacher || '').trim() || p.preacher || result.preacher || '';
+  const preacher = normalizePreacher(String(s.preacher || '').trim() || p.preacher || result.preacher || '');
   const first = bookOf(scripture);
   const qt = parseJson(s.mode_qt);
   const study = parseJson(s.mode_study);
   const group = parseJson(s.mode_group);
   const bible = parseJson(s.bible_json);
   const modes = ['review', ...(qt ? ['qt'] : []), ...(study ? ['study'] : []), ...(group ? ['group'] : [])];
-  const title = (p.date && p.title) || tidyTitle(result.title) || p.title || s.title; // 영상 제목이 규칙([날짜] 제목 (본문) - 설교자)을 따르면 거기서 뽑은 깔끔한 제목을 씁니다
+  const title = displayTitle({ category: s.category, title: p.date ? p.title : '', aiTitle: tidyTitle(result.title), scripture }) || p.title || s.title; // "주일예배 - 설교제목" (제목이 없으면 성경 본문)
   const index = {
     id: s.video_id,
     category: s.category,

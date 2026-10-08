@@ -5,7 +5,7 @@
 // 일부 모드만 실패하면 status 를 error 로 두되 성공한 모드는 시트에 남기고, 다음 재시도 때는 빠진 모드만 다시 만듭니다.
 import { obtainMaterial as defaultObtain } from './transcript.mjs';
 import { MODES, MODE_LABELS } from './prompt.mjs';
-import { parseTitle, parseScripture } from './title.mjs';
+import { parseTitle, parseScripture, normalizePreacher } from './title.mjs';
 import { bibleIsCurrent } from './bible-web.mjs';
 
 export const CELL_LIMIT = 49_000; // Google Sheets 셀 하나의 최대 글자 수는 50,000
@@ -40,7 +40,7 @@ export function knownInfo(row) {
     date: p.date || String(row.published_at || '').slice(0, 10),
     title: p.title || row.title,
     scripture: String(row.scripture || '').trim() || p.scripture,
-    preacher: String(row.preacher || '').trim() || p.preacher,
+    preacher: normalizePreacher(String(row.preacher || '').trim() || p.preacher),
   };
 }
 
@@ -141,7 +141,7 @@ export async function processRow(row, deps) {
   if (bible) put('bible_json', bible);
   if (tooBig.length) failures.push(`결과가 너무 깁니다 (${tooBig.join(', ')})`);
   if (results.review) {
-    patch.preacher = results.review.preacher || '';
+    patch.preacher = normalizePreacher(results.review.preacher || '');
     patch.scripture = (results.review.scripture || []).join(', ');
   }
 

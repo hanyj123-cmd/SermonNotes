@@ -25,7 +25,8 @@ async function loadDetail(id) {
   const res = await fetch(`${dataBase()}s/${encodeURIComponent(id)}.json?t=${Date.now()}`);
   if (!res.ok) throw new Error(`설교 내용을 불러오지 못했습니다 (${res.status})`);
   const d = await res.json();
-  d.title = tidyTitle(d.title); // 영상 제목 그대로 들어 있어도 깔끔한 제목으로
+  d.title = displayTitle({ category: d.category, title: tidyTitle(d.title), aiTitle: tidyTitle((d.result && d.result.title) || ''), scripture: d.scripture }); // "주일예배 - 설교제목"
+  d.preacher = normalizePreacher(d.preacher || (d.result && d.result.preacher) || '');
   state.details.set(id, d);
   return d;
 }

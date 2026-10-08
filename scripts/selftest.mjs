@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import { parseTitle, parseScripture, preacherName, bookOf, tidyTitle } from './lib/title.mjs';
+import { parseTitle, parseScripture, preacherName, bookOf, tidyTitle, normalizePreacher, displayTitle } from './lib/title.mjs';
 import { koReference, parseNumberedLines, parseNumberedFlow, parseBskorea, parseBibleGateway, fetchBibleBlock, bibleIsCurrent, bibleSignature, bskoreaUrl, bibleGatewayUrl, BIBLE_SOURCES } from './lib/bible-web.mjs';
 import { normalizePassages, toUsfm } from './lib/bible-books.mjs';
 import { extractJson, normalizeReview, normalizeQt, normalizeStudy, normalizeGroup, readResponseText } from './lib/gemini.mjs';
@@ -258,6 +258,22 @@ await t('청년부는 예약 규칙 없음 · 직접 실행은 항상 실행', (
   assert.deepEqual(decide('schedule', at('2026-10-08T11:00:00Z')), { run: true, categories: 'wednesday' });
 });
 
+await t('설교자 이름 통일: 무엇이 와도 "OOO 목사"', () => {
+  for (const x of ['전대혁', '전대혁 담임목사', '전대혁 목사', '토론토영락교회 전대혁', '토론토영락교회 전대혁 담임목사님', '담임목사 전대혁', '설교자: 전대혁 목사', '영락교회 전대혁 목사', '전대혁목사', ' 전대혁  목사님 ']) assert.equal(normalizePreacher(x), '전대혁 목사', x);
+  assert.equal(normalizePreacher('김철수 전도사'), '김철수 전도사'); // 목사가 아닌 직함은 그대로
+  assert.equal(normalizePreacher('홍길동 목사, 김철수'), '홍길동 목사, 김철수 목사');
+  assert.equal(normalizePreacher(''), '');
+  assert.equal(normalizePreacher('Pastor Kim'), 'Pastor Kim');
+});
+await t('제목 통일: "주일예배 - 설교제목", 새벽기도는 제목이 없으면 성경 본문', () => {
+  assert.equal(displayTitle({ category: 'sunday', title: '진리를 분별하는 삶', scripture: '요일 4:1-6' }), '주일예배 - 진리를 분별하는 삶');
+  assert.equal(displayTitle({ category: 'dawn', title: '새벽기도회', scripture: '열왕기상 4, 5장', aiTitle: 'AI가 지은 제목' }), '새벽기도 - 열왕기상 4, 5장');
+  assert.equal(displayTitle({ category: 'sunday', title: '주일예배', aiTitle: '믿음의 길', scripture: '창 12장' }), '주일예배 - 믿음의 길');
+  assert.equal(displayTitle({ category: 'wednesday', title: '수요 예배', aiTitle: '', scripture: '시편 23편' }), '수요예배 - 시편 23편');
+  assert.equal(displayTitle({ category: 'youth', title: '청년부예배 - 소명', scripture: '' }), '청년부예배 - 소명'); // 이미 통일된 형식은 그대로
+  assert.equal(displayTitle({ category: 'user', title: '시편 23편 묵상' }), '시편 23편 묵상'); // 사용자 영상은 구분 이름을 붙이지 않음
+  assert.equal(tidyTitle('은혜 - 감사'), '은혜 - 감사');
+});
 await t('제목 정돈: 유튜브 제목 → 깔끔한 제목, 규칙 밖은 그대로', () => {
   assert.equal(tidyTitle('[2026.10.04] 믿음으로 걷는 길 (창세기 12:1-9) - 홍길동 목사'), '믿음으로 걷는 길');
   assert.equal(tidyTitle('은혜 (feat. 간증)'), '은혜 (feat. 간증)');
@@ -371,9 +387,10 @@ await t('내보내기 제목: AI가 유튜브 제목을 그대로 베껴도 깔�
   const raw = '[2026.10.04] 믿음으로 걷는 길 (창세기 12:1-9) - 홍길동 목사';
   const r = { ...normalizeReview(rawReview()), title: raw };
   const e = toExport(sermonRow({ title: raw, result_json: JSON.stringify(r) }));
-  assert.equal(e.index.title, '믿음으로 걷는 길');
+  assert.equal(e.index.title, '주일예배 - 믿음으로 걷는 길');
+  assert.equal(e.index.preacher, '홍길동 목사');
   const e2 = toExport(sermonRow({ title: '주일 설교 영상', result_json: JSON.stringify({ ...r, title: raw }) }));
-  assert.equal(e2.index.title, '믿음으로 걷는 길'); // 규칙이 없는 영상 제목이면 AI 제목을 정돈해서 사용
+  assert.equal(e2.index.title, '주일예배 - 믿음으로 걷는 길'); // 규칙이 없는 영상 제목이면 AI 제목을 정돈해서 사용
 });
 
 /* ===== 찬양 영상·배경음악 ===== */

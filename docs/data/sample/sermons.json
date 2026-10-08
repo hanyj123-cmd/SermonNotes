@@ -1,11 +1,11 @@
 {
- "updated": "2026-10-08T14:43:29.438Z",
+ "updated": "2026-10-08T15:00:17.583Z",
  "count": 9,
  "sermons": [
   {
    "id": "sampleDwn01",
    "category": "dawn",
-   "title": "솔로몬의 지혜",
+   "title": "새벽기도 - 솔로몬의 지혜",
    "date": "2026-10-07",
    "url": "https://www.youtube.com/watch?v=sampleDwn01",
    "preacher": "윤정환 목사",
@@ -21,7 +21,7 @@
   {
    "id": "sampleDwn02",
    "category": "dawn",
-   "title": "성전 건축의 준비",
+   "title": "새벽기도 - 성전 건축의 준비",
    "date": "2026-10-06",
    "url": "https://www.youtube.com/watch?v=sampleDwn02",
    "preacher": "윤정환 목사",
@@ -40,7 +40,7 @@
    "title": "시편 23편 묵상",
    "date": "2026-10-05",
    "url": "https://www.youtube.com/watch?v=sampleUsr01",
-   "preacher": "사용자",
+   "preacher": "박은혜 목사",
    "scripture": "시편 23편",
    "book": "시편",
    "bookIdx": 19,
@@ -53,7 +53,7 @@
   {
    "id": "sampleSun01",
    "category": "sunday",
-   "title": "믿음으로 걷는 길",
+   "title": "주일예배 - 믿음으로 걷는 길",
    "date": "2026-10-04",
    "url": "https://www.youtube.com/watch?v=sampleSun01",
    "preacher": "홍길동 목사",
@@ -72,7 +72,7 @@
   {
    "id": "sampleWed01",
    "category": "wednesday",
-   "title": "기도의 능력",
+   "title": "수요예배 - 기도의 능력",
    "date": "2026-10-01",
    "url": "https://www.youtube.com/watch?v=sampleWed01",
    "preacher": "김은혜 목사",
@@ -88,7 +88,7 @@
   {
    "id": "sampleSun02",
    "category": "sunday",
-   "title": "사랑의 계명",
+   "title": "주일예배 - 사랑의 계명",
    "date": "2026-09-27",
    "url": "https://www.youtube.com/watch?v=sampleSun02",
    "preacher": "홍길동 목사",
@@ -104,7 +104,7 @@
   {
    "id": "sampleYth01",
    "category": "youth",
-   "title": "청년의 소명",
+   "title": "청년부예배 - 청년의 소명",
    "date": "2026-09-26",
    "url": "https://www.youtube.com/watch?v=sampleYth01",
    "preacher": "이청년 목사",
@@ -120,7 +120,7 @@
   {
    "id": "sampleWed02",
    "category": "wednesday",
-   "title": "감사의 이유",
+   "title": "수요예배 - 감사의 이유",
    "date": "2026-09-17",
    "url": "https://www.youtube.com/watch?v=sampleWed02",
    "preacher": "홍길동 목사",
@@ -136,7 +136,7 @@
   {
    "id": "sampleSun03",
    "category": "sunday",
-   "title": "은혜로 구원받았으니",
+   "title": "주일예배 - 은혜로 구원받았으니",
    "date": "2026-08-30",
    "url": "https://www.youtube.com/watch?v=sampleSun03",
    "preacher": "박은혜 목사",

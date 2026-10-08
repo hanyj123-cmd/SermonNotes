@@ -65,8 +65,54 @@ export function parseTitle(raw) {
 
 /** 화면·PDF에 쓸 깔끔한 제목: "[2026.10.04] 믿음의 길 (창 12:1-9) - 홍길동 목사" → "믿음의 길" (규칙에 안 맞는 제목은 그대로) */
 export function tidyTitle(raw) {
-  const t = parseTitle(raw).title;
-  return t || String(raw || '').trim();
+  const s = String(raw || '').trim();
+  if (!s.startsWith('[')) return s; // [날짜]로 시작하는 유튜브 제목 형식일 때만 뗍니다 ("은혜 - 감사" 같은 제목을 설교자로 오해하지 않도록)
+  return parseTitle(s).title || s;
+}
+
+
+export const CAT_TITLE_LABEL = { sunday: '주일예배', dawn: '새벽기도', wednesday: '수요예배', youth: '청년부예배' };
+const GENERIC_TITLE = /^(주일|새벽|수요|청년부?|청년\d?부)(오전|낮|저녁|\d부|\d차)?(예배|기도회|기도|말씀)?$/;
+export const isGenericTitle = (t) => {
+  const k = String(t || '').replace(/\s+/g, '');
+  return !k || GENERIC_TITLE.test(k);
+};
+
+/** 설교자 이름 통일: "전대혁" · "전대혁 담임목사" · "토론토영락교회 전대혁" → "전대혁 목사" (전도사·강도사·장로·선교사·교수는 그 직함을 그대로 둠) */
+const PREACHER_ROLE = '(?:목사|전도사|강도사|장로|선교사|교수|박사)';
+const PREACHER_MOD = '(?:담임|부|협동|원로|객원|초청|수석|선임|청년부|청년1부)';
+function normalizeOnePreacher(raw) {
+  let s = String(raw || '').replace(/[()[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!s || !/[가-힣]/.test(s)) return s;
+  s = s.replace(/^(설교자|설교|강사|말씀)\s*[:：]\s*/, '').replace(/^(토론토\s*)?영락\s*교회\s*/, '').trim();
+  let role = '';
+  const lead = new RegExp(`^(?:${PREACHER_MOD}\\s*)*(${PREACHER_ROLE})\\s+`).exec(s);
+  if (lead) {
+    role = lead[1];
+    s = s.slice(lead[0].length);
+  }
+  const trail = new RegExp(`\\s*(?:${PREACHER_MOD}\\s*)*(${PREACHER_ROLE})\\s*님?$`).exec(s);
+  if (trail) {
+    role = role || trail[1];
+    s = s.slice(0, trail.index);
+  }
+  s = s.replace(/님$/, '').trim();
+  if (!s) return '';
+  return `${s} ${role && role !== '목사' ? role : '목사'}`;
+}
+export function normalizePreacher(raw) {
+  const parts = String(raw || '').split(/\s*[,/·&]\s*|\s+및\s+/).filter((x) => x.trim());
+  return parts.map(normalizeOnePreacher).filter(Boolean).join(', ');
+}
+
+/** 설교 제목 통일: "주일예배 - 설교제목". 제목이 없으면(새벽기도 등) 성경 본문을 씁니다. 사용자 영상은 구분 이름을 붙이지 않습니다. */
+export function displayTitle({ category, title, aiTitle = '', scripture = '' }) {
+  const label = CAT_TITLE_LABEL[category];
+  const t = String(title || '').trim();
+  if (label && /^(주일예배|새벽기도회?|수요예배|청년부예배)\s[-–—]\s\S/.test(t)) return t; // 이미 통일된 형식
+  const pick = (x) => (isGenericTitle(x) ? '' : String(x).trim());
+  const core = pick(t) || (category === 'dawn' ? '' : pick(aiTitle)) || String(scripture || '').trim() || t || String(aiTitle || '').trim();
+  return label && core ? `${label} - ${core}` : core;
 }
 
 /** 설교자 이름에서 직함을 뗀 이름 ("윤정환 목사" → "윤정환") — 같은 사람을 하나로 묶을 때 씁니다 */
