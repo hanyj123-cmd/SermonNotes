@@ -1,6 +1,6 @@
 {
- "updated": "2026-10-08T14:08:23.569Z",
- "count": 1,
+ "updated": "2026-10-08T14:19:20.292Z",
+ "count": 6,
  "sermons": [
   {
    "id": "6-HiR1JZHAc",
@@ -13,6 +13,101 @@
    "book": "요한계시록",
    "bookIdx": 66,
    "summary_short": "버가모 교회를 향한 경고와 칭찬을 통해, 우리는 외부의 핍박보다 교묘하게 진리를 왜곡하는 내부의 잘못된 가르침을 경계하고 평생 말씀을 배우며 영적 분별력을 세워가야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "9vD6ZcrrzYU",
+   "category": "sunday",
+   "title": "[2026.09.20] 주일예배 (계 2:8-11) - 전대혁 목사",
+   "date": "2026-09-20",
+   "url": "https://www.youtube.com/watch?v=9vD6ZcrrzYU",
+   "preacher": "전대혁 목사",
+   "scripture": "계 2:8:11",
+   "book": "요한계시록",
+   "bookIdx": 66,
+   "summary_short": "세상의 세속적 부유함과 우상숭배적 구조 속에서도 그리스도를 향한 믿음과 순수함을 지키며, 다가오는 고난을 두려워하지 않고 주님께 충성할 때 주께서 생명의 면류관을 허락하십니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "-pkBZt1QUgE",
+   "category": "sunday",
+   "title": "[2026.09.13] 주일예배 (계 2:1-7) - 토론토영락교회 전대혁 목사",
+   "date": "2026-09-13",
+   "url": "https://www.youtube.com/watch?v=-pkBZt1QUgE",
+   "preacher": "토론토영락교회 전대혁 목사",
+   "scripture": "계 2:1-7",
+   "book": "요한계시록",
+   "bookIdx": 66,
+   "summary_short": "오랜 신앙생활과 수많은 사역 속에서 잃어버리기 쉬운 예수 그리스도를 향한 첫사랑을 기억하고, 회개함으로 처음 행위를 회복해야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "jSpz_J5O9_s",
+   "category": "sunday",
+   "title": "[2026.09.06] 주일예배 (계 1:9-20) - 토론토영락교회 전대혁 목사",
+   "date": "2026-09-06",
+   "url": "https://www.youtube.com/watch?v=jSpz_J5O9_s",
+   "preacher": "토론토영락교회 전대혁 목사",
+   "scripture": "계 1:9-20",
+   "book": "요한계시록",
+   "bookIdx": 66,
+   "summary_short": "우리의 신앙적 문제와 영적 무기력함을 극복하고 참된 회복에 이르기 위해서는, 우리를 가장 잘 아시는 예수 그리스도의 말씀 앞에 겸손히 엎드려 그분의 음성을 들어야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "_oTtkG7fWEo",
+   "category": "sunday",
+   "title": "[2026.08.30] 주일예배 (살전 5:14) - 전대혁 담임목사",
+   "date": "2026-08-30",
+   "url": "https://www.youtube.com/watch?v=_oTtkG7fWEo",
+   "preacher": "전대혁 담임목사",
+   "scripture": "살전 5:14",
+   "book": "데살로니가전서",
+   "bookIdx": 52,
+   "summary_short": "교회 공동체는 하나님이 허락하신 믿음의 동역자들과 함께 말씀, 격려, 도움, 인내의 교제를 나누며 영적으로 성장해 가는 은혜의 통로입니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "PZJYS19qA7U",
+   "category": "sunday",
+   "title": "[2026.08.23] 주일예배 (시 78:1-8) - 전대혁 담임목사",
+   "date": "2026-08-23",
+   "url": "https://www.youtube.com/watch?v=PZJYS19qA7U",
+   "preacher": "전대혁 담임목사",
+   "scripture": "시 78:1-8",
+   "book": "시편",
+   "bookIdx": 19,
+   "summary_short": "성도는 자신이 먼저 체험한 하나님의 은혜와 구원의 역사를 다음 세대와 이웃에게 입술로 전하여, 오직 하나님께 소망을 두고 영적 회복을 누려야 합니다.",
    "modes": [
     "review",
     "qt",
