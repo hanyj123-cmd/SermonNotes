@@ -8,7 +8,7 @@
     "sync": "node scripts/sync.mjs",
     "export": "node scripts/sync.mjs --export-only",
     "serve": "npx --yes serve docs",
-    "test": "node scripts/selftest.mjs && node scripts/selftest-gas.mjs && node scripts/make-sample.mjs"
+    "test": "node scripts/selftest.mjs && node scripts/selftest-gas.mjs && node scripts/game-conf.mjs --check && node scripts/make-sample.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -56,9 +56,20 @@ function songItems(list) {
 function qaItems(list) {
   if (!Array.isArray(list)) return [];
   return list
-    .map((x) => (typeof x === 'string' ? { question: x.trim(), answer: '' } : { question: asString(x?.question), answer: asString(x?.answer) }))
+    .map((x) => (typeof x === 'string' ? { question: x.trim(), guide: '', answer: '' } : { question: asString(x?.question), guide: asString(x?.guide), answer: asString(x?.answer) || asString(x?.example) }))
     .filter((x) => x.question);
 }
+
+// QT 묵상 질문: { question, guide(생각의 길잡이), example(예시 답안) } — 예전처럼 글자만 와도 받아 줍니다
+function meditationItems(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((x) => (typeof x === 'string' ? { question: x.trim(), guide: '', example: '' } : { question: asString(x?.question), guide: asString(x?.guide), example: asString(x?.example) || asString(x?.answer) }))
+    .filter((x) => x.question);
+}
+
+// 빈칸 정답 비교용: 띄어쓰기·문장부호·따옴표를 모두 지우고 소문자로
+export const blankKey = (s) => String(s || '').normalize('NFC').toLowerCase().replace(/[\s.,!?·~'"“”‘’()\[\]{}<>「」『』:;\-_/]/g, '');
 
 const need = (cond, msg) => {
   if (!cond) throw new Error(msg);
@@ -92,7 +103,7 @@ export function normalizeQt(raw) {
     opening_prayer: asString(raw.opening_prayer),
     songs: songItems(raw.songs),
     outline: outlineItems(raw.outline),
-    questions: asArray(raw.questions),
+    questions: meditationItems(raw.questions),
     applications: applicationItems(raw.applications),
     closing_prayer: asString(raw.closing_prayer),
   };
@@ -109,12 +120,13 @@ export function normalizeStudy(raw) {
     .map((x) => {
       const options = asArray(x?.options).slice(0, 5);
       const idx = Number(x?.answer_index);
-      return { question: asString(x?.question), options, answer_index: Number.isInteger(idx) ? idx : -1, explanation: asString(x?.explanation) };
+      const level = /어려/.test(asString(x?.level)) ? '어려움' : /중/.test(asString(x?.level)) ? '중간' : /쉬/.test(asString(x?.level)) ? '쉬움' : '';
+      return { question: asString(x?.question), options, answer_index: Number.isInteger(idx) ? idx : -1, level, explanation: asString(x?.explanation) };
     })
     .filter((x) => x.question && x.options.length >= 2 && x.answer_index >= 0 && x.answer_index < x.options.length);
   const fb = (Array.isArray(q.fill_blank) ? q.fill_blank : [])
-    .map((x) => ({ question: asString(x?.question), answer: asString(x?.answer), explanation: asString(x?.explanation) }))
-    .filter((x) => x.question && x.answer);
+    .map((x) => ({ question: asString(x?.question), answer: clip(x?.answer, 40), accept: asArray(x?.accept).map((a) => a.slice(0, 40)).filter((a) => blankKey(a)).slice(0, 6), explanation: asString(x?.explanation) }))
+    .filter((x) => x.question && blankKey(x.answer));
   const sa = (Array.isArray(q.short_answer) ? q.short_answer : [])
     .map((x) => ({ question: asString(x?.question), answer: asString(x?.answer), explanation: asString(x?.explanation) }))
     .filter((x) => x.question && x.answer);
@@ -145,7 +157,7 @@ export function normalizeStudy(raw) {
 export function normalizeGroup(raw) {
   const q = raw.questions || {};
   const guide = raw.sharing_guide || {};
-  const ice = qaItems([q.icebreaker])[0] || { question: '', answer: '' };
+  const ice = qaItems([q.icebreaker])[0] || { question: '', guide: '', answer: '' };
   const out = {
     representative_prayer: asString(raw.representative_prayer),
     songs: songItems(raw.songs),
@@ -205,7 +217,7 @@ export function createGemini(apiKey, model = DEFAULT_MODEL, options = {}) {
         const response = await ai.models.generateContent({
           model,
           contents,
-          config: { maxOutputTokens: 32_768, temperature: 0.4, ...config }, // 사고(thinking) 토큰이 포함될 수 있어 넉넉하게
+          config: { maxOutputTokens: 65_536, temperature: 0.4, ...config }, // 사고(thinking) 토큰이 포함될 수 있어 넉넉하게
         });
         return parse(readResponseText(response));
       } catch (e) {

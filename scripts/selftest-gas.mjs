@@ -83,7 +83,7 @@ function makeEnv(props) {
   vm.createContext(ctx);
   vm.runInContext(code, ctx);
   const post = (body) => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(body) } }).getContent());
-  return { post, ss, sheets, formats, ghCalls, oembed, setOembed: (t) => { oembedTitle = t; }, setGh: (f) => { ghHandler = f; }, get fetches() { return fetches; } };
+  return { ctx, post, ss, sheets, formats, ghCalls, oembed, setOembed: (t) => { oembedTitle = t; }, setGh: (f) => { ghHandler = f; }, get fetches() { return fetches; } };
 }
 
 const CID = 'cid.apps.googleusercontent.com';
@@ -516,6 +516,101 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
   }
   const pl = g.post({ action: 'add', password: 'pw', category: '청년부', playlist_url: 'https://www.youtube.com/playlist?list=PLabcdefghijk' });
   check('재생목록: 청년부예배 구분을 추가할 수 있음', pl.ok && g.sheets.get('Playlists').rows[1][0] === '청년부예배', JSON.stringify(pl));
+}
+
+
+// ---------- 말씀결 게임 ----------
+{
+  const g = makeEnv({ GOOGLE_CLIENT_ID: CID, ALLOWED_EMAILS: 'a@x.com, b@x.com' });
+  let today = '2026-10-05'; // 월요일
+  g.ctx.gameToday = () => today;
+  // Sermons 탭에 퀴즈가 있는 설교 3편
+  const quiz = (n) => ({ quiz: { multiple_choice: [0, 1, 2].map((i) => ({ question: `q${n}${i}`, options: ['a', 'b', 'c', 'd'], answer_index: i })), fill_blank: [{ question: '____', answer: '하나님 나라', accept: ['천국'] }, { question: '____', answer: '칭의', accept: [] }] } });
+  const ss = g.ss.insertSheet('Sermons');
+  ss.rows.push(['video_id', 'category', 'title', 'published_at', 'url', 'status', 'transcript_manual', 'result_json', 'updated_at', 'note', 'preacher', 'scripture', 'mode_qt', 'mode_study']);
+  ['vidAAAAAAA1', 'vidAAAAAAA2', 'vidAAAAAAA3', 'vidAAAAAAA4'].forEach((v, i) => ss.rows.push([v, 'sunday', 't', '2026-10-04', '', 'done', '', '{}', '', '', '', '', '', JSON.stringify(quiz(i))]));
+  const gp = (o, who = A) => g.post({ id_token: who, ...o });
+  const all = { mc: [0, 1, 2], fb: ['하나님나라', ' 칭의. '] };
+
+  let r = gp({ action: 'game_get' });
+  check('게임: 처음 들어오면 기본 옷·머리가 들어 있는 새 기록', r.ok && r.state.talents === 0 && r.state.inv.includes('robe_brown') && r.state.inv.includes('hair_bun') && !r.state.inv.includes('pet_lamb') && r.state.level === 1, JSON.stringify(r).slice(0, 200));
+  check('게임: 로그인 없이는 거절', g.post({ action: 'game_get' }).code === 'auth');
+  r = gp({ action: 'game_quiz', video_id: 'vidAAAAAAA1', mc: [0, 1], fb: ['x', 'y'] });
+  check('게임: 모든 문제에 답해야 제출', !r.ok && /모든 문제/.test(r.error));
+
+  r = gp({ action: 'game_journey', key: 'pilgrim' });
+  check('게임: 여정 고르기', r.ok && r.state.journey.cur === 'pilgrim');
+  r = gp({ action: 'game_quiz', video_id: 'vidAAAAAAA1', ...all });
+  const res = r.result;
+  check('게임 채점: 빈칸은 띄어쓰기·문장부호 무시하고 맞음', res.fb.every(Boolean) && res.mc.every(Boolean), JSON.stringify(res));
+  // 객관식 3×4 + 빈칸 2×6 + 만점 20 = 44 XP (+ 도장 20)
+  check('게임 점수: 만점 → 경험치 44 + 도장 20', res.perfect && res.xp === 44 && r.state.xp === 64, JSON.stringify(res));
+  // 달란트: 3×2 + 2×3 + 15 = 27 (연속 1일 ×1) + 도장 10 + 업적(첫 걸음 20, 만점 30)
+  check('게임 달란트: 27 + 도장 10 + 업적 50 = 87', r.state.talents === 87, String(r.state.talents));
+  check('게임: 첫 도장 · 연속 1일 · 업적 이벤트', r.state.stampedToday && r.state.streak === 1 && r.events.some((e) => e.type === 'stamp') && r.events.filter((e) => e.type === 'badge').length === 2, JSON.stringify(r.events));
+  check('게임 여정: 경험치만큼 순례길이 나아감(64 XP → 아직 0걸음)', r.state.journey.prog.pilgrim === 64);
+
+  r = gp({ action: 'game_quiz', video_id: 'vidAAAAAAA1', ...all });
+  check('게임: 같은 설교를 다시 풀면 연습(점수 없음)', r.result.scored === false && r.result.already === true && r.state.xp === 64);
+  r = gp({ action: 'game_quiz', video_id: 'vidAAAAAAA2', mc: [0, 1, 0], fb: ['천국', '틀림'] });
+  check('게임 채점: 다른 표기(accept) 인정, 틀린 문제는 점수 없음', r.result.right === 3 && r.result.xp === 2 * 4 + 6 && r.result.fb[0] === true && r.result.fb[1] === false, JSON.stringify(r.result));
+  r = gp({ action: 'game_quiz', video_id: 'vidAAAAAAA3', ...all });
+  check('게임: 하루 점수 퀘스트는 2개까지(세 번째는 연습)', r.result.capped === true && r.result.scored === false && r.state.dailyLeft === 0);
+
+  // 다음 날: 연속 2일
+  today = '2026-10-06';
+  r = gp({ action: 'game_quiz', video_id: 'vidAAAAAAA3', ...all });
+  check('게임: 다음 날 도장 → 연속 2일, 하루 한도 초기화', r.result.scored && r.state.streak === 2 && r.state.dailyLeft === 1, JSON.stringify({ s: r.state.streak, d: r.state.dailyLeft }));
+  r = gp({ action: 'game_quiz', video_id: 'vidAAAAAAA4', ...all });
+  // 순례길 걸음과 보상(1걸음 = 160 XP → 지팡이)
+  check('게임 여정: 1걸음 → 지팡이 보상', r.state.journey.prog.pilgrim >= 160 && r.state.inv.includes('staff') && r.events.some((e) => e.type === 'step' && e.reward === 'staff'), JSON.stringify(r.state.journey));
+
+  // 상점 · 옷장
+  r = gp({ action: 'game_buy', item: 'robe_star' });
+  check('상점: 달란트가 부족하면 못 삼', !r.ok && /부족/.test(r.error));
+  const t0 = gp({ action: 'game_get' }).state.talents;
+  r = gp({ action: 'game_buy', item: 'robe_blue' });
+  check('상점: 하늘빛 겉옷 구입(80 달란트)', r.ok && r.state.inv.includes('robe_blue') && r.state.talents === t0 - 80, String(r.state.talents));
+  check('상점: 같은 것은 두 번 못 삼', !gp({ action: 'game_buy', item: 'robe_blue' }).ok);
+  check('상점: 여정 보상은 살 수 없음', !gp({ action: 'game_buy', item: 'laurel' }).ok);
+  r = gp({ action: 'game_equip', look: { robe: 'robe_blue', handR: 'staff', hairColor: 'black' } });
+  check('옷장: 가진 것으로 갈아입기', r.ok && r.state.look.robe === 'robe_blue' && r.state.look.handR === 'staff');
+  check('옷장: 없는 아이템은 못 입음', !gp({ action: 'game_equip', look: { pet: 'pet_lamb' } }).ok);
+  check('옷장: 칸이 다른 아이템은 못 입음', !gp({ action: 'game_equip', look: { head: 'robe_blue' } }).ok);
+  check('옷장: 옷·머리는 비워 둘 수 없음', !gp({ action: 'game_equip', look: { robe: '' } }).ok);
+
+  // 안식 쿠폰: 하루 쉬어도 연속 유지
+  const cash = gp({ action: 'game_get' }).state.talents;
+  r = gp({ action: 'game_buy', item: 'freeze' });
+  check('안식 쿠폰 구입(120)', cash < 120 ? !r.ok : r.ok && r.state.freeze === 1, String(cash));
+  if (r.ok) {
+    today = '2026-10-08'; // 7일 하루 쉼
+    r = gp({ action: 'game_quiz', video_id: 'vidAAAAAAA1', ...all });
+    check('안식 쿠폰: 하루 쉬어도 연속 3일로 이어짐', r.state.streak === 3 && r.state.freeze === 0 && r.events.some((e) => e.type === 'freeze'), JSON.stringify({ s: r.state.streak, ev: r.events.map((e) => e.type) }));
+  }
+  // 오래 쉬면 다시 1일 + 환영 보너스
+  today = '2026-10-15';
+  r = gp({ action: 'game_quiz', video_id: 'vidAAAAAAA1', ...all });
+  check('오래 쉬었다 오면 연속 1일부터 + 환영 보너스', r.state.streak === 1 && r.events.some((e) => e.type === 'comeback'), JSON.stringify(r.events.map((e) => e.type)));
+  check('연습으로 풀어도 절반 이상 맞히면 그날 도장', r.result.scored === false && r.result.stamped === true);
+
+  // 묵상 퀘스트: 내 묵상 답이 30자 이상이어야
+  r = gp({ action: 'game_reflect', video_id: 'vidAAAAAAA2' });
+  check('묵상 퀘스트: 묵상 답이 없으면 거절', !r.ok && /30자/.test(r.error));
+  g.post({ action: 'notes_save', id_token: A, video_id: 'vidAAAAAAA2', memo: '', answers: [], checks: [], fields: { 'qt.q.0': '하나님보다 제 계획표를 더 믿어 왔음을 고백합니다. 이번 주에는 먼저 기도하겠습니다.' } });
+  r = gp({ action: 'game_reflect', video_id: 'vidAAAAAAA2' });
+  check('묵상 퀘스트: 답을 적으면 경험치·달란트', r.ok && r.result.xp === 10 && r.state.reflects.vidAAAAAAA2, JSON.stringify(r).slice(0, 300));
+  check('묵상 퀘스트: 같은 설교는 한 번만', gp({ action: 'game_reflect', video_id: 'vidAAAAAAA2' }).result.already === true);
+
+  // 가족 순위
+  gp({ action: 'game_profile', nick: '엄마' }, B);
+  gp({ action: 'game_quiz', video_id: 'vidAAAAAAA1', ...all }, B);
+  r = gp({ action: 'game_board' });
+  check('가족 순위: 두 사람 · 내 표시 · 별명', r.ok && r.players.length === 2 && r.players.some((p) => p.me) && r.players.some((p) => p.name === '엄마'), JSON.stringify(r.players.map((p) => [p.name, p.weekXp, p.me])));
+  check('가족 순위: 이번 주 경험치 순', r.players[0].weekXp >= r.players[1].weekXp);
+  r = gp({ action: 'game_profile', title: '천성에 이른 순례자' });
+  check('칭호: 받지 않은 칭호는 고를 수 없음', !r.ok);
+  check('게임: 사람마다 기록이 따로', g.sheets.get('Game').rows.length === 3);
 }
 
 console.log(fails ? `\n${fails}개 실패` : '\n서버 로직 테스트 모두 통과');

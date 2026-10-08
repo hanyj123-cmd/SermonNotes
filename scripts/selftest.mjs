@@ -7,7 +7,8 @@ import fs from 'node:fs/promises';
 import { parseTitle, parseScripture, preacherName, bookOf, tidyTitle, normalizePreacher, displayTitle } from './lib/title.mjs';
 import { koReference, parseNumberedLines, parseNumberedFlow, parseBskorea, parseBibleGateway, fetchBibleBlock, bibleIsCurrent, bibleSignature, bskoreaUrl, bibleGatewayUrl, BIBLE_SOURCES } from './lib/bible-web.mjs';
 import { normalizePassages, toUsfm } from './lib/bible-books.mjs';
-import { extractJson, normalizeReview, normalizeQt, normalizeStudy, normalizeGroup, readResponseText } from './lib/gemini.mjs';
+import { extractJson, normalizeReview, normalizeQt, normalizeStudy, normalizeGroup, readResponseText, blankKey } from './lib/gemini.mjs';
+import { QUIZ_COUNTS } from './lib/prompt.mjs';
 import { MODES, systemPromptFor, buildUserMessage } from './lib/prompt.mjs';
 import { buildQueue } from './lib/queue.mjs';
 import { guessFromTitle, parseAnyTitle } from './lib/title.mjs';
@@ -173,6 +174,41 @@ await t('성경공부: 퀴즈 15문제(5·5·5), 정답 번호가 잘못된 객�
   const bad = rawStudy();
   bad.quiz.multiple_choice = mcq(5).map((m, i) => (i < 3 ? { ...m, answer_index: 9 } : m));
   assert.throws(() => normalizeStudy(bad), /퀴즈가 부족/);
+});
+await t('QT 묵상 질문: 길잡이·예시 답안이 붙은 새 형식과 글자만 온 옛 형식 모두 받음', () => {
+  const q = normalizeQt({ ...rawQt(), questions: [{ question: '무엇을 내려놓을까요?', guide: '12:1을 다시 읽어 보세요', example: '저는…' }, '옛 질문'] });
+  assert.deepEqual(q.questions[0], { question: '무엇을 내려놓을까요?', guide: '12:1을 다시 읽어 보세요', example: '저는…' });
+  assert.deepEqual(q.questions[1], { question: '옛 질문', guide: '', example: '' });
+});
+await t('퀴즈 개수: 객관식 15 · 빈칸 5 · 주관식 5, 프롬프트에 헷갈리는 보기·키워드 규칙', () => {
+  assert.deepEqual(QUIZ_COUNTS, { multiple_choice: 15, fill_blank: 5, short_answer: 5 });
+  const p = systemPromptFor('study');
+  assert.match(p, /오답 보기 3개는 모두 그럴듯/);
+  assert.match(p, /짧은 단어 하나/);
+  assert.match(p, /채점하지 않/);
+  assert.match(systemPromptFor('qt'), /guide\(생각의 길잡이\)/);
+  assert.match(systemPromptFor('group'), /guide\(생각의 길잡이\)/);
+});
+await t('빈칸: 정답 키워드·다른 표기(accept)·띄어쓰기 무시 비교', () => {
+  const raw = rawStudy();
+  raw.quiz.fill_blank = [{ question: '____ 안에서', answer: '하나님 나라', accept: ['천국', '  '], explanation: '' }, ...sa(4)];
+  const s = normalizeStudy(raw);
+  assert.deepEqual(s.quiz.fill_blank[0].accept, ['천국']);
+  assert.equal(blankKey('하나님 나라'), blankKey('하나님나라'));
+  assert.equal(blankKey(' "칭의." '), '칭의');
+  assert.equal(blankKey('Grace'), blankKey('grace'));
+});
+await t('객관식 난이도 표시(쉬움·중간·어려움)를 받아 둠', () => {
+  const raw = rawStudy();
+  raw.quiz.multiple_choice = mcq(5).map((m, i) => ({ ...m, level: ['쉬움', '중간', '어려움', 'hard?', ''][i] }));
+  const s = normalizeStudy(raw);
+  assert.deepEqual(s.quiz.multiple_choice.map((m) => m.level), ['쉬움', '중간', '어려움', '', '']);
+});
+await t('소그룹 질문: 길잡이(guide) 받음', () => {
+  const raw = rawGroup();
+  raw.questions.observation = [{ question: '관찰', guide: '7절을 보세요', answer: '제단' }];
+  const g = normalizeGroup(raw);
+  assert.deepEqual(g.questions.observation[0], { question: '관찰', guide: '7절을 보세요', answer: '제단' });
 });
 await t('소그룹 나눔: 질문+모범답안, 글자만 온 질문도 받음, 진행 가이드 필수', () => {
   const g = normalizeGroup(rawGroup());

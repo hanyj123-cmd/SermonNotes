@@ -97,7 +97,7 @@ async function load() {
   }
 }
 
-/* ---------- 라우팅: #/c/<구분>  #/u  #/u/add  #/v/<영상ID>[/<모드>]  #/h/<영상ID>[/<모드>]  #/admin ---------- */
+/* ---------- 라우팅: #/c/<구분>  #/u  #/u/add  #/v/<영상ID>[/<모드>]  #/h/<영상ID>[/<모드>]  #/g[/<탭>]  #/q/<영상ID>  #/admin ---------- */
 function route() {
   const [, kind, arg, arg2] = location.hash.split('/');
   window.scrollTo(0, 0);
@@ -109,8 +109,10 @@ function route() {
   teardownMarks(); // 형광펜·밑줄·메모 저장 후 도구 막대 정리
   teardownHandout();
   document.body.classList.toggle('handout-mode', kind === 'h');
-  setActiveMenu(kind === 'u' ? 'user' : kind === 'admin' ? '' : 'church');
+  setActiveMenu(kind === 'u' ? 'user' : kind === 'g' || kind === 'q' ? 'game' : kind === 'admin' ? '' : 'church');
   if (kind === 'admin') return renderAdminRoute();
+  if (kind === 'g') return renderGame(arg || 'home');
+  if (kind === 'q' && arg) return renderQuest(decodeURIComponent(arg));
   if (kind === 'h' && arg) return renderHandout(decodeURIComponent(arg), arg2);
   if (kind === 'v' && arg) return renderDetail(decodeURIComponent(arg), arg2);
   if (kind === 'u') return renderUserRoute(arg);
@@ -759,6 +761,7 @@ function clearSession() {
   auth.token = '';
   auth.user = null;
   state.noteIds = new Set();
+  if (typeof gameState !== 'undefined') gameState = null; // 다른 사람이 로그인하면 그 사람 게임 기록을 새로 받습니다
   try {
     localStorage.removeItem(SESSION_KEY);
   } catch {

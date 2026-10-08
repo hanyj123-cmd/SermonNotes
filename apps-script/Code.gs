@@ -66,6 +66,7 @@ function doPost(e) {
 
   if (action.indexOf('notes_') === 0) return json(handleNotes(action, body));
   if (action.indexOf('user_video_') === 0) return json(handleUserVideos(action, body));
+  if (action.indexOf('game_') === 0) return json(handleGame(action, body));
 
   if (!passwordOk(body.password)) {
     return json({ ok: false, error: '비밀번호가 맞지 않습니다.' });
@@ -1031,4 +1032,485 @@ function userVideoChange(user, body, status) {
   sh.getRange(r.row, COL.updated_at, 1, 2).setNumberFormat('@').setValues([[new Date().toISOString(), status === 'redo' ? '다시 정리를 요청했습니다' : '목록에서 뺐습니다']]);
   if (status === 'redo') return Object.assign({ ok: true }, dispatchUserRun());
   return { ok: true };
+}
+
+/* ---------- 말씀결 게임 (Game 탭) ----------
+   구글 로그인한 사람마다 한 줄: 경험치 · 달란트 · 연속 도장 · 여정 · 옷장(아이템) 을 state_json 에 담습니다.
+   퀴즈 채점은 서버가 Sermons 탭의 성경공부 퀴즈로 다시 합니다(화면이 보낸 점수를 그대로 믿지 않습니다).
+   날짜는 토론토 기준입니다. 규칙·아이템 값은 아래 GAME_CONF(docs/game-data.js 에서 자동 생성)를 씁니다. */
+
+// <GAME_CONF> (scripts/game-conf.mjs 가 docs/game-data.js 에서 만듭니다 — 직접 고치지 마세요)
+const GAME_CONF = {"rules":{"xp":{"mc":4,"blank":6,"perfect":20,"stamp":20,"reflect":10},"talent":{"mc":2,"blank":3,"perfect":15,"stamp":10,"reflect":5,"week":50,"comeback":20},"passRate":0.5,"dailyScored":2,"freezePrice":120,"freezeMax":2},"streak":[[30,2],[14,1.7],[7,1.5],[3,1.2],[1,1]],"journeys":{"pilgrim":{"steps":11,"xpPerStep":160,"title":"천성에 이른 순례자","rewards":{"1":"staff","3":"scroll","4":"robe_linen","6":"lamp","11":"laurel"}},"armor":{"steps":18,"xpPerStep":100,"title":"믿음의 용사","rewards":{"18":"bg_stars"}},"tree":{"steps":13,"xpPerStep":140,"title":"열매 맺는 나무","rewards":{"4":"bg_garden","13":"halo_flower"}}},"armor":["belt_bronze","chest_bronze","feet_bronze","shield_bronze","helmet_bronze","sword_bronze","belt_silver","chest_silver","feet_silver","shield_silver","helmet_silver","sword_silver","belt_gold","chest_gold","feet_gold","shield_gold","helmet_gold","sword_gold"],"items":{"s1":["skin",0,"start"],"s2":["skin",0,"start"],"s3":["skin",0,"start"],"hair_short":["hair",0,"start"],"hair_bob":["hair",0,"start"],"hair_long":["hair",0,"start"],"hair_bun":["hair",0,"start"],"hair_curly":["hair",60,"shop"],"hair_spiky":["hair",60,"shop"],"black":["hairColor",0,"start"],"brown":["hairColor",0,"start"],"gray":["hairColor",40,"shop"],"auburn":["hairColor",40,"shop"],"blond":["hairColor",40,"shop"],"robe_brown":["robe",0,"start"],"robe_blue":["robe",80,"shop"],"robe_green":["robe",80,"shop"],"robe_red":["robe",120,"shop"],"robe_purple":["robe",200,"shop"],"robe_star":["robe",400,"shop"],"robe_linen":["robe",0,"journey"],"straw_hat":["head",100,"shop"],"scarf":["head",120,"shop"],"laurel":["head",0,"journey"],"halo_flower":["head",0,"journey"],"staff":["handR",0,"journey"],"scroll":["handR",0,"journey"],"lamp":["handL",0,"journey"],"pet_fish":["pet",150,"shop"],"pet_lamb":["pet",250,"shop"],"pet_dove":["pet",300,"shop"],"pet_donkey":["pet",350,"shop"],"bg_dawn":["bg",80,"shop"],"bg_galilee":["bg",120,"shop"],"bg_rainbow":["bg",200,"shop"],"bg_zion":["bg",300,"shop"],"bg_garden":["bg",0,"journey"],"bg_stars":["bg",0,"journey"],"belt_bronze":["belt",0,"journey"],"belt_silver":["belt",0,"journey"],"belt_gold":["belt",0,"journey"],"chest_bronze":["chest",0,"journey"],"chest_silver":["chest",0,"journey"],"chest_gold":["chest",0,"journey"],"feet_bronze":["feet",0,"journey"],"feet_silver":["feet",0,"journey"],"feet_gold":["feet",0,"journey"],"shield_bronze":["handL",0,"journey"],"shield_silver":["handL",0,"journey"],"shield_gold":["handL",0,"journey"],"helmet_bronze":["head",0,"journey"],"helmet_silver":["head",0,"journey"],"helmet_gold":["head",0,"journey"],"sword_bronze":["handR",0,"journey"],"sword_silver":["handR",0,"journey"],"sword_gold":["handR",0,"journey"]},"look":{"skin":"s1","hair":"hair_short","hairColor":"black","robe":"robe_brown","head":"","handR":"","handL":"","chest":"","belt":"","feet":"","pet":"","bg":""},"badges":[["first",20],["streak3",30],["streak7",60],["streak30",200],["perfect1",30],["perfect10",150],["quests10",50],["quests50",200],["reflect10",60],["journey1",100],["journey3",300]],"levelTitles":[[30,"반석"],[20,"등대"],[15,"일꾼"],[10,"제자"],[5,"순례자"],[1,"새싹"]]};
+// </GAME_CONF>
+
+const GAME_SHEET = 'Game';
+const GAME_HEADERS = ['user_sub', 'email', 'name', 'state_json', 'updated_at'];
+const GAME_NICK_MAX = 12;
+const GAME_KEEP_STAMPS = 400;
+
+function gameToday() {
+  return todayString();
+}
+
+function handleGame(action, body) {
+  let user;
+  try {
+    user = body.session ? verifySession(body.session) : verifyIdToken(body.id_token);
+  } catch (err) {
+    return authError(err);
+  }
+  try {
+    if (action === 'game_board') return gameBoard(user);
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      const sh = getGameSheet();
+      const found = gameLoad(sh, user);
+      const st = found.state;
+      const today = gameToday();
+      const events = [];
+      let out = {};
+      if (action === 'game_get') out = {};
+      else if (action === 'game_equip') gameEquip(st, body.look);
+      else if (action === 'game_buy') out = gameBuy(st, String(body.item || ''), events);
+      else if (action === 'game_journey') gameSelectJourney(st, String(body.key || ''));
+      else if (action === 'game_profile') gameProfile(st, body);
+      else if (action === 'game_quiz') out = gameQuiz(st, body, today, events);
+      else if (action === 'game_reflect') out = gameReflect(st, user, body, today, events);
+      else return { ok: false, error: '알 수 없는 작업입니다.' };
+      if (action !== 'game_get' || found.isNew) gameSave(sh, found.row, user, st);
+      return Object.assign({ ok: true, state: gameView(st, today), events: events }, out);
+    } finally {
+      lock.releaseLock();
+    }
+  } catch (err) {
+    return { ok: false, error: String(err && err.message ? err.message : err) };
+  }
+}
+
+function getGameSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(GAME_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(GAME_SHEET);
+    sh.getRange(1, 1, 1, GAME_HEADERS.length).setValues([GAME_HEADERS]);
+    sh.getRange(1, 1, sh.getMaxRows(), GAME_HEADERS.length).setNumberFormat('@');
+  }
+  return sh;
+}
+
+function gameNewState() {
+  const inv = Object.keys(GAME_CONF.items).filter(function (id) {
+    return GAME_CONF.items[id][2] === 'start';
+  });
+  const prog = {};
+  Object.keys(GAME_CONF.journeys).forEach(function (k) {
+    prog[k] = 0;
+  });
+  return {
+    v: 1,
+    xp: 0,
+    talents: 0,
+    look: Object.assign({}, GAME_CONF.look),
+    inv: inv,
+    streak: 0,
+    best: 0,
+    last: '',
+    stamps: [],
+    freeze: 0,
+    week: { key: '', xp: 0 },
+    daily: { day: '', n: 0 },
+    quizzes: {},
+    reflects: {},
+    journey: { cur: '', prog: prog, done: [] },
+    badges: [],
+    titles: [],
+    title: '',
+    nick: '',
+    stats: { quests: 0, perfect: 0, reflects: 0 },
+  };
+}
+
+function gameLoad(sh, user) {
+  const last = sh.getLastRow();
+  if (last >= 2) {
+    const vals = sh.getRange(2, 1, last - 1, 4).getValues();
+    for (let i = 0; i < vals.length; i++) {
+      if (String(vals[i][0]) === user.sub) {
+        const saved = parseJsonObject(vals[i][3]);
+        const st = Object.assign(gameNewState(), saved);
+        st.journey = Object.assign(gameNewState().journey, saved.journey || {});
+        st.journey.prog = Object.assign(gameNewState().journey.prog, (saved.journey && saved.journey.prog) || {});
+        st.stats = Object.assign(gameNewState().stats, saved.stats || {});
+        st.look = Object.assign({}, GAME_CONF.look, saved.look || {});
+        return { row: i + 2, state: st, isNew: false };
+      }
+    }
+  }
+  return { row: 0, state: gameNewState(), isNew: true };
+}
+
+function gameSave(sh, row, user, st) {
+  if (st.stamps.length > GAME_KEEP_STAMPS) st.stamps = st.stamps.slice(-GAME_KEEP_STAMPS);
+  const text = JSON.stringify(st);
+  if (text.length > MAX_CELL) throw new Error('게임 기록이 너무 커졌습니다.');
+  const values = [[user.sub, user.email || '', user.name || '', text, new Date().toISOString()]];
+  if (row) sh.getRange(row, 1, 1, GAME_HEADERS.length).setValues(values);
+  else sh.appendRow(values[0]);
+}
+
+/* 날짜 계산 (yyyy-MM-dd) */
+function gameDayNum(day) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(day || ''));
+  return m ? Math.round(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) / 86400000) : NaN;
+}
+function gameWeekKey(day) {
+  const n = gameDayNum(day);
+  const dow = (new Date(n * 86400000).getUTCDay() + 6) % 7; // 월요일 = 0
+  return new Date((n - dow) * 86400000).toISOString().slice(0, 10);
+}
+function gameLevel(xp) {
+  return Math.max(1, Math.floor((1 + Math.sqrt(1 + (8 * Math.max(0, xp)) / 100)) / 2));
+}
+function gameLevelTitle(lv) {
+  const t = GAME_CONF.levelTitles.filter(function (x) {
+    return lv >= x[0];
+  })[0];
+  return t ? t[1] : '새싹';
+}
+function gameMult(streak) {
+  const s = GAME_CONF.streak.filter(function (x) {
+    return streak >= x[0];
+  })[0];
+  return s ? s[1] : 1;
+}
+function gameOwn(st, id) {
+  if (st.inv.indexOf(id) < 0) st.inv.push(id);
+}
+
+/* 그날 첫 도장: 연속 일수 · 안식 쿠폰 · 다시 돌아옴 · 7일마다 보너스 */
+function gameStamp(st, today, events) {
+  if (st.last === today) return false;
+  const gap = st.last ? gameDayNum(today) - gameDayNum(st.last) : 0;
+  if (!st.last) st.streak = 1;
+  else if (gap === 1) st.streak += 1;
+  else {
+    const missed = gap - 1;
+    if (missed > 0 && missed <= st.freeze) {
+      st.freeze -= missed;
+      st.streak += 1;
+      events.push({ type: 'freeze', used: missed });
+    } else {
+      st.streak = 1;
+      if (gap >= 3) {
+        st.talents += GAME_CONF.rules.talent.comeback;
+        events.push({ type: 'comeback', talents: GAME_CONF.rules.talent.comeback });
+      }
+    }
+  }
+  st.last = today;
+  st.stamps.push(today);
+  st.best = Math.max(st.best, st.streak);
+  const talents = Math.round(GAME_CONF.rules.talent.stamp * gameMult(st.streak));
+  events.push({ type: 'stamp', day: today, streak: st.streak, talents: talents, xp: GAME_CONF.rules.xp.stamp });
+  gameGain(st, GAME_CONF.rules.xp.stamp, talents, today, events);
+  if (st.streak % 7 === 0) {
+    st.talents += GAME_CONF.rules.talent.week;
+    events.push({ type: 'week', streak: st.streak, talents: GAME_CONF.rules.talent.week });
+  }
+  return true;
+}
+
+/* 경험치 · 달란트 더하기 → 주간 점수 · 레벨 · 여정 진행 */
+function gameGain(st, xp, talents, today, events) {
+  const before = gameLevel(st.xp);
+  st.xp += xp;
+  st.talents += talents;
+  const wk = gameWeekKey(today);
+  if (st.week.key !== wk) st.week = { key: wk, xp: 0 };
+  st.week.xp += xp;
+  const after = gameLevel(st.xp);
+  if (after > before) events.push({ type: 'level', level: after, title: gameLevelTitle(after) });
+  gameAdvanceJourney(st, xp, events);
+}
+
+function gameJourneySteps(key, prog) {
+  const j = GAME_CONF.journeys[key];
+  return Math.min(j.steps, Math.floor((prog || 0) / j.xpPerStep));
+}
+
+function gameAdvanceJourney(st, xp, events) {
+  const key = st.journey.cur;
+  if (!key || !GAME_CONF.journeys[key] || st.journey.done.indexOf(key) >= 0) return;
+  const j = GAME_CONF.journeys[key];
+  const beforeSteps = gameJourneySteps(key, st.journey.prog[key]);
+  st.journey.prog[key] = Math.min(j.steps * j.xpPerStep, (st.journey.prog[key] || 0) + xp);
+  const afterSteps = gameJourneySteps(key, st.journey.prog[key]);
+  for (let s = beforeSteps + 1; s <= afterSteps; s++) {
+    const item = key === 'armor' ? GAME_CONF.armor[s - 1] : '';
+    const reward = j.rewards[String(s)] || '';
+    if (item) gameOwn(st, item);
+    if (reward) gameOwn(st, reward);
+    events.push({ type: 'step', journey: key, step: s, steps: j.steps, item: item, reward: reward });
+  }
+  if (afterSteps >= j.steps && st.journey.done.indexOf(key) < 0) {
+    st.journey.done.push(key);
+    if (st.titles.indexOf(j.title) < 0) st.titles.push(j.title);
+    st.journey.cur = '';
+    events.push({ type: 'journey', journey: key, title: j.title });
+  }
+}
+
+function gameBadges(st, events) {
+  const has = {
+    first: st.stats.quests >= 1,
+    streak3: st.streak >= 3,
+    streak7: st.streak >= 7,
+    streak30: st.streak >= 30,
+    perfect1: st.stats.perfect >= 1,
+    perfect10: st.stats.perfect >= 10,
+    quests10: st.stats.quests >= 10,
+    quests50: st.stats.quests >= 50,
+    reflect10: st.stats.reflects >= 10,
+    journey1: st.journey.done.length >= 1,
+    journey3: st.journey.done.length >= 3,
+  };
+  GAME_CONF.badges.forEach(function (b) {
+    if (has[b[0]] && st.badges.indexOf(b[0]) < 0) {
+      st.badges.push(b[0]);
+      st.talents += b[1];
+      events.push({ type: 'badge', id: b[0], talents: b[1] });
+    }
+  });
+}
+
+/* 옷 갈아입기: 가진 아이템만, 칸이 맞아야 합니다 */
+function gameEquip(st, look) {
+  if (!look || typeof look !== 'object') throw new Error('옷장 정보가 올바르지 않습니다.');
+  const next = Object.assign({}, st.look);
+  Object.keys(GAME_CONF.look).forEach(function (slot) {
+    if (!(slot in look)) return;
+    const id = String(look[slot] || '');
+    if (!id) {
+      if (['skin', 'hair', 'hairColor', 'robe'].indexOf(slot) >= 0) throw new Error('이 칸은 비워 둘 수 없습니다.');
+      next[slot] = '';
+      return;
+    }
+    const it = GAME_CONF.items[id];
+    if (!it || it[0] !== slot) throw new Error('이 칸에 입을 수 없는 아이템입니다.');
+    if (st.inv.indexOf(id) < 0) throw new Error('아직 가지고 있지 않은 아이템입니다.');
+    next[slot] = id;
+  });
+  st.look = next;
+}
+
+function gameBuy(st, id, events) {
+  if (id === 'freeze') {
+    if (st.freeze >= GAME_CONF.rules.freezeMax) throw new Error('안식 쿠폰은 ' + GAME_CONF.rules.freezeMax + '장까지 가질 수 있습니다.');
+    if (st.talents < GAME_CONF.rules.freezePrice) throw new Error('달란트가 부족합니다.');
+    st.talents -= GAME_CONF.rules.freezePrice;
+    st.freeze += 1;
+    events.push({ type: 'buy', item: 'freeze' });
+    return { bought: 'freeze' };
+  }
+  const it = GAME_CONF.items[id];
+  if (!it || it[2] !== 'shop') throw new Error('상점에서 살 수 없는 아이템입니다.');
+  if (st.inv.indexOf(id) >= 0) throw new Error('이미 가지고 있습니다.');
+  if (st.talents < it[1]) throw new Error('달란트가 부족합니다.');
+  st.talents -= it[1];
+  gameOwn(st, id);
+  events.push({ type: 'buy', item: id });
+  return { bought: id };
+}
+
+function gameSelectJourney(st, key) {
+  if (!GAME_CONF.journeys[key]) throw new Error('여정을 찾을 수 없습니다.');
+  if (st.journey.done.indexOf(key) >= 0) throw new Error('이미 완주한 여정입니다.');
+  st.journey.cur = key;
+}
+
+function gameProfile(st, body) {
+  if ('nick' in body) st.nick = cleanEditText(body.nick, GAME_NICK_MAX);
+  if ('title' in body) {
+    const t = String(body.title || '');
+    if (t && st.titles.indexOf(t) < 0 && t !== gameLevelTitle(gameLevel(st.xp))) throw new Error('아직 받지 않은 칭호입니다.');
+    st.title = t;
+  }
+}
+
+/* 빈칸 정답 비교: 띄어쓰기 · 문장부호 무시 (scripts/lib/gemini.mjs 의 blankKey 와 같은 규칙) */
+function gameBlankKey(s) {
+  return String(s || '')
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/[\s.,!?·~'"“”‘’()\[\]{}<>「」『』:;\-_/]/g, '');
+}
+
+function gameStudyQuiz(videoId) {
+  const sh = getSermonsSheet();
+  const last = sh.getLastRow();
+  if (last < 2) throw new Error('설교를 찾을 수 없습니다.');
+  const ids = sh.getRange(2, COL.video_id, last - 1, 1).getValues();
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === videoId) {
+      const study = parseJsonObject(sh.getRange(i + 2, COL.mode_study, 1, 1).getValues()[0][0]);
+      const quiz = study.quiz || {};
+      return { mc: Array.isArray(quiz.multiple_choice) ? quiz.multiple_choice : [], fb: Array.isArray(quiz.fill_blank) ? quiz.fill_blank : [] };
+    }
+  }
+  throw new Error('설교를 찾을 수 없습니다.');
+}
+
+function gameQuiz(st, body, today, events) {
+  const videoId = checkVideoId(body.video_id);
+  const quiz = gameStudyQuiz(videoId);
+  const total = quiz.mc.length + quiz.fb.length;
+  if (!total) throw new Error('이 설교에는 퀴즈가 없습니다.');
+  const mcAns = Array.isArray(body.mc) ? body.mc : [];
+  const fbAns = Array.isArray(body.fb) ? body.fb : [];
+  if (mcAns.length !== quiz.mc.length || fbAns.length !== quiz.fb.length) throw new Error('모든 문제에 답한 뒤 제출해 주세요.');
+  const mcOk = quiz.mc.map(function (q, i) {
+    return Number(mcAns[i]) === Number(q.answer_index);
+  });
+  const fbOk = quiz.fb.map(function (q, i) {
+    const got = gameBlankKey(String(fbAns[i] || '').slice(0, 80));
+    if (!got) return false;
+    const accept = [q.answer].concat(Array.isArray(q.accept) ? q.accept : []);
+    return accept.some(function (a) {
+      return gameBlankKey(a) === got;
+    });
+  });
+  const mcRight = mcOk.filter(Boolean).length;
+  const fbRight = fbOk.filter(Boolean).length;
+  const right = mcRight + fbRight;
+  const perfect = right === total;
+  const passed = right >= Math.ceil(total * GAME_CONF.rules.passRate);
+  if (st.daily.day !== today) st.daily = { day: today, n: 0 };
+  const already = !!st.quizzes[videoId];
+  const scored = !already && st.daily.n < GAME_CONF.rules.dailyScored;
+  let stamped = false;
+  if (passed) stamped = gameStamp(st, today, events);
+  let xp = 0;
+  let talents = 0;
+  if (scored) {
+    const r = GAME_CONF.rules;
+    const mult = gameMult(st.streak);
+    xp = mcRight * r.xp.mc + fbRight * r.xp.blank + (perfect ? r.xp.perfect : 0);
+    talents = Math.round((mcRight * r.talent.mc + fbRight * r.talent.blank + (perfect ? r.talent.perfect : 0)) * mult);
+    st.daily.n += 1;
+    st.quizzes[videoId] = { s: right, t: total, at: today };
+    st.stats.quests += 1;
+    if (perfect) st.stats.perfect += 1;
+    gameGain(st, xp, talents, today, events);
+  }
+  gameBadges(st, events);
+  return {
+    result: {
+      scored: scored,
+      already: already,
+      capped: !already && !scored,
+      right: right,
+      total: total,
+      perfect: perfect,
+      passed: passed,
+      stamped: stamped,
+      xp: xp,
+      talents: talents,
+      mult: gameMult(st.streak),
+      mc: mcOk,
+      fb: fbOk,
+    },
+  };
+}
+
+/* 묵상 퀘스트: QT 묵상 질문에 내 답을 적었으면(모두 합쳐 30자 이상) 설교마다 한 번 */
+function gameReflect(st, user, body, today, events) {
+  const videoId = checkVideoId(body.video_id);
+  if (st.reflects[videoId]) return { result: { already: true } };
+  const sh = getNotesSheet();
+  const row = findNoteRow(sh, user.sub, videoId);
+  const fields = row ? parseJsonObject(sh.getRange(row, 8, 1, 1).getValues()[0][0]) : {};
+  let len = 0;
+  Object.keys(fields).forEach(function (k) {
+    if (/^qt\.q\./.test(k)) len += String(fields[k] || '').trim().length;
+  });
+  if (len < 30) throw new Error('묵상 질문에 내 답을 조금 더 적어 주세요. (모두 합쳐 30자 이상)');
+  st.reflects[videoId] = today;
+  st.stats.reflects += 1;
+  const stamped = gameStamp(st, today, events);
+  const r = GAME_CONF.rules;
+  const talents = Math.round(r.talent.reflect * gameMult(st.streak));
+  gameGain(st, r.xp.reflect, talents, today, events);
+  gameBadges(st, events);
+  return { result: { already: false, stamped: stamped, xp: r.xp.reflect, talents: talents } };
+}
+
+/* 화면에 보낼 모습 (계산한 값 덧붙임) */
+function gameView(st, today) {
+  const lv = gameLevel(st.xp);
+  const daily = st.daily.day === today ? st.daily.n : 0;
+  const wk = gameWeekKey(today);
+  // 어제도 오늘도 도장이 없으면(그리고 쿠폰으로도 못 이으면) 연속 기록이 끊긴 것으로 보여 줍니다
+  let streak = st.streak;
+  if (st.last && st.last !== today) {
+    const gap = gameDayNum(today) - gameDayNum(st.last);
+    if (gap - 1 > st.freeze) streak = 0;
+  }
+  return {
+    xp: st.xp,
+    talents: st.talents,
+    level: lv,
+    levelTitle: gameLevelTitle(lv),
+    look: st.look,
+    inv: st.inv,
+    streak: streak,
+    best: st.best,
+    stampedToday: st.last === today,
+    stamps: st.stamps.slice(-62),
+    freeze: st.freeze,
+    weekXp: st.week.key === wk ? st.week.xp : 0,
+    dailyLeft: Math.max(0, GAME_CONF.rules.dailyScored - daily),
+    mult: gameMult(Math.max(1, streak)),
+    quizzes: st.quizzes,
+    reflects: st.reflects,
+    journey: st.journey,
+    badges: st.badges,
+    titles: st.titles,
+    title: st.title,
+    nick: st.nick,
+    stats: st.stats,
+    today: today,
+  };
+}
+
+/* 가족 순위: 이번 주 경험치 · 누적 · 연속 */
+function gameBoard(user) {
+  const sh = getGameSheet();
+  const last = sh.getLastRow();
+  const today = gameToday();
+  const wk = gameWeekKey(today);
+  const players = [];
+  if (last >= 2) {
+    sh.getRange(2, 1, last - 1, 4)
+      .getValues()
+      .forEach(function (r) {
+        const st = Object.assign(gameNewState(), parseJsonObject(r[3]));
+        const v = gameView(st, today);
+        players.push({
+          me: String(r[0]) === user.sub,
+          name: st.nick || String(r[2] || '').split(' ')[0] || String(r[1] || '').split('@')[0] || '이름 없음',
+          level: v.level,
+          title: st.title || v.levelTitle,
+          xp: st.xp,
+          weekXp: st.week.key === wk ? st.week.xp : 0,
+          streak: v.streak,
+          look: Object.assign({}, GAME_CONF.look, st.look || {}),
+          stampedToday: v.stampedToday,
+        });
+      });
+  }
+  players.sort(function (a, b) {
+    return b.weekXp - a.weekXp || b.xp - a.xp;
+  });
+  return { ok: true, players: players, week: wk };
 }

@@ -70,7 +70,12 @@ function renderQtMode(d, notes) {
       'questions',
       '묵상 질문',
       h('h2', { text: '묵상 질문' }),
-      h('ol', { class: 'q' }, (q.questions || []).map((t, i) => h('li', {}, h('span', {}, inlineMd(t)), notes ? notes.fieldBox(`qt.q.${i}`, { label: `묵상 질문 ${i + 1} 내 답` }) : null))),
+      h('p', { class: 'meta', text: '질문마다 "길잡이 · 예시 답안"을 펼쳐 보면 어떻게 묵상하면 좋을지 도움을 받을 수 있어요. 정답이 있는 문제가 아닙니다.' }),
+      h('ol', { class: 'q' }, (q.questions || []).map((t, i) => {
+        const it = qtItem(t);
+        return h('li', {}, h('span', {}, inlineMd(it.question)), notes ? notes.fieldBox(`qt.q.${i}`, { label: `묵상 질문 ${i + 1} 내 답` }) : null, guideReveal(it.guide, it.example));
+      })),
+      notes && typeof gameReflectButton === 'function' ? gameReflectButton(d.id, notes) : null,
     ),
     block(
       'apply',
@@ -126,8 +131,8 @@ function renderQuiz(quiz) {
     all.push({ btn, box });
     return h('li', { class: 'qz-item', value: no }, h('div', { class: 'qz-q' }, inlineMd(it.question)), h('div', { class: 'qz-act' }, btn), box);
   });
-  const sa = groupBlock('주관식', '내 말로 답을 정리해 본 뒤 [답보기]로 모범 답안을 확인하세요.', quiz.short_answer || [], (it, no) => {
-    const ans = h('div', { class: 'reveal-body' }, h('p', {}, h('strong', { text: '모범 답안' })), h('p', { class: 'md' }, inlineMd(it.answer)), it.explanation ? h('p', { class: 'md' }, inlineMd(it.explanation)) : null);
+  const sa = groupBlock('주관식 (채점하지 않아요)', '내 말로 답을 정리해 본 뒤 [답보기]로 참고 답안을 확인하세요.', quiz.short_answer || [], (it, no) => {
+    const ans = h('div', { class: 'reveal-body' }, h('p', {}, h('strong', { text: '참고 답안' })), h('p', { class: 'md' }, inlineMd(it.answer)), it.explanation ? h('p', { class: 'md' }, inlineMd(it.explanation)) : null);
     const { btn, box } = revealBox('답보기', ans);
     all.push({ btn, box });
     return h('li', { class: 'qz-item', value: no }, h('div', { class: 'qz-q' }, inlineMd(it.question)), h('div', { class: 'qz-act' }, btn), box);
@@ -142,6 +147,20 @@ function renderQuiz(quiz) {
     toggleAll.textContent = open ? '모든 답 감추기' : '모든 답 한꺼번에 보기';
   });
   return block('quiz', '퀴즈', h('div', { class: 'block-head' }, h('h2', { text: `퀴즈 ${n}문제` }), toggleAll), mc, fb, sa);
+}
+
+// 성경공부 퀴즈를 게임으로: 객관식 + 빈칸(직접 타이핑)으로 도전하고 달란트·경험치를 받습니다
+function renderQuizCta(d) {
+  const quiz = (d.study && d.study.quiz) || {};
+  const n = (quiz.multiple_choice || []).length + (quiz.fill_blank || []).length;
+  if (!n) return null;
+  return h(
+    'a',
+    { class: 'quiz-cta', href: `#/q/${encodeURIComponent(d.id)}` },
+    h('span', { class: 'quiz-cta-art', 'aria-hidden': 'true' }, typeof avatarSvg === 'function' ? svgNode(avatarSvg(typeof gameLook === 'function' ? gameLook() : {}, { size: 64, frame: false, mood: 'cheer' })) : null),
+    h('span', { class: 'quiz-cta-text' }, h('strong', { text: '말씀 퀘스트 도전!' }), h('span', { text: `객관식 ${(quiz.multiple_choice || []).length}문제 · 빈칸 ${(quiz.fill_blank || []).length}문제 — 맞히면 달란트와 경험치를 받아요` })),
+    h('span', { class: 'quiz-cta-go', text: '시작' }),
+  );
 }
 
 function renderStudyMode(d) {
@@ -165,6 +184,7 @@ function renderStudyMode(d) {
       ),
     ),
     st.summary ? block('summary', 'Summary', h('h2', { text: 'Summary' }), h('div', { class: 'summary-box md' }, splitParas(st.summary).map((t) => h('p', {}, inlineMd(t))))) : null,
+    renderQuizCta(d),
     renderQuiz(st.quiz || {}),
     renderPrayer('마치는 기도', st.closing_prayer, 'close'),
   ];
@@ -198,10 +218,7 @@ function smallGroupText(d) {
 function groupQuestion(item, noteKey, notes, label) {
   const parts = [h('div', { class: 'gq-text' }, inlineMd(item.question))];
   if (notes) parts.push(notes.fieldBox(noteKey, { placeholder: '내 생각이나 나눌 이야기를 적어 보세요', label }));
-  if (item.answer) {
-    const { btn, box } = revealBox('모범 답안 보기', h('div', { class: 'reveal-body md' }, h('p', {}, h('strong', { text: '모범 답안' })), splitParas(item.answer).map((t) => h('p', {}, inlineMd(t)))), { hiddenLabel: '모범 답안 보기', shownLabel: '모범 답안 감추기' });
-    parts.push(h('div', { class: 'qz-act' }, btn), box);
-  }
+  parts.push(...guideReveal(item.guide, item.answer));
   return parts;
 }
 
