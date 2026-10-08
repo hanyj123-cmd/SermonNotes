@@ -1,6 +1,6 @@
 {
- "updated": "2026-10-08T14:59:40.517Z",
- "count": 14,
+ "updated": "2026-10-08T15:03:44.561Z",
+ "count": 15,
  "sermons": [
   {
    "id": "dAtaD-X_yFE",
@@ -260,6 +260,25 @@
    "book": "시편",
    "bookIdx": 19,
    "summary_short": "성도는 자신이 먼저 체험한 하나님의 은혜와 구원의 역사를 다음 세대와 이웃에게 입술로 전하여, 오직 하나님께 소망을 두고 영적 회복을 누려야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "PqSsvTrKKIo",
+   "category": "user",
+   "title": "부르심(01) - 복의 통로",
+   "date": "2026-06-14",
+   "url": "https://www.youtube.com/watch?v=PqSsvTrKKIo",
+   "preacher": "송태근 목사",
+   "scripture": "창세기 12:1-4",
+   "book": "창세기",
+   "bookIdx": 1,
+   "summary_short": "아브라함의 부르심은 인간의 완벽함이 아니라, 하나님의 끈질긴 설득과 은혜의 레일 위로 우리를 이끄시는 구속사의 시작입니다.",
    "modes": [
     "review",
     "qt",
