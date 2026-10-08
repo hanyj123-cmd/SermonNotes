@@ -20,6 +20,10 @@ on:
         description: '확인할 구분 (쉼표로: sunday,dawn,wednesday,youth / all = 전부, 비우면 청년부 제외)'
         required: false
         default: ''
+      export_only:
+        description: '새로 정리하지 않고 시트의 현재 내용을 사이트에 반영만 하기 (제목·설교자 수정 후 사용, true/false)'
+        required: false
+        default: 'false'
       bible_check:
         description: '성경 본문 가져오기 점검만 하기 (true/false)'
         required: false
@@ -80,7 +84,7 @@ jobs:
           AUTO_WITHIN_DAYS: ${{ vars.AUTO_WITHIN_DAYS }}
           RETRY_DAYS: ${{ vars.RETRY_DAYS }}
           MAX_NEW_PER_RUN: ${{ github.event.inputs.max_new || vars.MAX_NEW_PER_RUN || '5' }}
-        run: node scripts/sync.mjs
+        run: node scripts/sync.mjs ${{ github.event.inputs.export_only == 'true' && '--export-only' || '' }}
 
       - name: 변경된 데이터 커밋
         run: |
@@ -91,5 +95,13 @@ jobs:
             echo "변경 없음"
           else
             git commit -m "데이터 갱신: 설교 정리 업데이트"
-            git push
+            # 동기화가 도는 사이 main 에 다른 변경이 올라왔을 수 있으므로, 최신 내용 위에 다시 얹어서 올립니다 (최대 5번 시도)
+            for i in 1 2 3 4 5; do
+              git pull --rebase -X theirs origin "${GITHUB_REF_NAME}" && git push && exit 0
+              echo "push 재시도 ${i}/5"
+              git rebase --abort 2>/dev/null || true
+              sleep $((i * 3))
+            done
+            echo "::error::데이터를 저장소에 올리지 못했습니다. 잠시 뒤 지금 동기화를 다시 눌러 주세요."
+            exit 1
           fi
