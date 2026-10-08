@@ -223,8 +223,12 @@ function createMarks(videoId, root, { enabled }) {
     el.style.top = `${top}px`;
     el.style.left = `${left}px`;
   }
+  // 막대가 무엇 때문에 떠 있는지: 'sel' = 고른 글, 'mark' = 이미 칠한 표시를 눌렀을 때
+  let toolMode = '';
+  let toolScrollY = 0;
   const hideTool = () => {
     tool.hidden = true;
+    toolMode = '';
   };
   const hidePop = () => {
     if (pop.contains(document.activeElement)) document.activeElement.blur(); // 키보드도 내립니다
@@ -268,10 +272,14 @@ function createMarks(videoId, root, { enabled }) {
   function showForSelection() {
     const got = selectionSegments();
     if (!got) {
-      if (!pressingTool) hideTool(); // 빈 곳을 눌러 고른 것이 풀리면 막대도 사라집니다
+      // 빈 곳을 눌러 고른 것이 풀리면 막대도 사라집니다.
+      // 단, 칠한 표시를 눌러서 뜬 막대는 "고른 글이 없는 것"이 정상이므로 그대로 둡니다.
+      if (!pressingTool && toolMode !== 'mark') hideTool();
       return;
     }
     hidePop();
+    toolMode = 'sel';
+    toolScrollY = window.scrollY;
     if (!enabled) {
       tool.replaceChildren(h('p', { class: 'mk-login', text: '구글 로그인을 하면 형광펜 · 밑줄 · 메모를 남길 수 있어요 (나만 보여요).' }));
       placeNear(tool, got.rect);
@@ -324,6 +332,9 @@ function createMarks(videoId, root, { enabled }) {
     const first = groupMarks(g)[0];
     if (!first) return;
     hidePop();
+    clearTimeout(selTimer); // 누를 때 생긴 "선택 풀림" 신호가 뒤늦게 와서 막대를 숨기지 않게 합니다
+    toolMode = 'mark';
+    toolScrollY = window.scrollY;
     const cur = `${first.st}:${first.c}`;
     tool.replaceChildren(
       swatches(MARK_HL, 'hl', (st, c) => (changeGroup(g, { st, c }), hideTool()), cur),
@@ -476,7 +487,8 @@ function createMarks(videoId, root, { enabled }) {
     }
   };
   const onScroll = () => {
-    if (!tool.hidden) hideTool(); // 글을 고른 채라면 고른 범위를 조금 바꾸면 다시 뜹니다
+    // 눌렀을 때 생기는 아주 작은 흔들림에는 반응하지 않고, 화면을 제대로 넘길 때만 숨깁니다
+    if (!tool.hidden && Math.abs(window.scrollY - toolScrollY) > 40) hideTool();
   };
   document.addEventListener('selectionchange', onSelChange);
   document.addEventListener('click', onClick);
