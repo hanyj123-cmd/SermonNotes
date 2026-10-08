@@ -7,6 +7,7 @@
   font-size: 12.5pt;
   line-height: 1.85;
   color: #0f1b2b;
+  text-align: left;
   word-break: keep-all;
   overflow-wrap: break-word;
   -webkit-print-color-adjust: exact;
@@ -61,10 +62,11 @@
 .ho-appendix { break-before: page; page-break-before: always; margin-top: 0; }
 .ho-keep { break-inside: avoid; page-break-inside: avoid; }
 .ho-line { break-inside: avoid; }
-.ho-md p { text-align: justify; margin-bottom: 8pt; orphans: 3; widows: 3; }
+.ho-md p { text-align: left; margin-bottom: 8pt; }
 .ho-md p:last-child { margin-bottom: 0; }
+.ho-keep + .ho-md { margin-top: 8pt; } /* 첫 문단(소제목과 묶인 덩어리)과 다음 문단 사이 간격 */
 .ho-md ul { margin: 0 0 8pt; padding-left: 15pt; }
-.ho-md li { margin-bottom: 3pt; text-align: justify; }
+.ho-md li { margin-bottom: 3pt; text-align: left; }
 .ho-md blockquote { margin: 0 0 8pt; padding: 5pt 11pt; border-left: 3pt solid #1b5fc4; background: #e8f0fc; color: #0f1b2b; }
 .ho-md blockquote p { margin: 0 0 3pt; }
 .ho-md blockquote p:last-child { margin: 0; }
@@ -122,3 +124,19 @@
 .ho-made strong { font-family: 'Noto Serif KR', serif; font-size: 13pt; color: #12408a; }
 .ho-logo-lg { width: 34pt; height: auto; flex: none; }
 .ho-made-by { margin-top: 2pt; font-size: 9.5pt; color: #4a5c72; }
+
+/* 쪽 나누기: 문단 · 성경 절 · 목록 항목은 쪽 중간에서 끊지 않고 통째로 다음 쪽으로 넘깁니다.
+   한 쪽의 절반이 넘을 만큼 아주 긴 문단(.ho-long, handout.js 가 표시)만 어쩔 수 없이 나누고, 그때도 앞뒤 3줄은 남깁니다. */
+.ho-doc p, .ho-doc li, .ho-doc blockquote, .ho-q-text, .ho-qz-q, .ho-note, .ho-ice { break-inside: avoid; page-break-inside: avoid; orphans: 3; widows: 3; }
+.ho-doc .ho-long { break-inside: auto; page-break-inside: auto; }
+/* paged.js 는 나뉜 문단의 앞쪽 마지막 줄을 억지로 펴 맞춥니다(스크린샷의 벌어진 줄). 항상 왼쪽 정렬을 씁니다. */
+.ho-doc [data-align-last-split-element] { text-align-last: auto !important; }
+
+/* 디지털 용지(휴대폰 · 태블릿): 좁은 화면에서 읽기 좋게 배치를 바꿉니다. 글자 크기는 handout.js 가 용지에 맞춰 배율을 곱합니다. */
+.ho-fmt-phone .ho-kicker { flex-wrap: wrap; gap: 3pt 10pt; }
+.ho-fmt-phone .ho-app { display: block; }
+.ho-fmt-phone .ho-check { margin-top: 5pt; padding-top: 0; }
+.ho-fmt-phone .ho-prayer { padding: 7pt 10pt; }
+.ho-fmt-phone .ho-key, .ho-fmt-phone .ho-words, .ho-fmt-phone .ho-summary-box { padding-left: 10pt; padding-right: 10pt; }
+.ho-fmt-phone .ho-q { padding-left: 17pt; }
+.ho-fmt-phone .ho-q .ho-lines { margin-left: -17pt; }

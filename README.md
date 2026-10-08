@@ -133,7 +133,7 @@ docs/                  웹사이트 (GitHub Pages)
   content.js           공통 그리기 도구 (성경 역본 버튼 · 찬양 · 배경음악 · 유튜브)
   notes.js             로그인 개인 노트 자동 저장
   admin-extra.js       관리: 영상 선택 · 모델
-  handout.js handout.css   핸드아웃 (paged.js, vendor/)
+  handout.js handout.css   핸드아웃 (paged.js · html2canvas, vendor/)
   data/sermons.json  data/s/<id>.json   실제 데이터 (Actions가 만듦)
   data/sample/  music.sample.json       ?demo 샘플
 apps-script/Code.gs    관리 · 로그인 · 노트 · 사용자 영상 서버
@@ -145,6 +145,16 @@ scripts/
   selftest.mjs selftest-gas.mjs   npm test
 .github/workflows/sync.yml
 ```
+
+## 핸드아웃 PDF 만들기 · 내려받기
+
+설교 화면의 **핸드아웃 PDF** 버튼 → 옵션을 고르고 **미리보기 새로고침** → **PDF 다운로드**.
+
+- **옵션**: 보기 방식 · 용지 · 성경 본문 · 찬양 · 쓰는 줄 · 정답·모범 답안. 옵션을 바꾸면 미리보기가 흐려지고 다운로드가 잠기며, "미리보기 새로고침"을 눌러야 새 옵션으로 다시 만들어집니다 (미리보기와 내려받는 파일이 늘 같습니다).
+- **용지**: 종이용 `Letter` · `A4`, 화면용 `디지털 · 태블릿`(7.5×10in, 3:4) · `디지털 · 휴대폰`(4×7.2in, 글자 크기·간격을 휴대폰에 맞춰 줄임). 파일 이름 끝에 용지가 붙습니다.
+- **아이폰·아이패드**: 예전에는 "인쇄 → PDF로 저장"에만 의존했는데, iOS 인쇄 창에는 "PDF로 저장"이 없어서 안 됐습니다. 이제는 쪽마다 그림을 찍어 **PDF 파일을 직접 만들고**(`vendor/html2canvas.min.js`), 아이폰·아이패드에서는 "PDF 다운로드"를 누르면 공유 창이 떠서 "파일에 저장"(또는 GoodNotes·Notability 같은 필기 앱)으로 보낼 수 있습니다. 공유 창이 안 되는 기기는 일반 다운로드, 그래도 안 되면 "새 창에서 열기"를 쓰세요.
+- 이 방식의 PDF 는 쪽이 그림이라 **글자 선택·검색은 되지 않습니다**. 글자가 살아 있는 PDF 가 필요하면 컴퓨터에서 **인쇄** 버튼(PC·Mac 에서만 보임) → "PDF로 저장"을 쓰세요.
+- **쪽 나누기**: 문단 · 성경 절 · 목록 항목은 쪽 중간에서 끊지 않고 통째로 다음 쪽으로 넘깁니다. 한 쪽의 절반이 넘을 만큼 아주 긴 문단만 어쩔 수 없이 나누고, 그때도 앞뒤 3줄은 남깁니다. 본문은 왼쪽 정렬입니다.
 
 ## 핸드아웃(PDF) 꾸밈
 

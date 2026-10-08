@@ -1,10 +1,20 @@
-// 핸드아웃: 설교 한 편을 쪽 단위(Letter / A4)로 미리 보고 인쇄·PDF로 저장합니다.
+// 핸드아웃: 설교 한 편을 쪽 단위(Letter / A4 / 디지털 태블릿 · 휴대폰)로 미리 보고 PDF 파일로 내려받습니다.
 // 보기 방식(설교리뷰 · QT 묵상 · 성경공부 · 소그룹 나눔)마다 내용이 다르고, 성경 본문은 역본을 골라(기본 개역개정) 넣을 수 있습니다.
 // 쪽 나누기는 paged.js(vendor/paged.polyfill.min.js)가 맡고, 모양은 handout.css 입니다.
+// PDF 파일은 미리보기 쪽을 html2canvas(vendor/html2canvas.min.js)로 쪽마다 그림으로 찍어 PDF 로 묶어 만듭니다.
+//   (아이폰·아이패드는 인쇄 창에 "PDF로 저장"이 없어서, 인쇄 방식은 쓰지 않고 파일을 직접 만들어 내려받게 합니다. 글자는 그림이라 선택·검색은 되지 않습니다.
+//    글자가 살아 있는 PDF 가 필요하면 컴퓨터에서 "인쇄" 버튼으로 저장합니다.)
 // 이 파일은 app.js 의 h(), state, route() 와 content.js · detail.js 의 도구를 함께 씁니다.
 
 const HANDOUT_KEY = 'sn-handout2';
-const PAGE_SIZES = { letter: { label: 'Letter (8.5 × 11 in)', css: 'letter' }, a4: { label: 'A4 (210 × 297 mm)', css: 'A4' } };
+// 용지: print = 종이(Letter · A4), digital = 화면에서 읽는 PDF(태블릿 · 휴대폰)
+//   w·h = 쪽 크기(in), m = 여백(in) [위, 오른쪽, 아래, 왼쪽], k = 글자·간격 배율(본문 12.5pt 기준), scale = PDF 그림 해상도 배율
+const PAGE_SIZES = {
+  letter: { label: 'Letter (8.5 × 11 in)', short: 'Letter', css: 'letter', w: 8.5, h: 11, m: [0.8, 0.85, 0.9, 0.85], k: 1, scale: 2, kind: 'print' },
+  a4: { label: 'A4 (210 × 297 mm)', short: 'A4', css: 'A4', w: 8.2677, h: 11.6929, m: [0.8, 0.85, 0.9, 0.85], k: 1, scale: 2, kind: 'print' },
+  tablet: { label: '디지털 · 태블릿 (3:4 화면)', short: '태블릿', css: '7.5in 10in', w: 7.5, h: 10, m: [0.55, 0.6, 0.75, 0.6], k: 0.95, scale: 2.5, kind: 'digital' },
+  phone: { label: '디지털 · 휴대폰 (세로 화면)', short: '휴대폰', css: '4in 7.2in', w: 4, h: 7.2, m: [0.32, 0.3, 0.5, 0.3], k: 0.88, scale: 3, kind: 'digital' },
+};
 // 성경 본문이 이만큼(글자 수)보다 길면 맨 뒤 부록으로 보냅니다
 const LONG_BIBLE_CHARS = 2200;
 const HANDOUT_DEFAULTS = { size: 'letter', songs: true, bible: 'GAE', lines: true, answers: false };
@@ -86,7 +96,7 @@ function buildHandoutDoc(d, mode, opts) {
     h(
       'header',
       { class: 'ho-head' },
-      h('div', { class: 'ho-kicker' }, h('span', { class: 'ho-brand' }, h('img', { class: 'ho-logo', src: 'icons/mark.svg', alt: '' }), h('strong', { text: '말씀결' }), h('span', { text: `  ·  ${modeLabel(mode)}` })), h('span', { text: `${eventName(d.category)}${date ? `  ·  ${date}` : ''}` })),
+      h('div', { class: 'ho-kicker' }, h('span', { class: 'ho-brand' }, h('img', { class: 'ho-logo', src: 'icons/mark.svg?v=9.16', alt: '' }), h('strong', { text: '말씀결' }), h('span', { text: `  ·  ${modeLabel(mode)}` })), h('span', { text: `${eventName(d.category)}${date ? `  ·  ${date}` : ''}` })),
       h('h1', { class: 'ho-title', text: d.title }),
       scripture || preacher ? h('p', { class: 'ho-scripture' }, scripture ? `본문  ${scripture}` : '', scripture && preacher ? '   |   ' : '', preacher) : null,
       d.result.summary_short || d.result.theme ? h('p', { class: 'ho-summary', text: d.result.summary_short || d.result.theme }) : null,
@@ -200,30 +210,52 @@ function buildHandoutDoc(d, mode, opts) {
 
   // 각주 · 부록
   const creditName = (window.APP_CONFIG && window.APP_CONFIG.CREDIT) || '';
-  secs.push(h('div', { class: 'ho-made' }, h('img', { class: 'ho-logo-lg', src: 'icons/mark.svg', alt: '' }), h('div', {}, h('strong', { text: '말씀결' }), h('span', { text: '  말씀의 결을 따라 읽고 묵상하는 노트' }), creditName ? h('div', { class: 'ho-made-by', text: creditName }) : null)));
+  secs.push(h('div', { class: 'ho-made' }, h('img', { class: 'ho-logo-lg', src: 'icons/mark.svg?v=9.16', alt: '' }), h('div', {}, h('strong', { text: '말씀결' }), h('span', { text: '  말씀의 결을 따라 읽고 묵상하는 노트' }), creditName ? h('div', { class: 'ho-made-by', text: creditName }) : null)));
   secs.push(h('footer', { class: 'ho-foot' }, h('p', { text: `참고: ${footnoteText(d.category)}` }), d.result.caveats ? h('p', { text: `유의: ${d.result.caveats}` }) : null));
   answerPages.forEach((a) => {
     a.classList.add('ho-appendix');
     secs.push(a);
   });
   if (bibleSec && bibleAtEnd) secs.push(bibleSec);
-  return h('article', { class: 'ho-doc' }, secs.filter(Boolean));
+  // 바깥에 빈 껍데기(.ho-root)를 한 겹 더 씌웁니다: paged.js 는 "쪽이 섹션과 섹션 사이에서 나뉘는" 쪽(첫 쪽·부록 첫 쪽 등)에서
+  // 맨 바깥 요소를 다시 만들지 않아서, 그 쪽들만 .ho-doc 서식(글꼴·크기·줄 간격)이 빠지던 문제를 막습니다.
+  return h('div', { class: 'ho-root' }, h('article', { class: `ho-doc ho-fmt-${opts.size}` }, secs.filter(Boolean)));
 }
 
 /* ---------- 쪽 규칙(용지 크기, 하단 머리말) ---------- */
 const cssString = (t) => `"${String(t).replace(/[\\"]/g, '\\$&').replace(/[\r\n]+/g, ' ')}"`;
+const px = (n) => +n.toFixed(2);
 function pageRules(size, s, mode) {
+  const f = PAGE_SIZES[size];
   const date = formatDate(s.date);
-  const foot = `말씀결  ·  ${eventName(s.category)}${date ? `  ${date}` : ''}  ·  ${modeLabel(mode)}`;
-  return `@page { size: ${PAGE_SIZES[size].css}; margin: 0.8in 0.85in 0.9in;
-  @bottom-left { content: ${cssString(foot)}; font: 9pt 'Noto Sans KR', sans-serif; color: #4a5c72; vertical-align: top; padding-top: 10pt; border-top: 0.75pt solid #8fcf5a; }
-  @bottom-right { content: "Page " counter(page) " / " counter(pages); font: 9pt 'Noto Sans KR', sans-serif; color: #4a5c72; vertical-align: top; padding-top: 10pt; border-top: 0.75pt solid #8fcf5a; }
+  // 휴대폰은 폭이 좁아서 하단 문구를 짧게 줄입니다
+  const foot = size === 'phone' ? `말씀결  ·  ${modeLabel(mode)}` : `말씀결  ·  ${eventName(s.category)}${date ? `  ${date}` : ''}  ·  ${modeLabel(mode)}`;
+  const pageNo = size === 'phone' ? 'counter(page) " / " counter(pages)' : '"Page " counter(page) " / " counter(pages)';
+  const box = `font: ${px(9 * f.k)}pt 'Noto Sans KR', sans-serif; color: #4a5c72; vertical-align: top; padding-top: ${px(10 * f.k)}pt; border-top: ${px(0.75 * f.k)}pt solid #8fcf5a;`;
+  return `@page { size: ${f.css}; margin: ${f.m[0]}in ${f.m[1]}in ${f.m[2]}in ${f.m[3]}in;
+  @bottom-left { content: ${cssString(foot)}; ${box} }
+  @bottom-right { content: ${pageNo}; ${box} }
 }
 @page :first { @bottom-left { content: ${cssString(foot)}; } }`;
 }
+// handout.css 의 pt 크기를 용지 배율(k)만큼 키우거나 줄입니다 (휴대폰은 작게, 태블릿은 조금 작게)
+const scalePt = (css, k) => (k === 1 ? css : css.replace(/(-?\d*\.?\d+)pt\b/g, (_, n) => `${px(parseFloat(n) * k)}pt`));
+
+// 쪽 중간에서 끊기지 않게 하려는 문단 중, 한 쪽의 절반이 넘게 긴 것에는 .ho-long 을 붙여 어쩔 수 없이 나눌 수 있게 합니다
+function markLongBlocks(root, f) {
+  const contentW = (f.w - f.m[1] - f.m[3]) * 72;
+  const contentH = (f.h - f.m[0] - f.m[2]) * 72;
+  const font = 12.5 * f.k;
+  const perLine = Math.max(8, contentW / (font * 0.92)); // 한 줄에 들어가는 글자 수(대략)
+  const pageLines = contentH / (font * 1.85);
+  const maxLines = Math.max(5, Math.floor(pageLines * 0.55));
+  root.querySelectorAll('p, li, blockquote, .ho-q-text, .ho-qz-q').forEach((el) => {
+    if (Math.ceil((el.textContent || '').length / perLine) > maxLines) el.classList.add('ho-long');
+  });
+}
 
 /* ---------- 미리보기 화면 ---------- */
-let handoutState = null; // { previewer, onResize }
+let handoutState = null; // { previewer, onResize, pdf }
 
 // paged.js 가 만든 쪽과 서식을 모두 치웁니다. (쪽의 감시 장치를 먼저 끄지 않으면 지운 뒤에 오류가 납니다)
 function disposePreviewer(previewer) {
@@ -243,6 +275,11 @@ function disposePreviewer(previewer) {
   }
 }
 
+function dropPdf(st) {
+  if (st.pdf && st.pdf.url) URL.revokeObjectURL(st.pdf.url);
+  st.pdf = null;
+}
+
 function teardownHandout() {
   if (!handoutState) return;
   const st = handoutState;
@@ -250,33 +287,196 @@ function teardownHandout() {
   st.token = -1;
   window.removeEventListener('resize', st.onResize);
   disposePreviewer(st.previewer);
+  dropPdf(st);
 }
 
-let pagedLoading = null;
-function loadPaged() {
-  if (window.Paged && window.Paged.Previewer) return Promise.resolve();
-  if (pagedLoading) return pagedLoading;
-  window.PagedConfig = { auto: false }; // 자동으로 쪽 나누기를 시작하지 않게 (직접 시작합니다)
-  pagedLoading = new Promise((resolve, reject) => {
+const scriptLoads = {};
+function loadScriptOnce(src, isReady, errorText) {
+  if (isReady()) return Promise.resolve();
+  if (scriptLoads[src]) return scriptLoads[src];
+  scriptLoads[src] = new Promise((resolve, reject) => {
     const el = document.createElement('script');
-    el.src = 'vendor/paged.polyfill.min.js';
+    el.src = src;
     el.onload = () => resolve();
     el.onerror = () => {
-      pagedLoading = null;
-      reject(new Error('쪽 나누기 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.'));
+      delete scriptLoads[src];
+      reject(new Error(errorText));
     };
     document.head.append(el);
   });
-  return pagedLoading;
+  return scriptLoads[src];
 }
+function loadPaged() {
+  window.PagedConfig = { auto: false }; // 자동으로 쪽 나누기를 시작하지 않게 (직접 시작합니다)
+  return loadScriptOnce('vendor/paged.polyfill.min.js?v=9.16', () => window.Paged && window.Paged.Previewer, '쪽 나누기 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+}
+const loadHtml2Canvas = () => loadScriptOnce('vendor/html2canvas.min.js?v=9.16', () => typeof window.html2canvas === 'function', 'PDF 파일 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
 
 let handoutCss = null;
 async function loadHandoutCss() {
   if (handoutCss) return handoutCss;
-  const res = await fetch('handout.css?v=9.15');
+  const res = await fetch('handout.css?v=9.16');
   if (!res.ok) throw new Error(`핸드아웃 서식을 불러오지 못했습니다 (${res.status})`);
   handoutCss = await res.text();
   return handoutCss;
+}
+
+/* ---------- PDF 파일 만들기: 쪽마다 그림으로 찍어서 PDF 한 파일로 묶습니다 ---------- */
+// 쪽 아래 문구(머리말·쪽 번호)는 paged.js 가 화면에서만 계산해 주는 값이라, 그림을 찍기 전에 글자로 미리 풀어 둡니다
+function marginTexts(pageEl, no, total) {
+  return [...pageEl.querySelectorAll('.pagedjs_margin-content')].map((el) => {
+    let raw = '';
+    for (const pseudo of ['::after', '::before']) {
+      const c = getComputedStyle(el, pseudo).content;
+      if (c && c !== 'none' && c !== 'normal') {
+        raw = c;
+        break;
+      }
+    }
+    if (!raw) return null;
+    let out = '';
+    const re = /"((?:[^"\\]|\\.)*)"|counter\(\s*(pages?)\s*\)/g;
+    for (let m = re.exec(raw); m; m = re.exec(raw)) out += m[2] ? String(m[2] === 'pages' ? total : no) : m[1].replace(/\\(.)/g, '$1');
+    return out;
+  });
+}
+
+const nextTick = () => new Promise((r) => setTimeout(r, 0));
+const canvasToJpeg = (canvas) =>
+  new Promise((resolve, reject) => {
+    canvas.toBlob((b) => (b ? b.arrayBuffer().then((buf) => resolve(new Uint8Array(buf)), reject) : reject(new Error('쪽 그림을 만들지 못했습니다. 기기의 메모리가 부족할 수 있어요.'))), 'image/jpeg', 0.92);
+  });
+
+async function capturePage(pageEl, texts, f) {
+  const width = Math.round(f.w * 96);
+  const height = Math.round(f.h * 96);
+  const canvas = await window.html2canvas(pageEl, {
+    scale: f.scale,
+    backgroundColor: '#ffffff',
+    useCORS: true,
+    logging: false,
+    width,
+    height,
+    windowWidth: Math.max(window.innerWidth, width + 80),
+    onclone: async (doc, el) => {
+      // 미리보기 화면용 확대·그림자·가림을 걷어내고 쪽을 원래 크기로 찍습니다
+      const style = doc.createElement('style');
+      style.textContent = '.ho-stage{zoom:1!important;width:max-content!important}.ho-stage-wrap{overflow:visible!important}.pagedjs_page{box-shadow:none!important;margin:0!important}.ho-nopseudo::before,.ho-nopseudo::after{content:none!important}';
+      doc.head.append(style);
+      el.querySelectorAll('.pagedjs_margin-content').forEach((m, i) => {
+        if (texts[i] != null) {
+          m.textContent = texts[i];
+          m.classList.add('ho-nopseudo');
+        }
+      });
+      await new Promise((r) => setTimeout(r, 60)); // 새로 쓴 글자의 글꼴 조각이 내려오게 잠깐 기다립니다
+      if (doc.fonts && doc.fonts.ready) await doc.fonts.ready;
+    },
+  });
+  try {
+    return { jpeg: await canvasToJpeg(canvas), w: canvas.width, h: canvas.height };
+  } finally {
+    canvas.width = 1; // 메모리를 바로 돌려줍니다 (아이폰은 그림 메모리 한도가 작습니다)
+    canvas.height = 1;
+  }
+}
+
+// JPEG 그림 여러 장을 쪽마다 한 장씩 넣은 PDF 로 묶습니다 (외부 도구 없이 직접 씁니다)
+function buildPdf(images, wPt, hPt, title) {
+  const enc = new TextEncoder();
+  const chunks = [];
+  const offsets = [];
+  let size = 0;
+  const put = (d) => {
+    const u = typeof d === 'string' ? enc.encode(d) : d;
+    chunks.push(u);
+    size += u.length;
+  };
+  const begin = (n) => {
+    offsets[n] = size;
+    put(`${n} 0 obj\n`);
+  };
+  const hex16 = (s) => `<FEFF${[...s].map((ch) => ch.codePointAt(0).toString(16).padStart(4, '0')).join('')}>`; // 한글 제목은 UTF-16 으로
+  const n = images.length;
+  const pageObj = (i) => 6 + i * 3;
+  put(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0x0a, 0x25, 0xe2, 0xe3, 0xcf, 0xd3, 0x0a])); // %PDF-1.4 + 바이너리 표시
+  begin(1);
+  put('<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+  begin(2);
+  put(`<< /Type /Pages /Count ${n} /Kids [${images.map((_, i) => `${pageObj(i)} 0 R`).join(' ')}] >>\nendobj\n`);
+  begin(3);
+  put(`<< /Title ${hex16(title)} /Producer (Malsseumgyeol) >>\nendobj\n`);
+  const W = px(wPt);
+  const H = px(hPt);
+  images.forEach((im, i) => {
+    const img = 4 + i * 3;
+    const content = 5 + i * 3;
+    begin(img);
+    put(`<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.jpeg.length} >>\nstream\n`);
+    put(im.jpeg);
+    put('\nendstream\nendobj\n');
+    const draw = `q ${W} 0 0 ${H} 0 0 cm /Im0 Do Q`;
+    begin(content);
+    put(`<< /Length ${draw.length} >>\nstream\n${draw}\nendstream\nendobj\n`);
+    begin(pageObj(i));
+    put(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 ${img} 0 R >> /ProcSet [/PDF /ImageC] >> /Contents ${content} 0 R >>\nendobj\n`);
+  });
+  const total = 4 + n * 3;
+  const xrefAt = size;
+  put(`xref\n0 ${total}\n0000000000 65535 f \n`);
+  for (let i = 1; i < total; i++) put(`${String(offsets[i]).padStart(10, '0')} 00000 n \n`);
+  put(`trailer\n<< /Size ${total} /Root 1 0 R /Info 3 0 R >>\nstartxref\n${xrefAt}\n%%EOF\n`);
+  return new Blob(chunks, { type: 'application/pdf' });
+}
+
+async function makePdfFromStage(stage, f, title, onProgress, alive) {
+  await loadHtml2Canvas();
+  const pages = [...stage.querySelectorAll('.pagedjs_page')];
+  if (!pages.length) throw new Error('미리보기 쪽이 없습니다.');
+  const texts = pages.map((pg, i) => marginTexts(pg, i + 1, pages.length));
+  const images = [];
+  for (let i = 0; i < pages.length; i++) {
+    if (!alive()) return null;
+    onProgress(i + 1, pages.length);
+    await nextTick(); // 진행 표시가 화면에 보이도록 한 숨 쉽니다
+    images.push(await capturePage(pages[i], texts[i], f));
+  }
+  if (!alive()) return null;
+  return buildPdf(images, f.w * 72, f.h * 72, title);
+}
+
+/* ---------- 내려받기 ---------- */
+const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isTouchPrimary = () => !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+
+function anchorDownload(url, name) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.rel = 'noopener';
+  document.body.append(a);
+  a.click();
+  setTimeout(() => a.remove(), 1000);
+}
+// 아이폰·아이패드는 공유 창의 "파일에 저장"이 가장 확실합니다. 안 되는 기기는 일반 다운로드로 내려받습니다.
+function downloadPdf(pdf) {
+  const file = new File([pdf.blob], pdf.name, { type: 'application/pdf' });
+  if (isIOS() && navigator.canShare && navigator.share) {
+    let ok = false;
+    try {
+      ok = navigator.canShare({ files: [file] });
+    } catch {
+      ok = false;
+    }
+    if (ok) {
+      navigator.share({ files: [file], title: pdf.name }).catch((e) => {
+        if (e && e.name === 'AbortError') return; // 사용자가 공유 창을 닫은 것
+        anchorDownload(pdf.url, pdf.name);
+      });
+      return;
+    }
+  }
+  anchorDownload(pdf.url, pdf.name);
 }
 
 async function renderHandout(id, modeArg) {
@@ -298,15 +498,47 @@ async function renderHandout(id, modeArg) {
   if (!location.hash.startsWith('#/h/')) return; // 불러오는 사이 다른 화면으로 옮겼다면 그리지 않습니다
   const modes = availableModes(d);
   let mode = MODES.some((m) => m.key === modeArg) && modes.includes(modeArg) ? modeArg : modes.includes(savedMode()) ? savedMode() : 'review';
-  const fileTitle = (m) => `말씀결_${(d.date || '').replace(/-/g, '.')}_${d.title}_${modeLabel(m)}`.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim(); // PDF로 저장할 때 기본 파일 이름이 됩니다
+  const fileTitle = (m) => `말씀결_${(d.date || '').replace(/-/g, '.')}_${d.title}_${modeLabel(m)}`.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim(); // PDF 파일 이름
+  const pdfName = (o) => `${fileTitle(o.mode)}_${PAGE_SIZES[o.size].short}.pdf`;
   document.title = fileTitle(mode);
   const prefs = loadHandoutPrefs();
-  const st = { token: 0, previewer: null, onResize: null };
+  const st = { token: 0, previewer: null, onResize: null, pdf: null };
   handoutState = st;
+  let drawn = null; // 지금 미리보기에 그려진 옵션 (옵션을 바꾸면 달라져서 "새로고침 필요"가 됩니다)
+  let busy = false;
 
   const status = h('p', { class: 'meta ho-status', role: 'status' });
   const stage = h('div', { class: 'ho-stage' });
   const wrap = h('div', { class: 'ho-stage-wrap' }, stage);
+
+  // 지금 고른 옵션이 미리보기와 같은지
+  const sameAsDrawn = () => !!drawn && drawn.mode === mode && drawn.size === prefs.size && drawn.bible === prefs.bible && drawn.songs === prefs.songs && drawn.lines === prefs.lines && drawn.answers === prefs.answers;
+  const refreshBtn = h('button', { class: 'btn primary', type: 'button' }, '미리보기 새로고침');
+  const dlBtn = h('button', { class: 'btn primary ho-dl', type: 'button', disabled: true }, icon('file'), 'PDF 다운로드');
+  const openLink = h('a', { class: 'ho-open', href: '#', target: '_blank', rel: 'noopener', hidden: true, text: '새 창에서 열기' });
+  const printBtn = h('button', { class: 'btn', type: 'button', disabled: true, title: '컴퓨터에서 글자가 살아 있는 PDF 로 저장할 때' }, '인쇄');
+  printBtn.hidden = isIOS() || isTouchPrimary();
+  printBtn.addEventListener('click', () => window.print());
+  dlBtn.addEventListener('click', () => {
+    if (st.pdf && sameAsDrawn()) downloadPdf(st.pdf);
+  });
+  refreshBtn.addEventListener('click', () => draw());
+
+  // 옵션이 바뀌면 지금 미리보기·PDF 는 옛 옵션이라, 새로고침을 누르게 안내합니다
+  const syncButtons = () => {
+    const stale = !!drawn && !sameAsDrawn();
+    wrap.classList.toggle('is-stale', stale);
+    refreshBtn.classList.toggle('primary', !drawn || stale || !st.pdf);
+    refreshBtn.disabled = busy;
+    dlBtn.disabled = busy || stale || !st.pdf;
+    printBtn.disabled = busy || stale || !drawn;
+    openLink.hidden = !(st.pdf && !stale);
+    if (!busy && stale) status.textContent = '옵션이 바뀌었어요. "미리보기 새로고침"을 누르면 새 옵션으로 다시 만듭니다.';
+  };
+  const optionChanged = () => {
+    saveHandoutPrefs(prefs);
+    syncButtons();
+  };
 
   const modeSel = h('select', { class: 'search ho-size', 'aria-label': '보기 방식' }, MODES.map((m) => h('option', { value: m.key, text: m.label, disabled: !modes.includes(m.key) })));
   modeSel.value = mode;
@@ -320,14 +552,16 @@ async function renderHandout(id, modeArg) {
       /* 주소를 못 바꿔도 화면은 바뀝니다 */
     }
     syncVisibility();
-    draw();
+    syncButtons();
   });
-  const sizeSel = h('select', { class: 'search ho-size', 'aria-label': '용지 크기' }, Object.entries(PAGE_SIZES).map(([k, v]) => h('option', { value: k, text: v.label })));
+  const sizeSel = h('select', { class: 'search ho-size', 'aria-label': '용지 크기' }, [
+    h('optgroup', { label: '종이 (인쇄용)' }, ['letter', 'a4'].map((k) => h('option', { value: k, text: PAGE_SIZES[k].label }))),
+    h('optgroup', { label: '디지털 (화면으로 읽기)' }, ['tablet', 'phone'].map((k) => h('option', { value: k, text: PAGE_SIZES[k].label }))),
+  ]);
   sizeSel.value = prefs.size;
   sizeSel.addEventListener('change', () => {
     prefs.size = sizeSel.value;
-    saveHandoutPrefs(prefs);
-    draw();
+    optionChanged();
   });
   // 성경 본문: 한 역본(기본 개역개정) 또는 4개 모두 또는 넣지 않기
   const bibleSel = h(
@@ -340,17 +574,15 @@ async function renderHandout(id, modeArg) {
   bibleSel.value = prefs.bible;
   bibleSel.addEventListener('change', () => {
     prefs.bible = bibleSel.value;
-    saveHandoutPrefs(prefs);
-    draw();
+    optionChanged();
   });
-  const bibleLabel = h('label', { class: 'ho-opt' }, '성경 본문 ', bibleSel);
+  const bibleLabel = h('label', { class: 'ho-opt ho-opt-sel' }, '성경 본문 ', bibleSel);
   const toggle = (key, label) => {
     const cb = h('input', { type: 'checkbox' });
     cb.checked = prefs[key];
     cb.addEventListener('change', () => {
       prefs[key] = cb.checked;
-      saveHandoutPrefs(prefs);
-      draw();
+      optionChanged();
     });
     return h('label', { class: 'ho-opt' }, cb, label);
   };
@@ -364,8 +596,6 @@ async function renderHandout(id, modeArg) {
     answersOpt.hidden = !(mode === 'study' || mode === 'group');
   };
   syncVisibility();
-  const printBtn = h('button', { class: 'btn primary', type: 'button', disabled: true }, '인쇄 / PDF로 저장');
-  printBtn.addEventListener('click', () => window.print());
 
   const fit = () => {
     const page = stage.querySelector('.pagedjs_page');
@@ -378,9 +608,19 @@ async function renderHandout(id, modeArg) {
   st.onResize = fit;
   window.addEventListener('resize', fit);
 
+  // 미리보기를 새로 만들고, 이어서 PDF 파일을 만듭니다
   async function draw() {
     const token = ++st.token;
+    const f = PAGE_SIZES[prefs.size];
+    const now = { mode, size: prefs.size, bible: prefs.bible, songs: prefs.songs, lines: prefs.lines, answers: prefs.answers };
+    busy = true;
+    dropPdf(st);
+    drawn = null;
+    wrap.classList.remove('is-stale');
+    refreshBtn.disabled = true;
+    dlBtn.disabled = true;
     printBtn.disabled = true;
+    openLink.hidden = true;
     status.textContent = '미리보기를 만드는 중입니다… (잠시만 기다려 주세요)';
     // 이전 미리보기 정리
     disposePreviewer(st.previewer);
@@ -389,12 +629,14 @@ async function renderHandout(id, modeArg) {
     stage.style.zoom = '1';
     try {
       await loadPaged();
-      const css = (await loadHandoutCss()) + '\n' + pageRules(prefs.size, d, mode);
+      const css = scalePt(await loadHandoutCss(), f.k) + '\n' + pageRules(prefs.size, d, mode);
       if (document.fonts && document.fonts.ready) await document.fonts.ready;
       if (token !== st.token) return;
       const previewer = new window.Paged.Previewer();
       st.previewer = previewer;
-      const flow = await previewer.preview(buildHandoutDoc(d, mode, prefs), [{ [location.href]: css }], stage);
+      const doc = buildHandoutDoc(d, mode, prefs);
+      markLongBlocks(doc, f);
+      const flow = await previewer.preview(doc, [{ [location.href]: css }], stage);
       if (token !== st.token) return;
       // 쪽 나누기가 끝났으니 paged.js 의 크기 감시를 꺼서, 창 크기가 바뀌어도 쪽 내용이 다시 나뉘지 않게 합니다
       (previewer.chunker?.pages || []).forEach((pg) => {
@@ -405,24 +647,47 @@ async function renderHandout(id, modeArg) {
         }
       });
       fit();
-      status.textContent = `${modeLabel(mode)} · ${flow.total || stage.querySelectorAll('.pagedjs_page').length}쪽 · ${PAGE_SIZES[prefs.size].label}`;
+      drawn = now;
+      const pageCount = flow.total || stage.querySelectorAll('.pagedjs_page').length;
+      const label = `${modeLabel(mode)} · ${pageCount}쪽 · ${f.label}`;
       printBtn.disabled = false;
+      status.textContent = `${label} — PDF 파일을 만드는 중…`;
+      try {
+        const blob = await makePdfFromStage(stage, f, fileTitle(mode), (i, n) => (status.textContent = `${label} — PDF 파일 만드는 중… ${i}/${n}쪽`), () => token === st.token);
+        if (token !== st.token || !blob) return;
+        st.pdf = { blob, url: URL.createObjectURL(blob), name: pdfName(now) };
+        openLink.href = st.pdf.url;
+        status.textContent = `${label} · PDF 준비 완료 (${(blob.size / 1048576).toFixed(1)}MB)`;
+      } catch (e) {
+        if (token !== st.token) return;
+        status.textContent = `미리보기는 만들었지만 PDF 파일을 만들지 못했습니다: ${e.message || e}${printBtn.hidden ? '' : ' — 위의 "인쇄" 버튼으로 저장할 수 있어요.'}`;
+      }
     } catch (e) {
       if (token !== st.token) return;
       status.textContent = `오류: ${e.message || e}`;
+    } finally {
+      if (token === st.token) {
+        busy = false;
+        syncButtons();
+      }
     }
   }
 
+  const hintText = isIOS()
+    ? '아래 옵션을 고르고 "미리보기 새로고침"을 누르세요. 미리보기와 PDF 파일이 함께 만들어지고, "PDF 다운로드"를 누르면 나오는 공유 창에서 "파일에 저장"(또는 GoodNotes 같은 필기 앱)을 고르면 됩니다.'
+    : '옵션을 고르고 "미리보기 새로고침"을 누르면 미리보기와 PDF 파일이 만들어지고, "PDF 다운로드"로 저장합니다. 옵션을 바꾸면 다시 새로고침해 주세요.';
   app.replaceChildren(
     back(`#/v/${encodeURIComponent(d.id)}/${mode}`, '← 설교로 돌아가기'),
     h(
       'div',
       { class: 'ho-toolbar' },
-      h('div', { class: 'ho-controls' }, h('label', { class: 'ho-opt' }, '보기 방식 ', modeSel), h('label', { class: 'ho-opt' }, '용지 ', sizeSel), bibleLabel, songsOpt, linesOpt, answersOpt),
-      h('div', { class: 'ho-actions' }, printBtn, status),
-      h('p', { class: 'meta ho-hint', text: '인쇄 창에서 "PDF로 저장"을 고르면 파일로 저장됩니다. 여백은 "없음(또는 기본)", "배경 그래픽"은 켜 주세요.' }),
+      h('div', { class: 'ho-controls' }, h('label', { class: 'ho-opt ho-opt-sel' }, '보기 방식 ', modeSel), h('label', { class: 'ho-opt ho-opt-sel' }, '용지 ', sizeSel), bibleLabel, songsOpt, linesOpt, answersOpt),
+      h('div', { class: 'ho-actions' }, refreshBtn, dlBtn, openLink, printBtn),
+      status,
+      h('p', { class: 'meta ho-hint', text: hintText }),
     ),
     wrap,
   );
+  syncButtons();
   draw();
 }

@@ -329,6 +329,23 @@ ol.q li > span { display: block; }
 .ho-opt input[type='checkbox'], .ho-opt input[type='radio'] { width: 1.15em; height: 1.15em; accent-color: var(--blue); }
 .ho-size { width: auto; margin: 0; min-width: 11em; }
 .ho-status { margin: 0; }
+.ho-actions .btn { white-space: nowrap; }
+.ho-dl .ic { margin-right: 6px; }
+.ho-open { font-size: 0.92em; text-decoration: underline; text-underline-offset: 3px; color: var(--blue); }
+.ho-open[hidden] { display: none !important; }
+.ho-actions .btn[hidden] { display: none !important; }
+.ho-stage-wrap { transition: opacity .15s; }
+@media (max-width: 640px) {
+  .ho-toolbar { padding: 12px 14px; grid-template-columns: minmax(0, 1fr); }
+  .ho-controls { display: flex; flex-wrap: wrap; gap: 10px 16px; }
+  .ho-opt-sel { flex: 1 1 100%; display: grid; grid-template-columns: 5.6em minmax(0, 1fr); align-items: center; white-space: nowrap; }
+  .ho-opt-sel[hidden] { display: none !important; }
+  .ho-size { min-width: 0; width: 100%; }
+  .ho-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .ho-actions .btn { justify-content: center; text-align: center; padding-left: 8px; padding-right: 8px; }
+  .ho-open { grid-column: 1 / -1; text-align: center; padding: 4px 0; }
+}
+.ho-stage-wrap.is-stale { opacity: .4; }
 .ho-hint { margin: 0; }
 .ho-stage-wrap { width: 100%; overflow-x: hidden; }
 .ho-stage { width: max-content; margin: 0 auto; }
