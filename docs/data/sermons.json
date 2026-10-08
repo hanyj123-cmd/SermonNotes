@@ -1,6 +1,6 @@
 {
- "updated": "2026-10-08T20:15:24.130Z",
- "count": 21,
+ "updated": "2026-10-08T20:20:57.078Z",
+ "count": 22,
  "sermons": [
   {
    "id": "dAtaD-X_yFE",
@@ -260,6 +260,25 @@
    "book": "시편",
    "bookIdx": 19,
    "summary_short": "성도는 자신이 먼저 체험한 하나님의 은혜와 구원의 역사를 다음 세대와 이웃에게 입술로 전하여, 오직 하나님께 소망을 두고 영적 회복을 누려야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "Oe4K3_hrTc8",
+   "category": "user",
+   "title": "예배",
+   "date": "2026-08-16",
+   "url": "https://www.youtube.com/watch?v=Oe4K3_hrTc8",
+   "preacher": "송태근 목사",
+   "scripture": "이사야43:1-7",
+   "book": "이사야",
+   "bookIdx": 23,
+   "summary_short": "하나님은 고난 속에서 정체성을 잃고 방황하는 백성을 숫자가 아닌 고유한 '이름'으로 부르시며, 십자가 사랑 안에서 가장 보배롭고 존귀한 자녀로 삼으셨습니다.",
    "modes": [
     "review",
     "qt",
