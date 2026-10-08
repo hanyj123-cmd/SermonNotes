@@ -84,6 +84,18 @@ const outlineParas = (o) => (Array.isArray(o.paragraphs) && o.paragraphs.length 
 const outlineSummary = (o) => o.key_summary || o.key_quote || '';
 
 /* ---------- 영상 ID · 링크 ---------- */
+/** 화면·PDF에 쓸 깔끔한 제목: "[2026.10.04] 믿음의 길 (창 12:1-9) - 홍길동 목사" → "믿음의 길" (본문 괄호는 성경 책 이름으로 시작할 때만 뗍니다) */
+const BOOK_START = /^(창세기|출애굽기|레위기|민수기|신명기|여호수아|사사기|룻기|사무엘|열왕기|역대|에스라|느헤미야|에스더|욥기|시편|잠언|전도서|아가|이사야|예레미야|에스겔|다니엘|호세아|요엘|아모스|오바댜|요나|미가|나훔|하박국|스바냐|학개|스가랴|말라기|마태|마가|누가|요한|사도행전|로마서|고린도|갈라디아서|에베소서|빌립보서|골로새서|데살로니가|디모데|디도서|빌레몬서|히브리서|야고보서|베드로|유다서|요한계시록|창|출|레|민|신|수|삿|룻|삼상|삼하|왕상|왕하|대상|대하|스|느|에|욥|시|잠|전|사|렘|애|겔|단|호|욜|암|옵|욘|미|나|합|습|학|슥|말|마|막|눅|요|행|롬|고전|고후|갈|엡|빌|골|살전|살후|딤전|딤후|딛|몬|히|약|벧전|벧후|요일|요이|요삼|유|계)\s*\d/;
+function tidyTitle(raw) {
+  let s = String(raw || '').trim();
+  const t0 = s;
+  s = s.replace(/^\[\s*\d{4}\s*[.\-/]\s*\d{1,2}\s*[.\-/]\s*\d{1,2}\s*\]\s*/, '');
+  s = s.replace(/\s[-–—]\s+[^-–—]+$/, '');
+  const m = /\(([^()]+)\)\s*$/.exec(s);
+  if (m && BOOK_START.test(m[1].trim())) s = s.slice(0, m.index).trim();
+  return s.trim() || t0;
+}
+
 const ytId = (v) => (/^[A-Za-z0-9_-]{11}$/.test(String(v || '')) ? String(v) : '');
 // youtube.com 주소를 씁니다 (youtube-nocookie 가 아님): 그래야 이 브라우저에서 로그인한 유튜브 계정(프리미엄 광고 제거)이 퍼가기 재생에도 적용될 수 있습니다.
 // 브라우저가 제3자 쿠키를 막은 환경(사파리, 크롬 시크릿 등)에서는 광고가 보일 수 있어서, 항상 "YouTube에서 열기" 링크를 함께 둡니다.
@@ -145,6 +157,22 @@ function bibleVersionBody(v) {
   ];
 }
 
+/** 개역개정 낭독 듣기: 유튜브에 올라온 음원(드라마바이블 등)을 찾았으면 앱 안에서 재생, 못 찾았으면 유튜브 검색 링크 */
+function renderBibleAudio(bible, gae) {
+  const first = gae && gae.passages && gae.passages[0] && gae.passages[0].reference;
+  const m = /^(.+?)\s+(\d+)/.exec(first || '');
+  const chapterRef = m ? `${m[1]} ${m[2]}${m[1] === '시편' ? '편' : '장'}` : first || '';
+  const items = ((bible && bible.audio) || []).filter((a) => ytId(a.video_id));
+  const wrap = h('div', { class: 'bible-audio' }, h('p', { class: 'meta', text: '개역개정 낭독을 들어 보세요. 유튜브에 올라온 음원(예: 드라마바이블)으로 연결합니다.' }));
+  items.forEach((a) => {
+    const stage = h('div', { class: 'audio-stage' });
+    const play = h('button', { class: 'btn primary', type: 'button', onclick: (e) => { stage.replaceChildren(embedPlayer(a.video_id, `${a.reference} 낭독`), h('p', { class: 'meta', text: PLAYER_HELP })); e.currentTarget.hidden = true; } }, `🎧 ${a.reference} 듣기`);
+    wrap.append(h('div', { class: 'audio-item' }, h('div', { class: 'actions' }, play, h('a', { class: 'btn', href: ytWatch(a.video_id), target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기')), a.title ? h('p', { class: 'meta', text: `${a.title}${a.channel ? ` · ${a.channel}` : ''}` }) : null, stage));
+  });
+  if (!items.length && chapterRef) wrap.append(h('div', { class: 'actions' }, h('a', { class: 'btn', href: ytSearch(`드라마바이블 ${chapterRef}`), target: '_blank', rel: 'noopener noreferrer' }, `🎧 ${chapterRef} 듣기 (YouTube에서 찾기)`)));
+  return wrap;
+}
+
 /** 성경 본문 보기: 개역개정 · NIV · 표준새번역 · 메시지 성경 버튼으로 하나씩 바꿔 봅니다 (동시에 한 역본만 보임) */
 function renderBibleViewer(bible, { open = true, id = 'passage' } = {}) {
   const versions = (bible && bible.versions) || [];
@@ -166,7 +194,7 @@ function renderBibleViewer(bible, { open = true, id = 'passage' } = {}) {
     current = vid;
     if (save) rememberBibleId(vid);
     buttons.forEach(([bid, btn]) => btn.setAttribute('aria-selected', String(bid === vid)));
-    body.replaceChildren(...bibleVersionBody(byId.get(vid)).filter(Boolean));
+    body.replaceChildren(...bibleVersionBody(byId.get(vid)).filter(Boolean), ...(vid === 'GAE' ? [renderBibleAudio(bible, byId.get(vid))] : []));
   }
   show(current, false);
   const credits = versions.filter((v) => v.copyright).map((v) => h('li', {}, h('strong', { text: `${v.label}  ` }), v.copyright, v.source ? ` (출처: ${v.source})` : ''));
@@ -220,35 +248,31 @@ function renderWorshipSection(songs, { title = '찬양', intro = '말씀을 묵�
   );
 }
 
-/* ---------- 기도 배경음악 (QT 묵상용) ---------- */
-function renderMusicSection(music) {
+/* ---------- 기도 배경음악 (QT 묵상용) — 설교마다 목록에서 한 곡씩 다르게 골라 보여 줍니다 ---------- */
+function pickBySeed(list, seed) {
+  let n = 0;
+  for (const ch of String(seed || '')) n = (n * 31 + ch.charCodeAt(0)) >>> 0;
+  return list[n % list.length];
+}
+function renderMusicSection(music, seed) {
   const tracks = ((music && music.tracks) || []).filter((t) => ytId(t.id));
   if (!tracks.length) return null;
+  const t = pickBySeed(tracks, seed);
   const stage = h('div', { class: 'music-stage' });
-  const list = h('ul', { class: 'tracks' });
-  let current = null;
-  const play = (t, btn) => {
-    stage.replaceChildren(embedPlayer(t.id, t.title), h('p', { class: 'meta', text: PLAYER_HELP }), h('a', { class: 'btn small', href: ytWatch(t.id), target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기'));
-    if (current) {
-      current.classList.remove('on');
-      current.removeAttribute('aria-current');
-    }
-    btn.classList.add('on');
-    btn.setAttribute('aria-current', 'true');
-    current = btn;
-  };
-  tracks.forEach((t) => {
-    const btn = h('button', { class: 'track', type: 'button' }, h('span', { class: 'track-title', text: t.title }), h('span', { class: 'meta', text: `${t.channel || ''}${t.minutes ? ` · ${t.minutes}분` : ''}` }));
-    btn.addEventListener('click', () => play(t, btn));
-    list.append(h('li', {}, btn));
-  });
+  const play = h('button', {
+    class: 'btn primary',
+    type: 'button',
+    onclick: (e) => {
+      stage.replaceChildren(embedPlayer(t.id, t.title), h('p', { class: 'meta', text: PLAYER_HELP }));
+      e.currentTarget.hidden = true;
+    },
+  }, '▶ 듣기');
   return h(
     'section',
     { class: 'block', id: 'music' },
     h('h2', { text: '묵상 음악' }),
     h('p', { class: 'meta', text: '조용히 말씀을 묵상하거나 기도할 때 틀어 두세요. 잔잔한 MR·연주 음악입니다. 다른 곳으로 이동하면 음악이 멈춥니다.' }),
-    stage,
-    list,
+    h('article', { class: 'song' }, h('div', { class: 'song-head' }, h('h3', { text: t.title })), h('p', { class: 'meta', text: `${t.channel || ''}${t.minutes ? ` · ${t.minutes}분` : ''}` }), h('div', { class: 'actions' }, play, h('a', { class: 'btn', href: ytWatch(t.id), target: '_blank', rel: 'noopener noreferrer' }, 'YouTube에서 열기')), stage),
   );
 }
 

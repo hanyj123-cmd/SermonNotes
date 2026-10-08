@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import { parseTitle, parseScripture, preacherName, bookOf } from './lib/title.mjs';
+import { parseTitle, parseScripture, preacherName, bookOf, tidyTitle } from './lib/title.mjs';
 import { koReference, parseNumberedLines, parseNumberedFlow, parseBskorea, parseBibleGateway, fetchBibleBlock, bibleIsCurrent, bibleSignature, bskoreaUrl, bibleGatewayUrl, BIBLE_SOURCES } from './lib/bible-web.mjs';
 import { normalizePassages, toUsfm } from './lib/bible-books.mjs';
 import { extractJson, normalizeReview, normalizeQt, normalizeStudy, normalizeGroup, readResponseText } from './lib/gemini.mjs';
@@ -13,7 +13,7 @@ import { buildQueue } from './lib/queue.mjs';
 import { processRow, CELL_LIMIT, readExisting, knownInfo } from './lib/process.mjs';
 import { RULES, torontoClock, dueCategories, decide, shouldRun } from './gate.mjs';
 import { parseCategories, toExport, exportJson } from './sync.mjs';
-import { durationSeconds, musicIsStale, attachSongVideos } from './lib/media.mjs';
+import { durationSeconds, musicIsStale, attachSongVideos, attachBibleAudio, scoreAudioTitle } from './lib/media.mjs';
 
 let pass = 0;
 let fail = 0;
@@ -258,6 +258,11 @@ await t('청년부는 예약 규칙 없음 · 직접 실행은 항상 실행', (
   assert.deepEqual(decide('schedule', at('2026-10-08T11:00:00Z')), { run: true, categories: 'wednesday' });
 });
 
+await t('제목 정돈: 유튜브 제목 → 깔끔한 제목, 규칙 밖은 그대로', () => {
+  assert.equal(tidyTitle('[2026.10.04] 믿음으로 걷는 길 (창세기 12:1-9) - 홍길동 목사'), '믿음으로 걷는 길');
+  assert.equal(tidyTitle('은혜 (feat. 간증)'), '은혜 (feat. 간증)');
+  assert.equal(tidyTitle(''), '');
+});
 /* ===== 영상 처리(processRow) ===== */
 function fakeAi({ failModes = [], calls = [] } = {}) {
   return {
@@ -362,6 +367,15 @@ await t('내보내기: 새 형식만 화면용 JSON 으로, 예전 형식은 건
   await fs.rm(dir, { recursive: true, force: true });
 });
 
+await t('내보내기 제목: AI가 유튜브 제목을 그대로 베껴도 깔끔한 제목으로', () => {
+  const raw = '[2026.10.04] 믿음으로 걷는 길 (창세기 12:1-9) - 홍길동 목사';
+  const r = { ...normalizeReview(rawReview()), title: raw };
+  const e = toExport(sermonRow({ title: raw, result_json: JSON.stringify(r) }));
+  assert.equal(e.index.title, '믿음으로 걷는 길');
+  const e2 = toExport(sermonRow({ title: '주일 설교 영상', result_json: JSON.stringify({ ...r, title: raw }) }));
+  assert.equal(e2.index.title, '믿음으로 걷는 길'); // 규칙이 없는 영상 제목이면 AI 제목을 정돈해서 사용
+});
+
 /* ===== 찬양 영상·배경음악 ===== */
 await t('길이 계산 · 배경음악 갱신 시점', () => {
   assert.equal(durationSeconds('PT1H2M3S'), 3723);
@@ -381,6 +395,24 @@ await t('찬양 영상: 제목이 곡명을 담은 영상만 연결, 같은 곡�
   assert.equal(songs[0].video_id, 'vid1');
   assert.equal(songs[1].video_id, 'vid1');
   assert.equal(calls, 1);
+});
+
+await t('개역개정 낭독 영상: 책 이름+장이 맞는 영상만, 드라마바이블 우선', async () => {
+  const p = { book: 'GEN', chapter: 12, verse_from: 1, verse_to: 9 };
+  assert.equal(scoreAudioTitle('창세기 112장 낭독', p), 0);
+  assert.equal(scoreAudioTitle('출애굽기 12장 드라마바이블', p), 0);
+  assert.equal(scoreAudioTitle('드라마바이블 창세기 10-12장', p), 0);
+  assert.ok(scoreAudioTitle('[드라마바이블] 개역개정 창세기 12장', p) > scoreAudioTitle('창세기 12장 낭독', p));
+  const items = [{ id: { videoId: 'bad00000001' }, snippet: { title: '시편 23편', channelTitle: 'x' } }, { id: { videoId: 'good0000001' }, snippet: { title: '[드라마바이블] 창세기 12장', channelTitle: 'ch' } }];
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ items }) });
+  const block = await attachBibleAudio({ versions: [{ id: 'GAE' }] }, [p, { ...p, verse_from: 10 }], 'key', { fetchImpl });
+  assert.equal(block.audio.length, 1); // 같은 장은 한 번만
+  assert.equal(block.audio[0].video_id, 'good0000001');
+  assert.equal(block.audio_checked, true);
+  const none = await attachBibleAudio({ versions: [] }, [p], 'key', { fetchImpl: async () => ({ ok: true, json: async () => ({ items: [] }) }) });
+  assert.deepEqual([none.audio, none.audio_checked], [[], true]); // 못 찾아도 다시 검색하지 않도록 표시
+  const failed = await attachBibleAudio({ versions: [] }, [p], 'key', { fetchImpl: async () => ({ ok: false, status: 500, text: async () => '' }) });
+  assert.ok(!failed.audio_checked); // 검색 오류면 다음 기회에 재시도
 });
 
 console.log(`\n${fail ? `❌ ${fail}개 실패, ` : '✅ '}${pass}개 통과`);

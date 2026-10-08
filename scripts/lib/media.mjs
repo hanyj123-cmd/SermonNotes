@@ -1,6 +1,8 @@
 // 추천 찬양의 유튜브 영상 찾기 + 기도 배경음악 목록 만들기 (YouTube Data API v3)
 //   search.list 는 1회에 100 할당량 단위를 쓰므로(하루 기본 1만), 곡 검색은 필요한 만큼만 합니다.
 
+import { koReference } from './bible-web.mjs';
+
 const API = 'https://www.googleapis.com/youtube/v3';
 
 export class QuotaError extends Error {}
@@ -106,6 +108,59 @@ export async function attachSongVideos(holder, apiKey, { fetchImpl = fetch, log 
   return holder;
 }
 
+/* ---------- 개역개정 성경 낭독(오디오) 영상 찾기 ---------- */
+// 유튜브에 이미 올라와 있는 음원(예: 드라마바이블)을 찾아 연결만 합니다. 장 단위이며, 제목에 책 이름과 장 번호가 모두 있는 영상만 씁니다.
+const escapeRe = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+export function scoreAudioTitle(title, passage) {
+  const ref = koReference({ book: passage.book, chapter: passage.chapter, verse_from: null }); // "창세기 12장" / "시편 23편"
+  const name = ref.replace(/\s\d+[장편]$/, '');
+  const t = String(title || '');
+  if (!t.includes(name)) return 0;
+  if (!new RegExp(`(^|\\D)${passage.chapter}\\s*[장편]`).test(t)) return 0;
+  const range = /(\d+)\s*[장편]?\s*[-~]\s*(\d+)\s*[장편]/.exec(t);
+  if (range && Number(range[1]) !== passage.chapter) return 0; // "10-12장" 같은 묶음 영상은 시작 장일 때만
+  return 1 + (/드라마/.test(t) ? 3 : 0) + (/개역개정/.test(t) ? 2 : 0) + (/성경/.test(t) ? 1 : 0);
+}
+
+export async function findBibleAudio(passage, apiKey, fetchImpl = fetch) {
+  const ref = koReference({ book: passage.book, chapter: passage.chapter, verse_from: null });
+  for (const q of [`드라마바이블 ${ref}`, `개역개정 ${ref} 낭독 오디오 성경`]) {
+    const found = await searchVideos(q, apiKey, { maxResults: 8, fetchImpl });
+    const best = found.map((v) => ({ v, score: scoreAudioTitle(v.title, passage) })).filter((x) => x.score > 0).sort((a, b) => b.score - a.score)[0];
+    if (best) return { reference: ref, video_id: best.v.video_id, title: best.v.title, channel: best.v.channel };
+  }
+  return null;
+}
+
+/** 성경 본문 블록에 개역개정 낭독 영상(audio)을 붙입니다. 찾지 못해도 audio_checked 로 표시해 같은 장을 계속 검색하지 않습니다. 실패해도 정리에는 영향이 없습니다. */
+export async function attachBibleAudio(block, passages, apiKey, { fetchImpl = fetch, log = () => {}, state = {} } = {}) {
+  if (!block || !apiKey) return block;
+  state.audio = state.audio || new Map();
+  const audio = [];
+  const seen = new Set();
+  for (const p of (passages || []).slice(0, 3)) {
+    const key = `${p.book}.${p.chapter}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (!state.audio.has(key)) {
+      if (state.quotaExhausted) return block;
+      try {
+        state.audio.set(key, await findBibleAudio(p, apiKey, fetchImpl));
+      } catch (e) {
+        if (e instanceof QuotaError) state.quotaExhausted = true;
+        log(`성경 낭독 영상 검색 실패 (${key}): ${e.message}`);
+        return block; // 이번에는 표시하지 않고 다음 기회에 다시 시도
+      }
+    }
+    const hit = state.audio.get(key);
+    if (hit) audio.push(hit);
+  }
+  block.audio = audio;
+  block.audio_checked = true;
+  return block;
+}
+
 export const PRAYER_QUERIES = [
   '기도 배경음악 피아노 워십',
   '기도할 때 듣는 찬양 연주 묵상 피아노',
@@ -113,7 +168,7 @@ export const PRAYER_QUERIES = [
   'prayer instrumental worship piano soaking',
 ];
 const MIN_MINUTES = 20;
-const MAX_TRACKS = 12;
+const MAX_TRACKS = 20; // 설교마다 다른 곡이 걸리도록 넉넉히 모읍니다
 
 /** 기도 배경음악으로 쓸 긴 영상 목록을 만듭니다: { updated, tracks: [{ id, title, channel, minutes }] } */
 export async function buildPrayerMusic(apiKey, { fetchImpl = fetch, now = () => new Date().toISOString(), log = () => {} } = {}) {

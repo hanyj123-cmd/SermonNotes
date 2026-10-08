@@ -71,7 +71,7 @@ async function load() {
   const res = await fetch(`${dataBase()}sermons.json?t=${Date.now()}`);
   if (!res.ok) throw new Error(`데이터를 불러오지 못했습니다 (${res.status})`);
   const data = await res.json();
-  state.sermons = Array.isArray(data.sermons) ? data.sermons : [];
+  state.sermons = (Array.isArray(data.sermons) ? data.sermons : []).map((x) => ({ ...x, title: tidyTitle(x.title) }));
   state.updated = data.updated || null;
   state.details = new Map(); // 새로 불러왔으니 설교별 내용도 다시 받습니다
   // 묵상 음악 목록 (없어도 괜찮습니다)

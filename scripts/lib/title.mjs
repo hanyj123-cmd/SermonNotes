@@ -63,6 +63,12 @@ export function parseTitle(raw) {
   return { date, title: s, scripture, preacher };
 }
 
+/** 화면·PDF에 쓸 깔끔한 제목: "[2026.10.04] 믿음의 길 (창 12:1-9) - 홍길동 목사" → "믿음의 길" (규칙에 안 맞는 제목은 그대로) */
+export function tidyTitle(raw) {
+  const t = parseTitle(raw).title;
+  return t || String(raw || '').trim();
+}
+
 /** 설교자 이름에서 직함을 뗀 이름 ("윤정환 목사" → "윤정환") — 같은 사람을 하나로 묶을 때 씁니다 */
 export function preacherName(p) {
   return String(p || '').replace(/\s*(담임|부|협동|원로|객원|초청)?\s*(목사|전도사|강도사|장로|선교사|교수|박사)님?\s*$/, '').trim();

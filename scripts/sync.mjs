@@ -32,11 +32,11 @@ import {
 } from './lib/sheets.mjs';
 import { extractPlaylistId, fetchPlaylistVideos, fetchVideoStates } from './lib/youtube.mjs';
 import { buildQueue } from './lib/queue.mjs';
-import { attachSongVideos, buildPrayerMusic, musicIsStale } from './lib/media.mjs';
+import { attachSongVideos, attachBibleAudio, buildPrayerMusic, musicIsStale } from './lib/media.mjs';
 import { fetchBibleBlock, bibleIsCurrent } from './lib/bible-web.mjs';
 import { processRow, CELL_LIMIT } from './lib/process.mjs';
 import { createGemini, DEFAULT_MODEL } from './lib/gemini.mjs';
-import { parseTitle, parseScripture, bookOf } from './lib/title.mjs';
+import { parseTitle, parseScripture, bookOf, tidyTitle } from './lib/title.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '../docs/data');
@@ -90,7 +90,7 @@ export function toExport(s) {
   const group = parseJson(s.mode_group);
   const bible = parseJson(s.bible_json);
   const modes = ['review', ...(qt ? ['qt'] : []), ...(study ? ['study'] : []), ...(group ? ['group'] : [])];
-  const title = result.title || p.title || s.title;
+  const title = (p.date && p.title) || tidyTitle(result.title) || p.title || s.title; // 영상 제목이 규칙([날짜] 제목 (본문) - 설교자)을 따르면 거기서 뽑은 깔끔한 제목을 씁니다
   const index = {
     id: s.video_id,
     category: s.category,
@@ -142,7 +142,7 @@ export async function exportJson(sermons, { dataDir = DATA_DIR, quiet = false } 
 }
 
 /** 이미 정리된 설교 중 성경 본문이 없거나 본문 범위가 바뀐 것에 4역본을 붙입니다 */
-async function backfillBible(sheets, spreadsheetId, sermons, limit = 12) {
+async function backfillBible(sheets, spreadsheetId, sermons, youtubeKey, limit = 12, mediaState = {}) {
   let n = 0;
   for (const row of sermons) {
     if (n >= limit) break;
@@ -152,10 +152,20 @@ async function backfillBible(sheets, spreadsheetId, sermons, limit = 12) {
     const passages = scripture ? parseScripture(scripture) : [];
     if (!passages.length) continue;
     const current = parseJson(row.bible_json);
-    if (bibleIsCurrent(current, passages)) continue;
+    const logWarn = (m) => console.warn(`   ${m}`);
+    if (bibleIsCurrent(current, passages)) {
+      if (current.audio_checked || !youtubeKey) continue;
+      n++; // 본문은 이미 있고 개역개정 낭독 영상만 아직 안 찾은 경우
+      await attachBibleAudio(current, passages, youtubeKey, { state: mediaState, log: logWarn });
+      if (!current.audio_checked) continue;
+      const j = JSON.stringify(current);
+      if (j.length <= CELL_LIMIT) await updateSermonRow(sheets, spreadsheetId, row.rowNumber, { bible_json: j, updated_at: now() });
+      continue;
+    }
     n++;
-    const block = await fetchBibleBlock(passages, { log: (m) => console.warn(`   ${m}`) });
+    const block = await fetchBibleBlock(passages, { log: logWarn });
     if (!block) continue;
+    await attachBibleAudio(block, passages, youtubeKey, { state: mediaState, log: logWarn });
     const json = JSON.stringify(block);
     if (json.length > CELL_LIMIT) continue;
     await updateSermonRow(sheets, spreadsheetId, row.rowNumber, { bible_json: json, updated_at: now() });
@@ -293,13 +303,16 @@ async function main() {
       supadataKey,
       geminiVideo,
       enrichSongs: (songs) => attachSongVideos(songs, youtubeKey, { state: mediaState, log: (m) => console.warn(`   ${m}`) }),
-      fetchBible: (passages) => fetchBibleBlock(passages, { log: (m) => console.warn(`   ${m}`) }),
+      fetchBible: async (passages) => {
+        const block = await fetchBibleBlock(passages, { log: (m) => console.warn(`   ${m}`) });
+        return block ? attachBibleAudio(block, passages, youtubeKey, { state: mediaState, log: (m) => console.warn(`   ${m}`) }) : block;
+      },
     });
   }
 
   // 이미 정리된 설교에도 성경 본문을 붙입니다 (아직 없거나 본문 범위가 바뀐 경우)
   sermons = await readSermons(sheets, spreadsheetId);
-  await backfillBible(sheets, spreadsheetId, sermons);
+  await backfillBible(sheets, spreadsheetId, sermons, youtubeKey, 12, mediaState);
 
   // 기도 배경음악 목록 갱신 (QT 묵상 화면용)
   await refreshMusic(youtubeKey);

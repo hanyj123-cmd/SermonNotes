@@ -25,6 +25,7 @@ async function loadDetail(id) {
   const res = await fetch(`${dataBase()}s/${encodeURIComponent(id)}.json?t=${Date.now()}`);
   if (!res.ok) throw new Error(`설교 내용을 불러오지 못했습니다 (${res.status})`);
   const d = await res.json();
+  d.title = tidyTitle(d.title); // 영상 제목 그대로 들어 있어도 깔끔한 제목으로
   state.details.set(id, d);
   return d;
 }
@@ -61,7 +62,7 @@ function renderQtMode(d, notes) {
     renderPrayer('여는 기도', q.opening_prayer, 'open'),
     renderWorshipSection(q.songs, { title: '찬양', intro: '찬송가 한 곡과 CCM 한 곡으로 마음을 모아 보세요.' }),
     renderBibleViewer(d.bible),
-    renderMusicSection(state.music),
+    renderMusicSection(state.music, d.id),
     block('outline', 'QT 설교 정리', h('h2', { text: 'QT 설교 정리' }), (q.outline || []).map((o) => renderPoint(o))),
     block(
       'questions',

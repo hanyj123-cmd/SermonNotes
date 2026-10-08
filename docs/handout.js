@@ -86,7 +86,7 @@ function buildHandoutDoc(d, mode, opts) {
     h(
       'header',
       { class: 'ho-head' },
-      h('div', { class: 'ho-kicker' }, h('span', { text: `말씀결  ·  ${modeLabel(mode)}` }), h('span', { text: `${eventName(d.category)}${date ? `  ·  ${date}` : ''}` })),
+      h('div', { class: 'ho-kicker' }, h('span', { class: 'ho-brand' }, h('img', { class: 'ho-logo', src: 'icons/mark.svg', alt: '' }), h('strong', { text: '말씀결' }), h('span', { text: `  ·  ${modeLabel(mode)}` })), h('span', { text: `${eventName(d.category)}${date ? `  ·  ${date}` : ''}` })),
       h('h1', { class: 'ho-title', text: d.title }),
       scripture || preacher ? h('p', { class: 'ho-scripture' }, scripture ? `본문  ${scripture}` : '', scripture && preacher ? '   |   ' : '', preacher) : null,
       d.result.summary_short || d.result.theme ? h('p', { class: 'ho-summary', text: d.result.summary_short || d.result.theme }) : null,
@@ -199,6 +199,8 @@ function buildHandoutDoc(d, mode, opts) {
   }
 
   // 각주 · 부록
+  const creditName = (window.APP_CONFIG && window.APP_CONFIG.CREDIT) || '';
+  secs.push(h('div', { class: 'ho-made' }, h('img', { class: 'ho-logo-lg', src: 'icons/mark.svg', alt: '' }), h('div', {}, h('strong', { text: '말씀결' }), h('span', { text: '  말씀의 결을 따라 읽고 묵상하는 노트' }), creditName ? h('div', { class: 'ho-made-by', text: creditName }) : null)));
   secs.push(h('footer', { class: 'ho-foot' }, h('p', { text: `참고: ${footnoteText(d.category)}` }), d.result.caveats ? h('p', { text: `유의: ${d.result.caveats}` }) : null));
   answerPages.forEach((a) => {
     a.classList.add('ho-appendix');
@@ -271,7 +273,7 @@ function loadPaged() {
 let handoutCss = null;
 async function loadHandoutCss() {
   if (handoutCss) return handoutCss;
-  const res = await fetch('handout.css?v=9.1');
+  const res = await fetch('handout.css?v=9.3');
   if (!res.ok) throw new Error(`핸드아웃 서식을 불러오지 못했습니다 (${res.status})`);
   handoutCss = await res.text();
   return handoutCss;
@@ -296,7 +298,8 @@ async function renderHandout(id, modeArg) {
   if (!location.hash.startsWith('#/h/')) return; // 불러오는 사이 다른 화면으로 옮겼다면 그리지 않습니다
   const modes = availableModes(d);
   let mode = MODES.some((m) => m.key === modeArg) && modes.includes(modeArg) ? modeArg : modes.includes(savedMode()) ? savedMode() : 'review';
-  document.title = `핸드아웃 · ${d.title}`;
+  const fileTitle = (m) => `말씀결_${(d.date || '').replace(/-/g, '.')}_${d.title}_${modeLabel(m)}`.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim(); // PDF로 저장할 때 기본 파일 이름이 됩니다
+  document.title = fileTitle(mode);
   const prefs = loadHandoutPrefs();
   const st = { token: 0, previewer: null, onResize: null };
   handoutState = st;
@@ -309,6 +312,7 @@ async function renderHandout(id, modeArg) {
   modeSel.value = mode;
   modeSel.addEventListener('change', () => {
     mode = modeSel.value;
+    document.title = fileTitle(mode);
     rememberMode(mode);
     try {
       history.replaceState(null, '', `#/h/${encodeURIComponent(id)}/${mode}`);

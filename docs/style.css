@@ -384,3 +384,8 @@ ol.q li > span { display: block; }
   body.handout-mode .ho-stage .pagedjs_pages { display: block; }
   body.handout-mode .ho-stage .pagedjs_page { box-shadow: none; margin: 0; }
 }
+
+/* 개역개정 낭독 듣기 */
+.bible-audio { margin-top: 16px; padding: 12px 14px; background: var(--lime-soft); border-left: 4px solid var(--lime-line); border-radius: 0 var(--radius) var(--radius) 0; }
+.bible-audio .actions { margin: 6px 0; }
+.audio-item + .audio-item { margin-top: 10px; }

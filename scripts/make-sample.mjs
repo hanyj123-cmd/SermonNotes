@@ -127,6 +127,8 @@ function sampleBible(passages) {
   return {
     signature: bibleSignature(passages),
     fetched_at: '2026-10-05T12:00:00Z',
+    audio: [{ reference: '창세기 12장', video_id: 'sample00003', title: '(샘플) 드라마바이블 창세기 12장', channel: '샘플 채널' }],
+    audio_checked: true,
     versions: BIBLE_SOURCES.map((s) => ({ id: s.id, label: s.label, lang: s.lang, copyright: s.copyright, source: s.source, passages: [{ reference: '창세기 12:1-3', verses: verses(s.label) }], truncated: false })),
   };
 }

@@ -5,4 +5,7 @@ window.APP_CONFIG = {
 
   // 구글 로그인용 OAuth 클라이언트 ID (개인 노트 기능에 필요)
   GOOGLE_CLIENT_ID: '896403793535-72hj7vkl6h1e80fd8stug1cv9lb1po67.apps.googleusercontent.com',
+
+  // 핸드아웃(PDF) 맨 끝에 들어가는 만든 사람 표시. 바꾸거나 지우려면 이 줄만 고치세요.
+  CREDIT: 'Made by 한윤종 (Patrick Han)',
 };
