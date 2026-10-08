@@ -1,4 +1,4 @@
-/* 말씀 노트 — Clean & Premium
+/* 말씀결 — Clean & Premium
    흰 바탕 · 푸른색(blue)과 연두색(lime)만 씁니다. 다크 모드는 지원하지 않습니다. */
 
 :root {
@@ -51,7 +51,7 @@ button { font: inherit; color: inherit; }
 .header-bar { display: flex; align-items: center; gap: 10px 28px; flex-wrap: wrap; padding: 14px 0 10px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
 .brand-mark { display: inline-flex; color: var(--blue); }
-.brand-mark svg { width: 1.3rem; height: 1.7rem; display: block; }
+.brand-mark svg { width: 2.1rem; height: auto; display: block; }
 .brand-name { font-family: var(--serif); font-weight: 700; font-size: 1.55rem; letter-spacing: -0.01em; line-height: 1.2; }
 
 .menu { display: flex; gap: 4px; flex-wrap: wrap; }

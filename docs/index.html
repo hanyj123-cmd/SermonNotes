@@ -3,31 +3,37 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>말씀 노트</title>
+  <title>말씀결</title>
   <meta name="description" content="설교 자막을 바탕으로 한 설교 정리, 삶의 적용, 묵상, 소그룹 나눔 질문" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Noto+Serif+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <meta name="theme-color" content="#ffffff" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="apple-mobile-web-app-title" content="말씀결" />
+  <meta name="application-name" content="말씀결" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="color-scheme" content="light" />
   <script>
     // 저장해 둔 글자 크기를 화면이 그려지기 전에 적용합니다 (깜빡임 방지)
     try { var fs = parseInt(localStorage.getItem('sn-fs'), 10); if (fs >= 10 && fs <= 20) document.documentElement.style.setProperty('--fs', String(fs)); } catch (e) {}
   </script>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=9.1" />
 </head>
 <body>
   <header class="site-header">
     <div class="wrap">
       <div class="header-bar">
-        <a class="brand" href="#/" aria-label="말씀 노트 처음으로">
+        <a class="brand" href="#/" aria-label="말씀결 처음으로">
           <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 31" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 29.5V13.5C3 8 8.2 3.6 12 1.2C15.8 3.6 21 8 21 13.5V29.5Z" />
-              <path d="M12 11v13M7.8 15.2h8.4" />
-            </svg>
+            <svg viewBox="0 6 64 50"><g fill="none" stroke-width="3.6" stroke-linecap="round"><path d="M30 20C23 15 14 14 6 16M34 20C41 15 50 14 58 16" stroke="#8fcf5a"/><path d="M30 30C23 25 14 24 6 26M34 30C41 25 50 24 58 26" stroke="#1b5fc4"/><path d="M30 40C23 35 14 34 6 36M34 40C41 35 50 34 58 36" stroke="#1b5fc4"/><path d="M30 50C23 45 14 44 6 46M34 50C41 45 50 44 58 46" stroke="#1b5fc4"/><path d="M6 16V46M58 16V46" stroke="#1b5fc4"/></g></svg>
           </span>
-          <span class="brand-name">말씀 노트</span>
+          <span class="brand-name">말씀결</span>
         </a>
         <nav class="menu" aria-label="주 메뉴">
           <a class="menu-link" data-menu="church" href="#/c/sunday">토론토영락교회 설교</a>
@@ -58,12 +64,12 @@
   </footer>
 
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="config.js"></script>
-  <script src="content.js"></script>
-  <script src="notes.js"></script>
-  <script src="admin-extra.js"></script>
-  <script src="handout.js"></script>
-  <script src="detail.js"></script>
-  <script src="app.js"></script>
+  <script src="config.js?v=9.1"></script>
+  <script src="content.js?v=9.1"></script>
+  <script src="notes.js?v=9.1"></script>
+  <script src="admin-extra.js?v=9.1"></script>
+  <script src="handout.js?v=9.1"></script>
+  <script src="detail.js?v=9.1"></script>
+  <script src="app.js?v=9.1"></script>
 </body>
 </html>

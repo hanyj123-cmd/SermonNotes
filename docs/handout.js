@@ -86,7 +86,7 @@ function buildHandoutDoc(d, mode, opts) {
     h(
       'header',
       { class: 'ho-head' },
-      h('div', { class: 'ho-kicker' }, h('span', { text: `말씀 노트  ·  ${modeLabel(mode)}` }), h('span', { text: `${eventName(d.category)}${date ? `  ·  ${date}` : ''}` })),
+      h('div', { class: 'ho-kicker' }, h('span', { text: `말씀결  ·  ${modeLabel(mode)}` }), h('span', { text: `${eventName(d.category)}${date ? `  ·  ${date}` : ''}` })),
       h('h1', { class: 'ho-title', text: d.title }),
       scripture || preacher ? h('p', { class: 'ho-scripture' }, scripture ? `본문  ${scripture}` : '', scripture && preacher ? '   |   ' : '', preacher) : null,
       d.result.summary_short || d.result.theme ? h('p', { class: 'ho-summary', text: d.result.summary_short || d.result.theme }) : null,
@@ -212,7 +212,7 @@ function buildHandoutDoc(d, mode, opts) {
 const cssString = (t) => `"${String(t).replace(/[\\"]/g, '\\$&').replace(/[\r\n]+/g, ' ')}"`;
 function pageRules(size, s, mode) {
   const date = formatDate(s.date);
-  const foot = `말씀 노트  ·  ${eventName(s.category)}${date ? `  ${date}` : ''}  ·  ${modeLabel(mode)}`;
+  const foot = `말씀결  ·  ${eventName(s.category)}${date ? `  ${date}` : ''}  ·  ${modeLabel(mode)}`;
   return `@page { size: ${PAGE_SIZES[size].css}; margin: 0.8in 0.85in 0.9in;
   @bottom-left { content: ${cssString(foot)}; font: 9pt 'Noto Sans KR', sans-serif; color: #4a5c72; vertical-align: top; padding-top: 10pt; border-top: 0.75pt solid #8fcf5a; }
   @bottom-right { content: "Page " counter(page) " / " counter(pages); font: 9pt 'Noto Sans KR', sans-serif; color: #4a5c72; vertical-align: top; padding-top: 10pt; border-top: 0.75pt solid #8fcf5a; }
@@ -271,7 +271,7 @@ function loadPaged() {
 let handoutCss = null;
 async function loadHandoutCss() {
   if (handoutCss) return handoutCss;
-  const res = await fetch('handout.css');
+  const res = await fetch('handout.css?v=9.1');
   if (!res.ok) throw new Error(`핸드아웃 서식을 불러오지 못했습니다 (${res.status})`);
   handoutCss = await res.text();
   return handoutCss;

@@ -1,4 +1,4 @@
-// 말씀 노트 — 정적 웹앱 (빌드 도구 없음)
+// 말씀결 — 정적 웹앱 (빌드 도구 없음)
 // 데이터: data/sermons.json (목록) + data/s/<영상ID>.json (설교별 내용) — GitHub Actions가 Google Sheets에서 만들어 커밋
 // 화면 확인용 샘플: 주소 뒤에 ?demo 를 붙이면 data/sample/ 의 샘플을 불러옵니다.
 // 화면 구성: 메뉴 [토론토영락교회 설교] [사용자 영상]  ·  detail.js(상세 4모드) · notes.js(개인 기록) · handout.js(핸드아웃)
@@ -248,7 +248,7 @@ function renderList(cat) {
   const items = state.sermons.filter((s) => s.category === cat);
   const empty = h('div', { class: 'empty' }, h('p', {}, h('strong', { text: `아직 ${catLabel(cat)} 정리가 없습니다.` })), h('p', { text: cat === 'youth' ? '청년부예배는 자동 수집이 없습니다. 관리 화면에서 "청년부예배"를 체크해 직접 실행해 보세요.' : 'Google Sheet의 Playlists 탭에 재생목록을 넣으면 정해진 시각에 자동으로 정리됩니다.' }));
   app.replaceChildren(tabs, sermonBrowser(items, empty));
-  document.title = `${catLabel(cat)} · 말씀 노트`;
+  document.title = `${catLabel(cat)} · 말씀결`;
 }
 
 /* ---------- 사용자 영상 ---------- */
@@ -261,7 +261,7 @@ const USER_STATUS = {
 };
 
 function renderUserRoute() {
-  document.title = '사용자 영상 · 말씀 노트';
+  document.title = '사용자 영상 · 말씀결';
   const items = state.sermons.filter((s) => s.category === 'user');
   const sections = [h('div', { class: 'page-head' }, h('h1', { text: '사용자 영상' }), h('p', { class: 'meta', text: '설교 영상의 유튜브 링크를 넣으면 AI가 같은 형식(설교리뷰 · QT 묵상 · 성경공부 · 소그룹 나눔)으로 정리해 줍니다. 여기 올린 영상과 정리는 로그인한 가족 모두가 볼 수 있습니다.' }))];
 
@@ -427,7 +427,7 @@ function backToHome() {
 }
 
 function renderAdminRoute() {
-  document.title = '관리 · 말씀 노트';
+  document.title = '관리 · 말씀결';
   if (!ADMIN_URL) {
     app.replaceChildren(
       backToHome(),

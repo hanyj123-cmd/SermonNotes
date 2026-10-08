@@ -253,7 +253,7 @@ async function renderDetail(id, modeArg) {
     app.replaceChildren(back(), h('div', { class: 'empty' }, h('p', { text: '해당 설교를 찾을 수 없습니다.' })));
     return;
   }
-  document.title = `${item.title} · 말씀 노트`;
+  document.title = `${item.title} · 말씀결`;
   app.replaceChildren(back(item.category), h('p', { class: 'loading', text: '불러오는 중…' }));
   let d;
   try {
@@ -324,7 +324,7 @@ async function renderDetail(id, modeArg) {
       b.tabIndex = b.dataset.mode === mode ? 0 : -1;
     });
     body.className = `mode-body mode-${mode}`;
-    document.title = `${d.title} · ${modeLabel(mode)} · 말씀 노트`;
+    document.title = `${d.title} · ${modeLabel(mode)} · 말씀결`;
   }
 
   MODES.forEach((m) => {
