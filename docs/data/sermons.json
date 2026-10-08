@@ -1,45 +1,7 @@
 {
- "updated": "2026-10-08T18:37:57.716Z",
- "count": 19,
+ "updated": "2026-10-08T19:38:11.710Z",
+ "count": 20,
  "sermons": [
-  {
-   "id": "IybCmH6A3eQ",
-   "category": "user",
-   "title": "부르심(05) -그물을 버리라",
-   "date": "2026-10-08",
-   "url": "https://www.youtube.com/watch?v=IybCmH6A3eQ",
-   "preacher": "송태근 목사",
-   "scripture": "예레미야 1:4-10",
-   "book": "예레미야",
-   "bookIdx": 24,
-   "summary_short": "하나님은 세상의 기준이 아닌 주권적인 예정과 부르심으로 우리를 택하시며, 연약한 우리와 동행하심으로 당신의 뜻을 이루어 가십니다.",
-   "modes": [
-    "review",
-    "qt",
-    "study",
-    "group"
-   ],
-   "complete": true
-  },
-  {
-   "id": "MMwmRhIyQNA",
-   "category": "user",
-   "title": "설교",
-   "date": "2026-10-08",
-   "url": "https://www.youtube.com/watch?v=MMwmRhIyQNA",
-   "preacher": "송태근 목사",
-   "scripture": "누가복음 5:1-11",
-   "book": "누가복음",
-   "bookIdx": 42,
-   "summary_short": "우리의 연약함과 실패의 현장 속에서도 주님의 말씀에 의지하여 순종할 때, 하나님께서는 놀라운 만선의 은혜와 구원의 부르심으로 이끄십니다.",
-   "modes": [
-    "review",
-    "qt",
-    "study",
-    "group"
-   ],
-   "complete": false
-  },
   {
    "id": "dAtaD-X_yFE",
    "category": "dawn",
@@ -298,6 +260,62 @@
    "book": "시편",
    "bookIdx": 19,
    "summary_short": "성도는 자신이 먼저 체험한 하나님의 은혜와 구원의 역사를 다음 세대와 이웃에게 입술로 전하여, 오직 하나님께 소망을 두고 영적 회복을 누려야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "N9zyca0R2YI",
+   "category": "user",
+   "title": "설교",
+   "date": "2026-07-26",
+   "url": "https://www.youtube.com/watch?v=N9zyca0R2YI",
+   "preacher": "송태근 목사",
+   "scripture": "시편23:1-6",
+   "book": "시편",
+   "bookIdx": 19,
+   "summary_short": "우리의 선한 목자 되신 하나님께서는 사망의 음침한 골짜기를 지날지라도 우리를 홀로 두지 않으시며, 그분의 선하심과 인자하심으로 끝까지 인도하여 영원한 아버지의 집에 거하게 하십니다.",
+   "modes": [
+    "review",
+    "qt",
+    "group"
+   ],
+   "complete": false
+  },
+  {
+   "id": "MMwmRhIyQNA",
+   "category": "user",
+   "title": "부르심(5) - 그물을 버리라",
+   "date": "2026-07-19",
+   "url": "https://www.youtube.com/watch?v=MMwmRhIyQNA",
+   "preacher": "송태근 목사",
+   "scripture": "누가복음 5:1-11",
+   "book": "누가복음",
+   "bookIdx": 42,
+   "summary_short": "우리의 연약함과 실패의 현장 속에서도 주님의 말씀에 의지하여 순종할 때, 하나님께서는 놀라운 만선의 은혜와 구원의 부르심으로 이끄십니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "IybCmH6A3eQ",
+   "category": "user",
+   "title": "부르심(4) - 정하시고 부르시다",
+   "date": "2026-07-12",
+   "url": "https://www.youtube.com/watch?v=IybCmH6A3eQ",
+   "preacher": "송태근 목사",
+   "scripture": "예레미야 1:4-10",
+   "book": "예레미야",
+   "bookIdx": 24,
+   "summary_short": "하나님은 세상의 기준이 아닌 주권적인 예정과 부르심으로 우리를 택하시며, 연약한 우리와 동행하심으로 당신의 뜻을 이루어 가십니다.",
    "modes": [
     "review",
     "qt",
