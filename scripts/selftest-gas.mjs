@@ -500,6 +500,22 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
   check('사이트 반영만: export_only 전달', sent().export_only === 'true' && sent().categories === 'none', JSON.stringify(sent()));
   g.post({ action: 'sync_run', password: 'pw' });
   check('사이트 반영만: 안 보내면 export_only 없음', sent().export_only === undefined);
+  // 오늘의 말씀 지금 동기화: 과거 5일 ~ 미래 2일
+  const rd = g.post({ action: 'sync_run', password: 'pw', daily: true });
+  const dd = (sent().daily_dates || '').split(',');
+  check('오늘의 말씀 지금 동기화: categories=daily · 8일치 날짜', rd.ok && sent().categories === 'daily' && dd.length === 8 && dd.every((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)) && dd[0] < dd[7] && sent().daily_force === undefined, JSON.stringify(sent()));
+  g.post({ action: 'sync_run', password: 'pw', daily: true, daily_force: true });
+  check('오늘의 말씀 다시 만들기: daily_force 전달', sent().daily_force === 'true');
+  {
+    const o2 = makeEnv({ ADMIN_PASSWORD: 'pw', GITHUB_TOKEN: 't', GITHUB_REPO: 'me/Repo' });
+    o2.setGh((url, opts) => {
+      if (opts.method === 'get') return { code: 200, body: { workflow_runs: [] } };
+      const inputs = JSON.parse(opts.payload).inputs;
+      return 'daily_dates' in inputs ? { code: 422, body: { message: 'Unexpected inputs provided: ["daily_dates"]' } } : { code: 204, body: {} };
+    });
+    const r = o2.post({ action: 'sync_run', password: 'pw', daily: true });
+    check('옛 sync.yml: daily_dates 없이 다시 요청 (오늘·내일만)', r.ok && r.workflow_old === true, JSON.stringify(r));
+  }
   // GitHub 의 sync.yml 이 옛 버전(export_only 입력 없음)이면: 그 입력만 빼고 다시 요청
   {
     const o = makeEnv({ ADMIN_PASSWORD: 'pw', GITHUB_TOKEN: 't', GITHUB_REPO: 'me/Repo' });

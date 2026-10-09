@@ -10,7 +10,7 @@
 //   node scripts/sync.mjs                 전체 실행
 //   node scripts/sync.mjs --export-only   시트 내용만 내보내기 (API 키 불필요)
 // 환경변수 ONLY_CATEGORIES=sunday,wednesday  : 이번 실행에서 확인할 구분 (기본: sunday. 새벽기도·수요예배·청년부는 직접 적어야 함, all = 전부)
-// 오늘의 말씀: 매 실행마다 오늘·내일(토론토 기준) 분량을 교회 앱에서 가져와 AI 정리(QT·성경공부·소그룹·퀴즈)를 만듭니다. DAILY_DATES=2026-10-08,2026-10-09 로 날짜를 직접 지정할 수도 있습니다.
+// 오늘의 말씀: 매 실행마다 내일·오늘(토론토 기준) 분량 중 빠진 것을 교회 앱에서 가져와 AI 정리(QT·성경공부·소그룹·퀴즈)를 만듭니다. DAILY_DATES=2026-10-08,2026-10-09 로 날짜를 직접 지정할 수도 있고, DAILY_FORCE=true 면 이미 만든 날도 다시 만듭니다.
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -181,17 +181,21 @@ export async function exportDaily(rows, { dataDir = DATA_DIR, quiet = false } = 
   return index.length;
 }
 
-/** 오늘·내일(또는 DAILY_DATES) 분량을 만들고 Daily 탭에 저장합니다. 실패해도 설교 동기화는 계속합니다. */
+/** 내일·오늘(또는 DAILY_DATES) 분량을 만들고 Daily 탭에 저장합니다. 실패해도 설교 동기화는 계속합니다. */
 async function syncDaily(sheets, spreadsheetId, ai, youtubeKey) {
   await ensureTab(sheets, spreadsheetId, DAILY_TAB, DAILY_HEADERS);
   const rows = await readDaily(sheets, spreadsheetId);
   const byDate = new Map(rows.map((r) => [r.date, r]));
   const wanted = String(process.env.DAILY_DATES || '').split(/[\s,]+/).filter(isDailyDate);
-  const dates = wanted.length ? wanted.slice(0, 14) : [torontoDate(0), torontoDate(1)];
+  // 기본: 다음 날 분량을 하루 전에 만들고, 혹시 오늘 것이 빠졌으면 같이 채웁니다
+  const dates = wanted.length ? wanted.slice(0, 14) : [torontoDate(1), torontoDate(0)];
+  const force = String(process.env.DAILY_FORCE || '').toLowerCase() === 'true';
   for (const date of dates) {
-    const prev = byDate.get(date);
-    const hasVideos = prev && prev.videos_json && prev.videos_json !== '[]';
-    if (prev && prev.status === 'done' && (hasVideos || !youtubeKey)) continue;
+    const found = byDate.get(date);
+    const hasVideos = found && found.videos_json && found.videos_json !== '[]';
+    if (!force && found && found.status === 'done' && (hasVideos || !youtubeKey)) continue;
+    // 다시 만들기: 본문만 남기고 AI 정리·영상은 새로 (시트의 같은 줄에 덮어씁니다)
+    const prev = force && found ? { rowNumber: found.rowNumber, passages_json: found.passages_json } : found;
     console.log(`\n📖 오늘의 말씀 ${date}`);
     try {
       const row = await buildDailyDay(date, prev, {
@@ -203,7 +207,7 @@ async function syncDaily(sheets, spreadsheetId, ai, youtubeKey) {
         console.log(`   교회 앱에 ${date} 본문이 아직 없습니다.`);
         continue;
       }
-      await writeDailyRow(sheets, spreadsheetId, prev ? prev.rowNumber : 0, row);
+      await writeDailyRow(sheets, spreadsheetId, found ? found.rowNumber : 0, row);
       console.log(`   ✅ ${row.refs} (${row.status === 'done' ? '완료' : `일부 실패: ${row.note}`})`);
     } catch (e) {
       console.error(`   ❌ ${date} 오늘의 말씀을 만들지 못했습니다: ${e.message || e}`);

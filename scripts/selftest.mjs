@@ -16,7 +16,7 @@ import { fetchPublishDates } from './lib/youtube.mjs';
 import { processRow, CELL_LIMIT, readExisting, knownInfo } from './lib/process.mjs';
 import { RULES, torontoClock, dueCategories, decide, shouldRun } from './gate.mjs';
 import { parseCategories, toExport, exportJson, exportDaily } from './sync.mjs';
-import { parseYnResponse, readingRefs, passagesText, dailyId, fetchDailyReading, YN_BIBLE_API, torontoDate, scoreReadingTitle, buildDailyDay, dailyExport } from './lib/daily.mjs';
+import { parseYnResponse, readingRefs, passagesText, dailyId, fetchDailyReading, YN_BIBLE_API, torontoDate, scoreReadingTitle, buildDailyDay, dailyExport, findReadingVideos } from './lib/daily.mjs';
 import { durationSeconds, musicIsStale, attachSongVideos, attachBibleAudio, scoreAudioTitle } from './lib/media.mjs';
 
 let pass = 0;
@@ -277,7 +277,7 @@ await t('토론토 시각: 여름(EDT, UTC-4)·겨울(EST, UTC-5)', () => {
 });
 await t('수요예배·새벽기도는 예약 없음', () => {
   assert.ok(!RULES.some((r) => r.category === 'wednesday' || r.category === 'dawn'));
-  assert.deepEqual(dueCategories(at('2026-10-08T11:03:00Z')), []); // 옛 수요예배 시각
+  assert.deepEqual(dueCategories(at('2026-10-08T11:03:00Z')), ['daily']); // 옛 수요예배 시각 = 지금은 오늘의 말씀 07:00
   assert.deepEqual(dueCategories(at('2026-10-09T15:02:00Z')), []); // 옛 새벽기도 시각
 });
 await t('주일예배: 일요일 22:00 (UTC로는 월요일 02:00/03:00)', () => {
@@ -285,16 +285,17 @@ await t('주일예배: 일요일 22:00 (UTC로는 월요일 02:00/03:00)', () =>
   assert.deepEqual(dueCategories(at('2026-12-07T03:05:00Z')), ['sunday']); // 일 22:05 EST
   assert.deepEqual(dueCategories(at('2026-10-05T03:05:00Z')), []);
 });
-await t('오늘의 말씀: 매일 04:00 (여름/겨울)', () => {
-  assert.deepEqual(dueCategories(at('2026-10-09T08:02:00Z')), ['daily']);
-  assert.deepEqual(dueCategories(at('2026-12-09T09:02:00Z')), ['daily']);
-  assert.deepEqual(dueCategories(at('2026-10-09T09:02:00Z')), []);
+await t('오늘의 말씀: 매일 07:00 (여름/겨울) — 다음 날 분량', () => {
+  assert.deepEqual(dueCategories(at('2026-10-09T11:02:00Z')), ['daily']);
+  assert.deepEqual(dueCategories(at('2026-12-09T12:02:00Z')), ['daily']);
+  assert.deepEqual(dueCategories(at('2026-10-09T12:02:00Z')), []);
+  assert.deepEqual(dueCategories(at('2026-10-09T08:02:00Z')), []); // 옛 04:00
 });
 await t('청년부는 예약 규칙 없음 · 직접 실행은 항상 실행', () => {
   assert.ok(!RULES.some((r) => r.category === 'youth'));
   assert.deepEqual(decide('workflow_dispatch', at('2026-10-09T03:00:00Z')), { run: true, categories: '' });
   assert.equal(shouldRun('schedule', at('2026-10-09T03:00:00Z')), false);
-  assert.deepEqual(decide('schedule', at('2026-10-09T08:00:00Z')), { run: true, categories: 'daily' });
+  assert.deepEqual(decide('schedule', at('2026-10-09T11:00:00Z')), { run: true, categories: 'daily' });
 });
 
 /* ===== 오늘의 말씀 ===== */
@@ -328,6 +329,17 @@ await t('공동체 성경읽기 영상 제목 점수', () => {
   assert.equal(scoreReadingTitle('열왕기하 11장', '열왕기상', 11), 0);
   assert.ok(scoreReadingTitle('공동체성경읽기 열왕기상 10-12장', '열왕기상', 11) > 0);
   assert.equal(scoreReadingTitle('마가복음 1장', '마가복음', 10), 0);
+  assert.ok(scoreReadingTitle('[하루 20분 공동체성경읽기] 10/16 마가복음 10-11장', '마가복음', 11) >= 4);
+});
+await t('공동체 성경읽기 영상: 앞 장 검색에 나온 "10-11장" 영상은 다시 검색하지 않음', async () => {
+  const queries = [];
+  const search = async (q) => {
+    queries.push(q);
+    return [{ video_id: 'AAAAAAAAAAA', title: '[하루 20분 공동체성경읽기] 10/16 마가복음 10-11장', channel: '드라마바이블' }, { video_id: 'BBBBBBBBBBB', title: '마가복음 12장 강해', channel: 'x' }];
+  };
+  const got = await findReadingVideos([{ book: '마가복음', chapter: 10 }, { book: '마가복음', chapter: 11 }], 'key', { search });
+  assert.equal(queries.length, 1);
+  assert.deepEqual(got.map((v) => v.video_id), ['AAAAAAAAAAA', 'AAAAAAAAAAA']);
 });
 const dailyAi = (fail = []) => ({
   calls: [],

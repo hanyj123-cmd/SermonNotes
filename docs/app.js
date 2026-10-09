@@ -650,7 +650,7 @@ function renderAdminPanel(password) {
   // 이번에 확인할 구분 (청년부예배는 자동 수집이 없으므로 필요할 때 여기서 체크)
   const catChecks = CATEGORIES.map((c) => {
     const cb = h('input', { type: 'checkbox', value: c.key });
-    cb.checked = c.key !== 'youth';
+    cb.checked = c.key === 'sunday'; // 자동 수집은 주일예배만, 나머지는 필요할 때 체크
     return h('label', { class: 'ho-opt' }, cb, c.label);
   });
   const syncCategories = () => {
@@ -658,6 +658,33 @@ function renderAdminPanel(password) {
     return keys.length ? keys : ['none'];
   };
   syncBtn.addEventListener('click', () => requestSync(syncMax.value));
+
+  // 오늘의 말씀 지금 동기화: 과거 5일 ~ 미래 2일 중 빠진 날 (또는 전부 다시)
+  const dailyInfo = h('p', { class: 'meta', role: 'status' });
+  const dailyForce = h('input', { type: 'checkbox' });
+  const dailyBtn = h('button', { class: 'btn primary', type: 'button' }, '오늘의 말씀 지금 동기화');
+  dailyBtn.addEventListener('click', async () => {
+    if (dailyForce.checked && !confirm('이미 만든 날도 QT·성경공부·소그룹·퀴즈·영상을 모두 새로 만듭니다. 계속할까요?')) return;
+    dailyBtn.disabled = true;
+    dailyInfo.textContent = '실행을 요청하는 중…';
+    try {
+      const r = await adminPost({ action: 'sync_run', password, daily: true, daily_force: dailyForce.checked });
+      if (passwordRejected(r)) return;
+      if (!r.ok) throw new Error(r.error || '실행하지 못했습니다.');
+      const range = r.dates && r.dates.length ? `${r.dates[0].slice(5).replace('-', '/')} ~ ${r.dates[r.dates.length - 1].slice(5).replace('-', '/')}` : '';
+      dailyInfo.replaceChildren(
+        icon('clock'),
+        r.workflow_old
+          ? ' 실행을 요청했습니다. GitHub의 sync.yml 이 옛 버전이라 이번에는 오늘·내일만 만듭니다. 새 sync.yml 을 올려 주세요.'
+          : ` ${range} ${r.force ? '전부 다시' : '중 빠진 날을'} 만드는 중입니다. 하루치에 몇 분씩 걸려요. 진행 상태는 위 "지금 동기화"에 보입니다.`,
+      );
+      syncTimer = setTimeout(refreshSync, 6000);
+    } catch (e) {
+      dailyInfo.textContent = `오류: ${e.message || e}`;
+    } finally {
+      dailyBtn.disabled = false;
+    }
+  });
 
   const rowFor = (p) => {
     const cat = h('select', { class: 'search admin-cat', 'aria-label': '구분' }, categoryOptions(p.category));
@@ -709,10 +736,18 @@ function renderAdminPanel(password) {
       'section',
       { class: 'point admin-sync' },
       h('h2', { text: '지금 동기화' }),
-      h('p', { class: 'meta', text: '새 영상을 찾아 설교 정리를 만듭니다. 자동 수집 시각(토론토): 수요예배 매주 목요일 오전 7:00 · 주일예배 매주 일요일 밤 10:00 · 새벽기도회 매일 오전 11:00. 청년부예배는 자동 수집이 없어서 아래에서 체크하고 직접 실행합니다. 전에 실패한 영상은 같은 구분의 다음 실행 때 먼저 다시 시도하고, 아직 올라오지 않은 예약 라이브는 건너뜁니다. 영상 1편에 몇 분씩 걸립니다.' }),
+      h('p', { class: 'meta', text: '새 영상을 찾아 설교 정리를 만듭니다. 자동 수집(토론토): 주일예배 매주 일요일 밤 10:00. 새벽기도 · 수요예배 · 청년부예배는 자동 수집이 없어서 필요하면 아래에서 체크하고 직접 실행합니다. 전에 실패한 영상은 같은 구분의 다음 실행 때 먼저 다시 시도하고, 아직 올라오지 않은 예약 라이브는 건너뜁니다. 영상 1편에 몇 분씩 걸립니다.' }),
       h('div', { class: 'admin-row' }, h('span', { class: 'meta', text: '확인할 구분' }), catChecks),
       h('div', { class: 'admin-row' }, h('label', { class: 'meta', text: '한 번에 정리할 영상' }), syncMax, syncBtn),
       syncInfo,
+    ),
+    h(
+      'section',
+      { class: 'point admin-sync' },
+      h('h2', { text: '오늘의 말씀 동기화' }),
+      h('p', { class: 'meta', text: '자동: 매일 아침 7:00(토론토)에 다음 날 분량의 QT 묵상 · 성경공부 · 소그룹 나눔 · 퀴즈 · 공동체 성경읽기 영상을 미리 만듭니다. 아래 버튼은 과거 5일 ~ 미래 2일(8일치) 중 아직 없거나 실패한 날을 지금 만듭니다.' }),
+      h('div', { class: 'admin-row' }, h('label', { class: 'ho-opt' }, dailyForce, '이미 만든 날도 다시 만들기'), dailyBtn),
+      dailyInfo,
     ),
     renderVideoManager(password, passwordRejected, requestSync),
     renderModelSection(password, passwordRejected),

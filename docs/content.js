@@ -236,8 +236,8 @@ function setYtOpenPref(on) {
   });
 }
 /** 재생 시작: 화면 위에 떠 있는 작은 창(float.js)에서 재생합니다. */
-function startPlayback(id, title) {
-  openFloatPlayer(id, title); // 항상 앱 안의 떠 있는 창에서 재생 (YouTube 앱은 창의 "YouTube" 버튼으로)
+function startPlayback(id, title, opts) {
+  openFloatPlayer(id, title, opts); // 항상 앱 안의 떠 있는 창에서 재생 (YouTube 앱은 창의 "YouTube" 버튼으로)
 }
 
 /* ---------- 성경 본문: 4역본 전환 보기 ---------- */

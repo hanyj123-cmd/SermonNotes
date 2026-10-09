@@ -607,7 +607,7 @@ function syncStatus() {
   return { ok: true, run: latestRun() };
 }
 
-const SYNC_CATEGORIES = ['sunday', 'dawn', 'wednesday', 'youth', 'all', 'user', 'none'];
+const SYNC_CATEGORIES = ['sunday', 'dawn', 'wednesday', 'youth', 'all', 'user', 'none', 'daily'];
 
 // 허용된 구분만 골라 쉼표로 잇습니다 (비어 있으면 '' = 청년부를 뺀 기본 구분)
 function cleanCategories(raw) {
@@ -620,26 +620,42 @@ function cleanCategories(raw) {
   return out.join(',');
 }
 
-// 실행을 요청합니다. 반환: true = GitHub 의 sync.yml 이 옛 버전이라 "반영만" 입력 없이 일반 실행으로 요청했음
-function dispatchSync(maxNew, categories, exportOnly) {
+// 실행을 요청합니다. 반환: true = GitHub 의 sync.yml 이 옛 버전이라 새 입력(export_only · daily_dates 등)을 빼고 일반 실행으로 요청했음
+function dispatchSync(maxNew, categories, exportOnly, extra) {
   const inputs = { max_new: String(maxNew) };
   if (categories) inputs.categories = categories;
   const url = '/actions/workflows/' + GH_WORKFLOW + '/dispatches';
   const ref = prop('GITHUB_REF') || 'main';
   if (exportOnly) inputs.export_only = 'true'; // 새로 정리하지 않고 시트 내용을 사이트에 반영만 합니다
+  Object.keys(extra || {}).forEach(function (k) { inputs[k] = extra[k]; });
   try {
     ghRequest('post', url, { ref: ref, inputs: inputs });
     return false;
   } catch (err) {
-    // GitHub 에 올라간 sync.yml 에 export_only 입력이 아직 없으면 422 "Unexpected inputs" 로 거절됩니다.
-    // 그때는 그 입력만 빼고 다시 요청합니다 (구분 'none' 이라 재생목록은 확인하지 않고, 시트 내용을 내보내는 일반 실행이 됩니다).
-    if (exportOnly && /export_only/.test(String(err && err.message))) {
-      delete inputs.export_only;
+    // GitHub 에 올라간 sync.yml 에 새 입력이 아직 없으면 422 "Unexpected inputs" 로 거절됩니다.
+    // 그때는 그 입력들만 빼고 다시 요청합니다.
+    const msg = String(err && err.message);
+    const newer = ['export_only', 'daily_dates', 'daily_force'].filter(function (k) { return inputs[k] !== undefined && msg.indexOf(k) >= 0; });
+    if (newer.length) {
+      ['export_only', 'daily_dates', 'daily_force'].forEach(function (k) { delete inputs[k]; });
       ghRequest('post', url, { ref: ref, inputs: inputs });
       return true;
     }
     throw err;
   }
+}
+
+// 오늘의 말씀 "지금 동기화": 토론토 기준 과거 5일 ~ 미래 2일 (8일치)
+const DAILY_MANUAL_PAST = 5;
+const DAILY_MANUAL_FUTURE = 2;
+function dailyManualDates(now) {
+  const base = now || new Date();
+  const out = [];
+  for (let k = -DAILY_MANUAL_PAST; k <= DAILY_MANUAL_FUTURE; k++) {
+    const d = Utilities.formatDate(new Date(base.getTime() + k * 86400000), 'America/Toronto', 'yyyy-MM-dd');
+    if (out.indexOf(d) < 0) out.push(d);
+  }
+  return out;
 }
 
 function syncRun(body) {
@@ -648,6 +664,14 @@ function syncRun(body) {
   n = Math.min(SYNC_MAX, Math.max(SYNC_MIN, n));
   if (latestRun().state === 'running') {
     return { ok: false, error: '이미 실행 중입니다. 끝난 뒤에 다시 눌러 주세요.' };
+  }
+  if (body.daily === true || body.daily === 'true') {
+    const dates = dailyManualDates();
+    const force = body.daily_force === true || body.daily_force === 'true';
+    const extra = { daily_dates: dates.join(',') };
+    if (force) extra.daily_force = 'true';
+    const old = dispatchSync(1, 'daily', false, extra);
+    return { ok: true, daily: true, dates: dates, force: force, workflow_old: old };
   }
   const categories = cleanCategories(body.categories);
   const exportOnly = body.export_only === true || body.export_only === 'true';

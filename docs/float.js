@@ -312,6 +312,12 @@ function mountPlayer(id, title) {
             el._paintVol(false);
           },
           onStateChange: (e) => {
+            // 이어 듣기: 영상이 끝나면(0) 다음 영상을 같은 창에서 바로 재생
+            if (e.data === 0 && floatEl === el && el._queue && el._queue.length) {
+              const next = el._queue.shift();
+              openFloatPlayer(next.id, next.title, { queue: el._queue });
+              return;
+            }
             el._paintPlay(e.data === 1 || e.data === 3);
             if (e.data === 1) e.target.setPlaybackRate(el._speed); // 새 영상도 같은 배속으로
             el._tick();
@@ -329,13 +335,14 @@ function mountPlayer(id, title) {
     });
 }
 
-/** 떠 있는 창에서 재생합니다. 이미 열려 있으면 영상만 바꿉니다. */
-function openFloatPlayer(id, title) {
+/** 떠 있는 창에서 재생합니다. 이미 열려 있으면 영상만 바꿉니다. queue: 끝나면 이어서 틀 [{ id, title }] */
+function openFloatPlayer(id, title, { queue = [] } = {}) {
   if (!ytId(id)) return;
   if (!floatEl) {
     floatEl = buildFloat();
     document.body.append(floatEl);
   }
+  floatEl._queue = queue.filter((q) => ytId(q.id));
   const { titleEl, link } = floatEl._els;
   floatEl._vid = id;
   titleEl.textContent = title || '재생 중';

@@ -117,6 +117,32 @@ async function pickDailyDate() {
   return past ? past.date : today;
 }
 
+/* ---------- 공동체 성경읽기 영상 ---------- */
+// 같은 영상이 여러 장을 담고 있으면(예: "마가복음 10-11장") 하나로 묶습니다
+function videoGroups(data) {
+  const out = [];
+  const byId = new Map();
+  for (const v of (data && data.videos) || []) {
+    if (!v || !v.video_id) continue;
+    const g = byId.get(v.video_id);
+    if (g) g.refs.push(v.reference);
+    else {
+      const ng = { video_id: v.video_id, title: v.title || '', refs: [v.reference] };
+      byId.set(v.video_id, ng);
+      out.push(ng);
+    }
+  }
+  return out;
+}
+const groupLabel = (g) => g.refs.join(' · ');
+/** 공동체 성경읽기를 떠 있는 창에서 처음부터 끝까지 이어 듣기 (from 번째 영상부터) */
+function playReadingVideos(groups, from = 0) {
+  const list = groups.slice(from).map((g) => ({ id: g.video_id, title: `공동체 성경읽기 · ${groupLabel(g)}` }));
+  if (!list.length) return;
+  const [first, ...rest] = list;
+  startPlayback(first.id, first.title, { queue: rest });
+}
+
 /* ---------- 카톡 메시지 ---------- */
 function dailyShareUrl(date) {
   return `${location.origin}${location.pathname.replace(/index\.html$/, '')}#/r/${date}`;
@@ -130,10 +156,10 @@ function kakaoText(date, refs, data) {
   }
   const kv = data && data.key_verse;
   if (kv && kv.text) lines.push('', '✝ 오늘의 구절', `"${kv.text}" (${kv.reference})`);
-  const vids = (data && data.videos) || [];
-  if (vids.length) {
+  const groups = videoGroups(data);
+  if (groups.length) {
     lines.push('', '🎧 공동체 성경읽기');
-    vids.forEach((v) => lines.push(`${v.reference}  https://youtu.be/${v.video_id}`));
+    groups.forEach((g) => lines.push(`${groupLabel(g)}`, `https://youtu.be/${g.video_id}`));
   }
   lines.push('', `말씀결에서 함께 읽기 ▶ ${dailyShareUrl(date)}`);
   return lines.join('\n');
@@ -203,7 +229,7 @@ async function renderDaily(dateArg, modeArg) {
   app.replaceChildren(page);
 
   const dLike = { id, category: 'daily', title: refs, date, bible: false, qt: data && data.qt, study: data && data.study ? { ...data.study, quiz: null } : null, group: data && data.group };
-  const notReady = (what) => h('div', { class: 'gm-card rd-wait' }, h('p', {}, h('strong', { text: `${what}은(는) 아직 준비 중이에요.` })), h('p', { class: 'meta', text: '매일 새벽 4시(토론토)에 오늘과 내일 분량이 자동으로 만들어져요. 말씀 탭에서 본문은 바로 읽을 수 있어요.' }));
+  const notReady = (what) => h('div', { class: 'gm-card rd-wait' }, h('p', {}, h('strong', { text: `${what}은(는) 아직 준비 중이에요.` })), h('p', { class: 'meta', text: '다음 날 분량은 매일 아침 7시(토론토)에 하루 먼저 만들어져요. 말씀 탭에서 본문은 바로 읽을 수 있어요.' }));
 
   if (mode === 'read') body.append(renderReadingTab(date, id, passages, data, st, notes));
   else if (mode === 'qt') body.append(...(dLike.qt ? renderQtMode(dLike, notes) : [notReady('QT 묵상')]).filter(Boolean));
@@ -230,6 +256,16 @@ function renderReadingTab(date, id, basePassages, data, st, notes) {
   const verBar = h('div', { class: 'gm-chips rd-vers', role: 'tablist', 'aria-label': '역본' });
   const text = h('div', { class: 'rd-text' });
   const videos = new Map(((data && data.videos) || []).map((v) => [`${v.book}|${v.chapter}`, v]));
+  const groups = videoGroups(data);
+  const listen = groups.length
+    ? h(
+        'div',
+        { class: 'rd-listen' },
+        h('span', { class: 'rd-listen-ic', 'aria-hidden': 'true' }, icon('headphones')),
+        h('span', { class: 'rd-listen-text' }, h('b', { text: '공동체 성경읽기로 함께 듣기' }), h('span', { class: 'meta', text: `${groups.map(groupLabel).join(' → ')} · 떠 있는 창에서 이어서 재생돼요` })),
+        h('button', { class: 'btn primary small', type: 'button', onclick: () => playReadingVideos(groups) }, icon('play'), groups.length > 1 ? '전체 이어 듣기' : '듣기'),
+      )
+    : null;
   const draw = async () => {
     verBar.querySelectorAll('.gm-chip').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.v === version)));
     let passages = basePassages;
@@ -245,8 +281,9 @@ function renderReadingTab(date, id, basePassages, data, st, notes) {
     text.replaceChildren(
       ...passages.map((p) => {
         const v = videos.get(`${p.book}|${p.chapter}`);
+        const gi = v ? groups.findIndex((g) => g.video_id === v.video_id) : -1;
         const play = v
-          ? h('button', { class: 'btn small rd-play', type: 'button', onclick: () => startPlayback(v.video_id, `${p.book} ${p.chapter}장 · 공동체 성경읽기`) }, icon('play'), '공동체 성경읽기')
+          ? h('button', { class: 'btn small rd-play', type: 'button', title: '떠 있는 창에서 재생 (다른 화면으로 가도 계속 들려요)', onclick: () => playReadingVideos(groups, gi) }, icon('headphones'), '공동체 성경읽기')
           : h('a', { class: 'btn small', href: ytSearch(`공동체성경읽기 ${p.book} ${p.chapter}장`), target: '_blank', rel: 'noopener noreferrer' }, icon('external'), '공동체 성경읽기 찾기');
         const verses = [];
         p.verses.forEach((x) => {
@@ -309,7 +346,7 @@ function renderReadingTab(date, id, basePassages, data, st, notes) {
       if (typeof confetti === 'function') confetti(wrap, 18);
     });
   }
-  wrap.prepend(verBar, text);
+  wrap.prepend(...[listen, verBar, text].filter(Boolean));
   wrap.append(h('div', { class: 'rd-done-box' }, btn, out));
   return wrap;
 }
@@ -342,6 +379,8 @@ function renderDailyCard(st) {
           h('a', { class: `rd-step${quizDone ? ' done' : ''}`, href: data && data.quiz ? `#/q/${id}` : `#/r/${date}/quiz` }, h('span', { class: 'rd-step-ic' }, icon(quizDone ? 'check' : 'star')), h('span', {}, h('b', { text: '말씀 퀴즈' }), h('em', { text: quizDone ? `${quizDone.s}/${quizDone.t}` : data && data.quiz ? '도전!' : '준비 중' }))),
         ),
       );
+      const groups = videoGroups(data);
+      if (groups.length) body.push(h('button', { class: 'btn rd-card-listen', type: 'button', onclick: () => playReadingVideos(groups) }, icon('headphones'), `공동체 성경읽기 듣기 · ${groups.map(groupLabel).join(' → ')}`));
       body.push(kakaoBox(date, refs, data));
     }
     card.lastChild.replaceWith(h('div', { class: 'rd-card-body' }, body));

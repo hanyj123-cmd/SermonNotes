@@ -87,19 +87,30 @@ export function scoreReadingTitle(title, book, chapter) {
   return score;
 }
 
-/** 각 장마다 공동체 성경읽기 영상 하나를 찾습니다 (못 찾으면 빼고). YouTube 할당량이 바닥나면 멈춥니다. */
-export async function findReadingVideos(passages, apiKey, { fetchImpl = fetch, log = () => {} } = {}) {
+/** 그 장을 찾을 검색어들 (앞에서부터 차례로). "하루 20분 공동체성경읽기"는 드라마바이블의 날짜별 영상 제목 */
+export const readingQueries = (book, chapter) => [`공동체성경읽기 ${book} ${chapter}장`, `하루 20분 공동체성경읽기 ${book} ${chapter}`, `${book} ${chapter}장 성경읽기 드라마바이블`];
+
+/**
+ * 각 장마다 공동체 성경읽기 유튜브 영상 하나를 찾습니다 (못 찾으면 빼고). 화면에서는 이 영상을 떠 있는 창에서 바로 재생합니다.
+ * 앞 장을 찾을 때 나온 영상이 이 장도 담고 있으면(예: "마가복음 10-11장") 다시 검색하지 않습니다. YouTube 할당량이 바닥나면 멈춥니다.
+ */
+export async function findReadingVideos(passages, apiKey, { fetchImpl = fetch, log = () => {}, search = searchVideos } = {}) {
   const out = [];
   if (!apiKey) return out;
+  const pool = new Map(); // 지금까지 검색에서 나온 영상들
+  const bestIn = (list, p) => list.map((v) => ({ v, s: scoreReadingTitle(v.title, p.book, p.chapter) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s)[0] || null;
   for (const p of passages || []) {
     const reference = `${p.book} ${p.chapter}장`;
     try {
-      let best = null;
-      for (const q of [`공동체성경읽기 ${p.book} ${p.chapter}장`, `${p.book} ${p.chapter}장 성경읽기 드라마바이블`]) {
-        const found = await searchVideos(q, apiKey, { maxResults: 8, fetchImpl });
-        const ranked = found.map((v) => ({ v, s: scoreReadingTitle(v.title, p.book, p.chapter) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s);
-        if (ranked.length) best = best && best.s >= ranked[0].s ? best : ranked[0];
-        if (best && best.s >= 4) break; // 공동체성경읽기 영상을 찾았으면 더 찾지 않습니다
+      let best = bestIn([...pool.values()], p);
+      if (!best || best.s < 4) {
+        for (const q of readingQueries(p.book, p.chapter)) {
+          const found = await search(q, apiKey, { maxResults: 8, fetchImpl });
+          found.forEach((v) => pool.set(v.video_id, v));
+          const top = bestIn(found, p);
+          if (top && (!best || top.s > best.s)) best = top;
+          if (best && best.s >= 4) break; // 공동체성경읽기 영상을 찾았으면 더 찾지 않습니다
+        }
       }
       if (best) out.push({ reference, book: p.book, chapter: p.chapter, video_id: best.v.video_id, title: best.v.title, channel: best.v.channel });
     } catch (e) {
