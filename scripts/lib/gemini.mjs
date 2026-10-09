@@ -1,6 +1,6 @@
 // Gemini API 호출 + 결과 검증 (설교 한 편을 4가지 모드로 따로 정리)
 import { GoogleGenAI } from '@google/genai';
-import { MODES, systemPromptFor, buildUserMessage, buildTranscribeMessage, DAILY_MODES, systemPromptForDaily, buildDailyMessage } from './prompt.mjs';
+import { MODES, systemPromptFor, buildUserMessage, buildTranscribeMessage, DAILY_MODES, systemPromptForDaily, buildDailyMessage, PROVERB_MODES, systemPromptForProverb, buildProverbMessage } from './prompt.mjs';
 import { normalizePassages } from './bible-books.mjs';
 
 export const DEFAULT_MODEL = 'gemini-3.8-flash';
@@ -240,6 +240,62 @@ export function normalizeDailyQuiz(raw) {
 const DAILY_NORMALIZERS = { qt: normalizeDailyQt, study: normalizeDailyStudy, group: normalizeGroup, quiz: normalizeDailyQuiz };
 export const normalizeDailyMode = (mode, raw) => DAILY_NORMALIZERS[mode](raw);
 
+/* ---------- 잠언 묵상 ---------- */
+export function normalizeProverbWord(raw) {
+  const out = {
+    theme: clip(raw.theme, 200),
+    summary: clip(raw.summary, 800),
+    outline: (Array.isArray(raw.outline) ? raw.outline : []).map((o) => ({ verses: clip(o?.verses, 20), title: clip(o?.title, 120) })).filter((o) => o.title).slice(0, 8),
+    key_verses: (Array.isArray(raw.key_verses) ? raw.key_verses : [])
+      .map((k) => ({ reference: clip(k?.reference, 40), text: clip(k?.text, 600), title: clip(k?.title, 120), meaning: clip(k?.meaning, 1200), apply: clip(k?.apply, 400) }))
+      .filter((k) => k.reference && k.text)
+      .slice(0, 3),
+  };
+  need(out.key_verses.length >= 3, `핵심 구절이 3개가 아닙니다 (${out.key_verses.length}개)`);
+  need(out.summary, '장 요약이 비어 있습니다');
+  return out;
+}
+export function normalizeProverbStudy(raw) {
+  const out = normalizeDailyStudy(raw);
+  out.perspectives = (Array.isArray(raw.perspectives) ? raw.perspectives : [])
+    .map((p) => ({ title: clip(p?.title, 160), views: paraList(p?.views, 5), pastoral: paraList(p?.pastoral, 3) }))
+    .filter((p) => p.title && p.views.length)
+    .slice(0, 6);
+  return out;
+}
+const GROUP_SECTION_KEYS = ['icebreaker', 'observation', 'reflection', 'application', 'prayer'];
+export function normalizeProverbGroup(raw) {
+  const m = raw.member || {};
+  const l = raw.leader || {};
+  const questions = (Array.isArray(m.questions) ? m.questions : [])
+    .map((q, i) => ({ id: clip(q?.id, 10) || `q${i + 1}`, section: GROUP_SECTION_KEYS.includes(q?.section) ? q.section : 'reflection', question: clip(q?.question, 600) }))
+    .filter((q) => q.question)
+    .slice(0, 14);
+  const byId = new Map((Array.isArray(l.questions) ? l.questions : []).map((q) => [String(q?.id || ''), q]));
+  const out = {
+    representative_prayer: asString(raw.representative_prayer),
+    songs: songItems(raw.songs),
+    member: { summary: clip(m.summary, 1500), key_verse: { reference: clip(m.key_verse?.reference, 40), text: clip(m.key_verse?.text, 500) }, questions },
+    leader: {
+      overview: clip(l.overview, 1000),
+      questions: questions.map((q) => {
+        const x = byId.get(q.id) || {};
+        return { id: q.id, intent: clip(x.intent, 500), guide: clip(x.guide, 900), answers: asArray(x.answers).map((a) => clip(a, 500)).slice(0, 4), follow_up: clip(x.follow_up, 400) };
+      }),
+      flow: (Array.isArray(l.flow) ? l.flow : []).map((f) => ({ title: clip(f?.title, 80), minutes: Number.isFinite(Number(f?.minutes)) ? Math.round(Number(f.minutes)) : 0, detail: clip(f?.detail, 600) })).filter((f) => f.title).slice(0, 8),
+      tips: asArray(l.tips).map((t) => clip(t, 400)).slice(0, 8),
+      closing_words: clip(l.closing_words, 1200),
+    },
+    closing_prayer: asString(raw.closing_prayer),
+  };
+  need(questions.length >= 5, `나눔 질문이 부족합니다 (${questions.length}개)`);
+  need(out.leader.questions.filter((q) => q.intent || q.guide).length >= Math.ceil(questions.length / 2), '인도자용 해설이 부족합니다');
+  need(out.representative_prayer && out.closing_prayer, '기도문이 비어 있습니다');
+  return out;
+}
+const PROVERB_NORMALIZERS = { word: normalizeProverbWord, qt: (r) => normalizeDailyQt(r), study: normalizeProverbStudy, group: normalizeProverbGroup, quiz: normalizeDailyQuiz };
+export const normalizeProverbMode = (mode, raw) => PROVERB_NORMALIZERS[mode](raw);
+
 const NORMALIZERS = { review: normalizeReview, qt: normalizeQt, study: normalizeStudy, group: normalizeGroup };
 export const normalizeMode = (mode, raw) => NORMALIZERS[mode](raw);
 
@@ -302,6 +358,11 @@ export function createGemini(apiKey, model = DEFAULT_MODEL, options = {}) {
     generateDaily(mode, { date, refs, text }) {
       if (!DAILY_MODES.includes(mode)) throw new Error(`알 수 없는 말씀 읽기 모드: ${mode}`);
       return call({ systemInstruction: systemPromptForDaily(mode), responseMimeType: 'application/json' }, buildDailyMessage({ date, refs, text }), (t) => normalizeDailyMode(mode, extractJson(t)));
+    },
+
+    generateProverb(mode, { chapter, text }) {
+      if (!PROVERB_MODES.includes(mode)) throw new Error(`알 수 없는 잠언 모드: ${mode}`);
+      return call({ systemInstruction: systemPromptForProverb(mode), responseMimeType: 'application/json' }, buildProverbMessage({ chapter, text }), (t) => normalizeProverbMode(mode, extractJson(t)));
     },
 
     /**

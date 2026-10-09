@@ -391,3 +391,112 @@ export function buildTranscribeMessage({ title }) {
 
 [영상 제목] ${title}`;
 }
+
+/* ===================== 잠언 묵상 / 성경공부 (잠언 1~31장, 날짜의 "일"이 곧 장) ===================== */
+export const PROVERB_MODES = ['word', 'qt', 'study', 'group', 'quiz'];
+export const PROVERB_MODE_LABELS = { word: '말씀', qt: 'QT 묵상', study: '성경공부', group: '소그룹 나눔', quiz: '퀴즈' };
+
+const PROVERB_COMMON = DAILY_COMMON.replace('아래에 주어지는 "오늘의 성경 읽기 본문"(개역개정 전문)이 유일한 자료입니다.', '아래에 주어지는 잠언 한 장(개역개정 전문)이 유일한 자료입니다. 한 달 동안 날짜마다 잠언 한 장씩(1일=1장 … 31일=31장) 묵상하는 과정입니다.')
+  + `
+
+[잠언을 다룰 때]
+- 잠언은 지혜 문학입니다. 하나하나의 격언을 "언제나 그대로 일어나는 약속"으로 단정하지 말고, 하나님을 경외함(1:7)에서 시작하는 삶의 지혜와 원리로 풀어 줍니다.
+- 1~9장은 아버지가 아들에게 주는 긴 훈계와 지혜/어리석음의 의인화, 10장 이후는 짧은 격언 모음이라는 구조를 존중합니다. 격언 모음 장은 주제별로 묶어(말, 부지런함, 정직, 친구, 가정, 재물, 교만과 겸손 등) 정리합니다.
+- 그리스도는 하나님의 지혜(고전 1:24, 골 2:3)라는 구속사적 연결을 자연스럽게 보여 주되, 모든 절을 억지로 풍유화하지 않습니다.`;
+
+const PROVERB_PROMPTS = {
+  word: `[이번에 만들 것: 잠언 말씀 — 이 장의 핵심 3구절]
+1. 한 줄 주제(theme): 이 장 전체를 꿰는 한 문장.
+2. 장 요약(summary): 2~3문장.
+3. 장의 흐름(outline): 3~6개 구간 — verses(예: "1-7"), title(구간 소제목).
+4. 핵심 구절(key_verses): **정확히 3개**. 이 장을 대표하고 마음에 새길 구절을 고릅니다(서로 다른 주제에서 고르면 좋습니다). 각 구절마다
+   - reference: "잠언 3:5-6"처럼 정확한 장·절
+   - text: 개역개정 본문 그대로(주어진 본문에서 옮겨 적기)
+   - title: 이 구절이 말하는 것 한 줄
+   - meaning: 3~4문장 — 구절의 뜻, 핵심 단어, 앞뒤 문맥
+   - apply: 1~2문장 — 오늘 붙들 실천 한 가지
+
+[JSON 구조]
+{
+  "theme": "한 줄 주제",
+  "summary": "장 요약",
+  "outline": [ { "verses": "1-7", "title": "구간 소제목" } ],
+  "key_verses": [ { "reference": "잠언 3:5-6", "text": "개역개정 본문", "title": "한 줄", "meaning": "뜻 풀이", "apply": "오늘의 실천" } ]
+}`,
+
+  qt: DAILY_PROMPTS.qt.replace('[이번에 만들 것: 오늘의 말씀 QT 묵상]', '[이번에 만들 것: 잠언 QT 묵상]').replace('오늘 읽는 장마다 하나씩, reference(예: "열왕기상 11장")', 'reference("잠언 N장") 하나로'),
+
+  study: `[이번에 만들 것: 잠언 성경공부 — 최대한 자세하게 (Deep Study)]
+교사·리더가 가르치거나 스스로 깊이 공부할 수 있도록, 이 장을 **주석서 수준으로 최대한 자세하게** 풀어 주는 자료입니다. 분량을 아끼지 말고, 장의 처음부터 끝까지 빠짐없이 다룹니다.
+
+1. 시작 기도문(opening_prayer): 1인칭 복수("주님, 우리가 …")의 5~8문장.
+2. 추천 찬양(songs): ${'${SONGS_RULE_TEXT}'}
+3. 배경(background): 2~3개 — 잠언의 저자(솔로몬, 아굴, 르무엘 등 해당 부분)와 편집, 이 장이 책 전체에서 차지하는 자리(서론 훈계/격언 모음 등), 고대 근동 지혜 문학과 이스라엘 지혜의 차이, 이 장에 나오는 사회·가정·경제 제도의 역사적 배경. 각 3~5단락.
+4. 절별 주석(commentary): passage 는 "잠언 N장" 하나. 장을 4~10개 구간(verses)으로 나누어 **모든 절을 빠짐없이** 덮습니다. 구간마다 heading, paragraphs(2~4개의 긴 주석 단락 — 단어·평행법(동의/반의/종합)·비유의 뜻, 문맥, 신학적 의미), cross_refs(관련 성경 구절 2~5개, 장·절 정확히), commentators(이 장을 실제로 주석한 학자들의 해석 요지 1~3개 — 예: 칼빈, 매튜 헨리, 박윤선, 데릭 키드너, 브루스 월키, 트렘퍼 롱맨, 찰스 브리지스, 카일-델리취. **인용문을 지어내지 않고** "~라고 해석합니다" 식의 요지로, 확실히 알 때만).
+5. 원어와 핵심 단어: deep_dive 각 주제의 word_notes 에 히브리어 핵심 단어(예: 호크마 חָכְמָה 지혜, 이르아트 아도나이 여호와 경외, 무사르 훈계 등 이 장에 실제로 나오는 것)를 확실한 것만(주제마다 최대 3개) 적습니다.
+6. 신학적 깊이 보기(deep_dive): 이 장을 관통하는 신학 주제 4~6개. 각 주제는 heading, scripture, 3~5개의 긴 단락(구속사적 의미, 그리스도 안에서의 성취, 교리적 연결), key_summary, word_notes.
+7. 다양한 해석과 목회적 적용(perspectives): 3~5개 — 해석이 갈리거나 오해가 잦은 구절·주제를 골라 title, views(주요 해석 2~3가지를 공정하게 소개하고 개혁주의 입장을 밝힘, 2~3단락), pastoral(목회적 적용 — 상담·가정·직장·청년 등 실제 상황에서 어떻게 적용할지 1~2단락).
+8. Summary(summary): 2~3단락.
+9. 마무리 기도문(closing_prayer): 5~8문장.
+
+[JSON 구조]
+{
+  "opening_prayer": "시작 기도문",
+  ${'${SONGS_SCHEMA_TEXT}'},
+  "background": [ { "title": "배경 제목", "paragraphs": ["단락1", "단락2", "단락3"] } ],
+  "commentary": [ { "passage": "잠언 N장", "sections": [ { "verses": "1-7", "heading": "구간 소제목", "paragraphs": ["주석 단락1", "주석 단락2"], "cross_refs": ["책 장:절 — 한 줄 설명"], "commentators": [ { "name": "주석가", "view": "해석 요지" } ] } ] } ],
+  "deep_dive": [ { "heading": "주제", "scripture": "장·절", "paragraphs": ["단락1", "단락2", "단락3"], "key_summary": "핵심 한 문장", "word_notes": [ { "word": "한글 단어", "original": "히브리어 (확실할 때만)", "meaning": "뜻" } ] } ],
+  "perspectives": [ { "title": "주제/구절", "views": ["해석 단락1", "해석 단락2"], "pastoral": ["목회적 적용 단락"] } ],
+  "summary": "Summary (단락은 \\\\n\\\\n 으로 구분)",
+  "closing_prayer": "마무리 기도문"
+}`,
+
+  group: `[이번에 만들 것: 잠언 소그룹 나눔 — 부원용 + 인도자용 해설서]
+같은 모임을 위한 두 가지 자료를 함께 만듭니다.
+[1] 부원용(member): 프린트·공유해서 모두가 보는 자료 — 짧은 요약과 나눔 질문만(답은 넣지 않음).
+[2] 인도자용 해설서(leader): 인도자만 보는 자료 — 질문마다 의도·진행 가이드·예상 답변·심화 질문, 모임 진행 팁, 마무리 정리 문구.
+
+1. 대표 기도문(representative_prayer): 1인칭 복수의 5~8문장.
+2. 추천 찬양(songs): ${'${SONGS_RULE_TEXT}'}
+3. member:
+   - summary: 이 장의 핵심을 쉬운 말로 3~5문장.
+   - key_verse: { reference, text } 모임에서 함께 읽을 한 구절(개역개정).
+   - questions: 마음 열기(icebreaker) 1개, 본문 관찰(observation) 2~3개, 묵상과 해석(reflection) 3개, 삶의 적용(application) 2개, 기도와 결단(prayer) 1~2개. 각 항목은 { "id": "q1", "section": "observation", "question": "질문" }. id 는 q1, q2 … 순서대로.
+4. leader:
+   - overview: 이 모임의 목표와 흐름 2~3문장.
+   - questions: member.questions 의 모든 질문에 대해 같은 id 로 { "id", "intent": "질문 의도 1~2문장", "guide": "나눔 진행 가이드 — 어떻게 묻고 어떻게 이어 갈지 2~3문장", "answers": ["예상 답변 2~3개 (각 1~2문장, 본문 근거)"], "follow_up": "심화 질문 1개" }.
+   - flow: 4~6단계 진행표 [{ "title", "minutes", "detail" }] (예: 마음 열기 10분 → 본문 읽기 → 관찰 → 적용 → 기도).
+   - tips: 모임을 매끄럽게 이끄는 팁 4~6개 (침묵이 길 때, 한 사람이 길게 말할 때, 논쟁이 생길 때, 새가족이 있을 때 등).
+   - closing_words: 마무리 정리 문구 — 인도자가 그대로 읽을 수 있는 3~5문장.
+5. 마무리 기도문(closing_prayer): 5~8문장.
+
+[JSON 구조]
+{
+  "representative_prayer": "대표 기도문",
+  ${'${SONGS_SCHEMA_TEXT}'},
+  "member": {
+    "summary": "요약",
+    "key_verse": { "reference": "잠언 N:N", "text": "개역개정" },
+    "questions": [ { "id": "q1", "section": "icebreaker|observation|reflection|application|prayer", "question": "질문" } ]
+  },
+  "leader": {
+    "overview": "모임 목표와 흐름",
+    "questions": [ { "id": "q1", "intent": "질문 의도", "guide": "진행 가이드", "answers": ["예상 답변"], "follow_up": "심화 질문" } ],
+    "flow": [ { "title": "단계", "minutes": 10, "detail": "진행 방법" } ],
+    "tips": ["진행 팁"],
+    "closing_words": "마무리 정리 문구"
+  },
+  "closing_prayer": "마무리 기도문"
+}`,
+
+  quiz: DAILY_PROMPTS.quiz.replace('[이번에 만들 것: 오늘의 말씀 퀴즈 (게임용)]', '[이번에 만들 것: 잠언 퀴즈 (게임용)]').replace('- 오늘 본문이 여러 책이면 책마다 고루 냅니다.\n', '- 장의 앞부분부터 끝부분까지 고루 냅니다.\n'),
+};
+
+export function systemPromptForProverb(mode) {
+  const body = PROVERB_PROMPTS[mode];
+  if (!body) throw new Error(`알 수 없는 잠언 모드: ${mode}`);
+  return `${PROVERB_COMMON}\n\n${body.split('${SONGS_RULE_TEXT}').join(SONGS_RULE).split('${SONGS_SCHEMA_TEXT}').join(SONGS_SCHEMA)}`;
+}
+export function buildProverbMessage({ chapter, text }) {
+  return `[잠언 묵상] 잠언 ${chapter}장\n\n아래는 잠언 ${chapter}장 전문(개역개정)입니다. 이 본문만을 근거로 정해진 JSON 을 만들어 주세요.\n\n${text}`;
+}

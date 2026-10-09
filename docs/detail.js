@@ -65,7 +65,7 @@ function renderQtMode(d, notes) {
     renderWorshipSection(q.songs, { title: '찬양', intro: '찬송가 한 곡과 CCM 한 곡으로 마음을 모아 보세요.' }),
     renderBibleViewer(d.bible),
     renderMusicSection(state.music, d.id),
-    block('outline', 'QT 설교 정리', h('h2', { text: 'QT 설교 정리' }), (q.outline || []).map((o) => renderPoint(o))),
+    block('outline', d.category === 'daily' || d.category === 'proverbs' ? 'QT 본문 묵상' : 'QT 설교 정리', h('h2', { text: d.category === 'daily' || d.category === 'proverbs' ? 'QT 본문 묵상' : 'QT 설교 정리' }), (q.outline || []).map((o) => renderPoint(o))),
     block(
       'questions',
       '묵상 질문',
@@ -197,6 +197,17 @@ function renderStudyCommentary(list) {
   );
 }
 
+// 잠언 성경공부: 다양한 해석과 목회적 적용
+function renderPerspectives(list) {
+  if (!list || !list.length) return null;
+  return block(
+    'perspectives',
+    '해석과 적용',
+    h('h2', { text: '다양한 해석과 목회적 적용' }),
+    list.map((p) => h('div', { class: 'point' }, h('h3', { text: p.title }), h('div', { class: 'md' }, p.views.map((t) => mdBlocks(t))), p.pastoral && p.pastoral.length ? h('div', { class: 'keybox' }, h('strong', { class: 'keybox-label', text: '목회적 적용' }), p.pastoral.map((t) => h('p', {}, inlineMd(t)))) : null)),
+  );
+}
+
 function renderStudyMode(d) {
   const st = d.study;
   return [
@@ -219,6 +230,7 @@ function renderStudyMode(d) {
         ),
       ),
     ),
+    renderPerspectives(st.perspectives),
     st.summary ? block('summary', 'Summary', h('h2', { text: 'Summary' }), h('div', { class: 'summary-box md' }, splitParas(st.summary).map((t) => h('p', {}, inlineMd(t))))) : null,
     renderQuizCta(d),
     renderQuiz(st.quiz || {}),

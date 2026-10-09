@@ -5,8 +5,8 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { normalizeReview, normalizeQt, normalizeStudy, normalizeGroup } from './lib/gemini.mjs';
-import { exportJson, exportDaily } from './sync.mjs';
-import { normalizeDailyQt, normalizeDailyStudy, normalizeDailyQuiz } from './lib/gemini.mjs';
+import { exportJson, exportDaily, exportProverbs } from './sync.mjs';
+import { normalizeDailyQt, normalizeDailyStudy, normalizeDailyQuiz, normalizeProverbWord, normalizeProverbGroup, normalizeProverbStudy } from './lib/gemini.mjs';
 import { readingRefs } from './lib/daily.mjs';
 import { parseScripture } from './lib/title.mjs';
 import { BIBLE_SOURCES, bibleSignature } from './lib/bible-web.mjs';
@@ -253,3 +253,40 @@ const dRow = { date: '2026-10-08', refs: readingRefs(dPassages), status: 'done',
 const dRow2 = { ...dRow, date: '2026-10-07', refs: '열왕기상 10장 · 마가복음 9장', passages_json: JSON.stringify([{ ...dPassages[0], chapter: 10 }, { ...dPassages[1], chapter: 9 }]), videos_json: '[]' };
 const nDaily = await exportDaily([dRow, dRow2], { dataDir: OUT, quiet: true });
 console.log(`오늘의 말씀 샘플 ${nDaily}일치를 만들었습니다.`);
+
+// ---------- 잠언 묵상 샘플 (9장 · 10장) ----------
+const pvBible = (ch) => ({ versions: BIBLE_SOURCES.map((s) => ({ id: s.id, label: s.label, lang: s.lang, copyright: s.copyright, source: s.source, passages: [{ reference: `잠언 ${ch}장`, verses: [1, 2, 3, 4, 5].map((n) => ({ n, text: `(샘플 ${s.label}) 잠언 ${ch}장 ${n}절입니다.` })) }], truncated: false })) });
+const pvWord = (ch) => normalizeProverbWord({
+  theme: ch === 9 ? '지혜의 잔치와 어리석음의 초대 — 누구의 식탁에 앉을 것인가' : '의인과 악인의 대조 — 말과 부지런함',
+  summary: '(샘플) 지혜와 어리석음이 각각 사람들을 자기 집으로 초대합니다. 여호와를 경외하는 것이 지혜의 근본입니다.',
+  outline: [{ verses: '1-6', title: '지혜의 초대' }, { verses: '7-12', title: '거만한 자와 지혜로운 자' }, { verses: '13-18', title: '미련한 여자의 초대' }],
+  key_verses: [
+    { reference: `잠언 ${ch}:10`, text: '여호와를 경외하는 것이 지혜의 근본이요 거룩하신 자를 아는 것이 명철이니라', title: '지혜의 출발점', meaning: '(샘플) 지혜는 정보가 아니라 하나님과의 관계에서 시작합니다.', apply: '오늘 결정 하나를 내리기 전에 먼저 기도합니다.' },
+    { reference: `잠언 ${ch}:9`, text: '지혜 있는 자에게 교훈을 더하라 그가 더욱 지혜로워질 것이요', title: '배우는 사람', meaning: '(샘플) 지혜로운 사람은 책망을 받을 때 더 자랍니다.', apply: '오늘 들은 조언 하나를 고마워하며 받아들입니다.' },
+    { reference: `잠언 ${ch}:6`, text: '어리석음을 버리고 생명을 얻으라 명철의 길을 행하라 하느니라', title: '생명의 길', meaning: '(샘플) 지혜의 초대에 응답하는 것은 생명을 택하는 일입니다.', apply: '버려야 할 습관 하나를 적어 봅니다.' },
+  ],
+});
+const pvGroup = normalizeProverbGroup({
+  representative_prayer: '(샘플) 주님, 지혜의 잔치에 우리를 부르심을 감사합니다. 아멘.',
+  songs: ccm,
+  member: { summary: '(샘플) 지혜와 어리석음이 모두 우리를 부릅니다.', key_verse: { reference: '잠언 9:10', text: '여호와를 경외하는 것이 지혜의 근본이요' }, questions: [
+    { id: 'q1', section: 'icebreaker', question: '최근에 받은 가장 기억에 남는 초대는 무엇인가요?' },
+    { id: 'q2', section: 'observation', question: '지혜는 어떤 음식을 차려 놓고 누구를 부릅니까? (1-6절)' },
+    { id: 'q3', section: 'reflection', question: '하나님을 경외하는 것이 왜 지혜의 "근본"일까요?' },
+    { id: 'q4', section: 'application', question: '이번 주 어리석음의 초대를 거절해야 할 자리는 어디인가요?' },
+    { id: 'q5', section: 'prayer', question: '서로를 위해 어떤 지혜를 구하며 기도할까요?' },
+  ] },
+  leader: { overview: '(샘플) 두 초대를 비교하며 지혜의 길을 택하도록 돕습니다.', questions: [
+    { id: 'q1', intent: '가볍게 마음을 엽니다.', guide: '짧게 한 사람씩 돌아가며.', answers: ['결혼식 초대', '친구 생일'], follow_up: '초대를 거절해 본 적은?' },
+    { id: 'q2', intent: '본문을 꼼꼼히 봅니다.', guide: '1-6절을 함께 읽고 찾게 합니다.', answers: ['고기와 포도주, 상을 차림 — 어리석은 자를 부름'], follow_up: '왜 어리석은 자를 부를까요?' },
+    { id: 'q3', intent: '핵심 구절을 깊이 생각합니다.', guide: '10절을 소리 내어 읽습니다.', answers: ['지혜의 출발이 관계이기 때문'], follow_up: '경외와 두려움은 어떻게 다를까요?' },
+    { id: 'q4', intent: '구체적으로 적용합니다.', guide: '각자 한 가지씩.', answers: ['밤늦은 스마트폰', '험담 자리'], follow_up: '' },
+    { id: 'q5', intent: '서로 중보합니다.', guide: '짝을 지어 기도합니다.', answers: [], follow_up: '' },
+  ], flow: [{ title: '마음 열기', minutes: 10, detail: '근황 나누기' }, { title: '말씀 읽기', minutes: 10, detail: '9장 함께 읽기' }, { title: '나눔', minutes: 30, detail: '질문 2-4' }, { title: '기도', minutes: 10, detail: '짝 기도' }],
+  tips: ['침묵이 길면 인도자가 먼저 짧게 나눕니다.', '한 사람이 길게 말하면 "다른 분 생각도 들어 볼까요?"로 이어 갑니다.'], closing_words: '(샘플) 오늘 우리는 지혜의 초대를 들었습니다. 이번 주 그 식탁에 앉기로 결단합시다.' },
+  closing_prayer: '(샘플) 지혜의 근본이신 주님, 이번 주도 주님을 경외하며 살게 하옵소서. 아멘.',
+});
+const pvStudy = normalizeProverbStudy({ ...JSON.parse(JSON.stringify(dStudy)), commentary: [{ passage: '잠언 9장', sections: [{ verses: '1-6', heading: '지혜의 잔치', paragraphs: ['(샘플) 일곱 기둥은 완전함을 나타냅니다.'], cross_refs: ['잠언 8:1-4 — 지혜가 부름'], commentators: [{ name: '데릭 키드너', view: '(샘플) 두 초대의 대조가 1-9장 전체의 결론이라고 봅니다.' }] }] }], perspectives: [{ title: '"일곱 기둥"은 무엇인가', views: ['(샘플) 완전함의 상징으로 보는 견해와 실제 건축 양식으로 보는 견해가 있습니다.'], pastoral: ['(샘플) 지혜는 삶 전체를 떠받치는 기둥입니다.'] }] });
+const pvRow = (ch) => ({ chapter: String(ch), status: 'done', bible_json: JSON.stringify(pvBible(ch)), word_json: JSON.stringify(pvWord(ch)), qt_json: JSON.stringify(dQt), study_json: JSON.stringify(pvStudy), commentary_json: '', group_json: JSON.stringify(pvGroup), quiz_json: JSON.stringify(dQuiz), updated_at: '', note: '' });
+const nProv = await exportProverbs([pvRow(9), pvRow(10)], { dataDir: OUT, quiet: true });
+console.log(`잠언 묵상 샘플 ${nProv}장을 만들었습니다.`);

@@ -18,8 +18,10 @@ import { RULES, torontoClock, dueCategories, decide, shouldRun } from './gate.mj
 import { parseCategories, toExport, exportJson, exportDaily } from './sync.mjs';
 import { parseReadingTitle, buildReadingIndex, readingIndexIsStale } from './lib/reading-index.mjs';
 import { fitCommentary, DAILY_CELL_LIMIT } from './lib/daily.mjs';
-import { dawnDateOf, findDawnUpdates, dawnPlaylistId } from './lib/dawn.mjs';
 import { scheduledCategories } from './gate.mjs';
+import { buildProverbChapter, proverbExport, proverbChaptersToBuild, proverbChapterOf } from './lib/proverbs.mjs';
+import { normalizeProverbGroup, normalizeProverbWord } from './lib/gemini.mjs';
+import { systemPromptForProverb } from './lib/prompt.mjs';
 import { parseYnResponse, readingRefs, passagesText, dailyId, fetchDailyReading, YN_BIBLE_API, torontoDate, scoreReadingTitle, buildDailyDay, dailyExport, findReadingVideos } from './lib/daily.mjs';
 import { durationSeconds, musicIsStale, attachSongVideos, attachBibleAudio, scoreAudioTitle } from './lib/media.mjs';
 
@@ -304,11 +306,8 @@ await t('청년부는 예약 규칙 없음 · 직접 실행은 항상 실행', (
 
 await t('예약: 울린 cron 의 "정해진 시각"으로 판단 (늦게 시작해도 헷갈리지 않음)', () => {
   assert.deepEqual(scheduledCategories('0 11 * * *', at('2026-10-09T11:25:00Z')), ['daily']); // 07:00 EDT 예약이 25분 늦게 시작
-  assert.deepEqual(scheduledCategories('20 11 * * *', at('2026-10-09T11:31:00Z')), ['dawn_video']); // 07:20
-  assert.deepEqual(scheduledCategories('0 12 * * *', at('2026-10-09T12:05:00Z')), ['dawn_video']); // 여름 08:00 다시 확인
+  assert.deepEqual(scheduledCategories('0 12 * * *', at('2026-10-09T12:05:00Z')), []); // 여름 08:00 — 해당 없음
   assert.deepEqual(scheduledCategories('0 12 * * *', at('2026-12-09T12:05:00Z')), ['daily']); // 겨울 07:00
-  assert.deepEqual(scheduledCategories('0 13 * * *', at('2026-12-09T13:10:00Z')), ['dawn_video']); // 겨울 08:00
-  assert.deepEqual(scheduledCategories('20 12 * * *', at('2026-10-09T12:25:00Z')), []); // 여름 08:20 — 해당 없음
   assert.equal(scheduledCategories('', at('2026-10-09T12:25:00Z')), null);
   assert.deepEqual(decide('schedule', at('2026-10-12T02:10:00Z'), '0 2 * * 1'), { run: true, categories: 'sunday' });
 });
@@ -438,40 +437,48 @@ await t('오늘의 말씀 성경공부: 절별 주석은 commentary_json 열에 
   const big = [{ passage: 'x', sections: Array.from({ length: 12 }, () => ({ verses: '1', heading: 'h', paragraphs: ['가'.repeat(2900), '나'.repeat(2900)], cross_refs: ['r'], commentators: [{ name: 'n', view: '다'.repeat(600) }] })) }];
   assert.ok(JSON.stringify(fitCommentary(big)).length <= DAILY_CELL_LIMIT);
 });
-await t('새벽기도 영상: 제목의 날짜 → 없으면 올라온 시각(토론토)', () => {
-  assert.equal(dawnDateOf('[2026.10.09] 새벽기도 - 열왕기상 12장', '2026-10-10T01:00:00Z'), '2026-10-09');
-  assert.equal(dawnDateOf('새벽기도회 26.10.08', ''), '2026-10-08');
-  assert.equal(dawnDateOf('10월 7일 새벽기도', '2026-10-07T10:00:00Z'), '2026-10-07');
-  assert.equal(dawnDateOf('새벽기도', '2026-10-09T03:30:00Z'), '2026-10-08'); // UTC 3:30 = 토론토 전날 밤
-  assert.equal(dawnPlaylistId(''), 'PLexqr1dnrjPzF_IXx_pR1YRKUx13rX7CT');
-  assert.equal(dawnPlaylistId('https://youtube.com/playlist?list=PLabcdefghijk'), 'PLabcdefghijk');
+await t('잠언 묵상: 날짜의 "일" = 장 · 만들 장 고르기 (오늘 · 내일 먼저, 빠진 장, 직접 지정)', () => {
+  assert.equal(proverbChapterOf('2026-10-09'), 9);
+  assert.equal(proverbChapterOf('2026-10-31'), 31);
+  const now = new Date('2026-10-09T15:00:00Z');
+  assert.deepEqual(proverbChaptersToBuild([], { now }), [9, 10, 1]);
+  assert.deepEqual(proverbChaptersToBuild([{ chapter: '9', status: 'done' }], { now }), [10, 1, 2]);
+  assert.equal(proverbChaptersToBuild([], { want: 'missing', now }).length, 6);
+  assert.deepEqual(proverbChaptersToBuild([{ chapter: '3', status: 'done' }], { want: '3,7,99', now }), [7]);
+  assert.deepEqual(proverbChaptersToBuild([{ chapter: '3', status: 'done' }], { want: '3,7', force: true, now }), [3, 7]);
 });
-await t('새벽기도 영상: 날짜별 1:1 연결 · 예정된 라이브 제외 · 직접 넣은 영상은 그대로 · 이미 있으면 재생목록 안 읽음', async () => {
-  let calls = 0;
-  const fetchImpl = async (url) => {
-    calls++;
-    const u = new URL(url);
-    const ep = u.pathname.split('/').pop();
-    const item = (id, title, pub) => ({ snippet: { title }, contentDetails: { videoId: id, videoPublishedAt: pub }, status: { privacyStatus: 'public' } });
-    const body = ep === 'playlistItems'
-      ? { items: [item('vid0009aaaa', '[2026.10.09] 새벽기도', '2026-10-09T10:00:00Z'), item('vid0008aaaa', '[2026.10.08] 새벽기도', '2026-10-08T10:00:00Z'), item('vid0010live', '[2026.10.10] 새벽기도', '2026-10-10T10:00:00Z'), item('vid0007aaaa', '[2026.10.07] 새벽기도', '2026-10-07T10:00:00Z')] }
-      : { items: u.searchParams.get('id').split(',').map((id) => ({ id, snippet: { liveBroadcastContent: id.includes('live') ? 'upcoming' : 'none' }, status: { privacyStatus: 'public', uploadStatus: 'processed' }, contentDetails: { duration: 'PT30M' } })) };
-    return { ok: true, json: async () => body };
-  };
-  const rows = [{ date: '2026-10-08', dawn_json: JSON.stringify({ video_id: 'manualAAAAA', manual: true }) }, { date: '2026-10-07', dawn_json: '' }];
-  const ups = await findDawnUpdates({ rows, playlistId: 'PLx', apiKey: 'k', dates: ['2026-10-10', '2026-10-09', '2026-10-08', '2026-10-07'], fetchImpl, now: new Date('2026-10-10T12:00:00Z') });
-  assert.deepEqual(ups.map((u) => [u.date, u.dawn.video_id]), [['2026-10-09', 'vid0009aaaa'], ['2026-10-07', 'vid0007aaaa']]);
-  calls = 0;
-  const none = await findDawnUpdates({ rows: [{ date: '2026-10-09', dawn_json: JSON.stringify({ video_id: 'x' }) }], playlistId: 'PLx', apiKey: 'k', dates: ['2026-10-09'], fetchImpl });
-  assert.equal(none.length, 0);
-  assert.equal(calls, 0); // 08:00 다시 확인: 오늘 영상이 이미 있으면 재생목록을 읽지 않음
+await t('잠언 묵상: 핵심 3구절 · 소그룹 부원용/인도자용 · 프롬프트', () => {
+  const kv = (n) => ({ reference: `잠언 1:${n}`, text: '본문', title: 't', meaning: 'm', apply: 'a' });
+  assert.equal(normalizeProverbWord({ summary: 's', key_verses: [kv(1), kv(2), kv(3), kv(4)] }).key_verses.length, 3);
+  assert.throws(() => normalizeProverbWord({ summary: 's', key_verses: [kv(1)] }), /3개/);
+  const qs = ['icebreaker', 'observation', 'reflection', 'application', 'prayer'].map((section, i) => ({ id: `q${i + 1}`, section, question: `질문${i}` }));
+  const g = normalizeProverbGroup({ representative_prayer: 'p', closing_prayer: 'c', member: { summary: 's', questions: qs }, leader: { questions: qs.map((q) => ({ id: q.id, intent: '의도', guide: '가이드', answers: ['답'], follow_up: '심화' })), tips: ['팁'], closing_words: '마무리' } });
+  assert.equal(g.member.questions[0].answers, undefined); // 부원용에는 답이 없음
+  assert.equal(g.leader.questions[4].follow_up, '심화');
+  assert.match(systemPromptForProverb('word'), /정확히 3개/);
+  assert.match(systemPromptForProverb('group'), /인도자용/);
+  assert.match(systemPromptForProverb('study'), /perspectives/);
 });
-await t('새벽기도 영상: 오늘의 말씀을 다시 만들어도 연결은 남고, 내보내기에 들어감', async () => {
-  const fetchReading = async () => parseYnResponse(ynSample);
-  const prev = { date: '2026-10-08', dawn_json: JSON.stringify({ video_id: 'dawnVID1234', title: '새벽기도', manual: true }) };
-  const row = await buildDailyDay('2026-10-08', prev, { ai: dailyAi(), fetchReading, now: () => 'T' });
-  assert.equal(JSON.parse(row.dawn_json).video_id, 'dawnVID1234');
-  assert.deepEqual(dailyExport(row).dawn, { video_id: 'dawnVID1234', title: '새벽기도', manual: true });
+await t('잠언 묵상: 한 장 만들기 — 본문(4역본) → 5가지, 실패한 것만 다시', async () => {
+  const bible = { versions: [{ id: 'GAE', label: '개역개정', passages: [{ reference: '잠언 9장', verses: [{ n: 10, text: '여호와를 경외하는 것이 지혜의 근본이요' }] }] }] };
+  const calls = [];
+  const ai = (fail = []) => ({ async generateProverb(mode, { chapter, text }) {
+    calls.push(mode);
+    assert.equal(chapter, 9); assert.match(text, /경외/);
+    if (fail.includes(mode)) throw new Error('일시 오류');
+    return mode === 'study' ? { deep_dive: [], commentary: [{ passage: '잠언 9장', sections: [] }] } : { mode };
+  } });
+  const row = await buildProverbChapter(9, null, { ai: ai(['group']), fetchBible: async () => bible, now: () => 'T' });
+  assert.equal(row.status, 'error');
+  assert.match(row.note, /group/);
+  assert.ok(row.commentary_json);
+  calls.length = 0;
+  const row2 = await buildProverbChapter(9, row, { ai: ai(), fetchBible: async () => { throw new Error('다시 가져오면 안 됨'); } });
+  assert.deepEqual(calls, ['group']);
+  assert.equal(row2.status, 'done');
+  const out = proverbExport(row2);
+  assert.equal(out.id, 'prov-09');
+  assert.equal(out.study.commentary[0].passage, '잠언 9장');
 });
 await t('오늘의 말씀 내보내기: 날짜별 파일 + 목록(최신순)', async () => {
   const fetchReading = async () => parseYnResponse(ynSample);

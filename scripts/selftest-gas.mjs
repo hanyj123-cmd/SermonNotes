@@ -44,6 +44,8 @@ function makeEnv(props) {
   let oembedTitle = '[2026.10.04] 믿음의 길 (창세기 12:1-9) - 홍길동 목사';
   const ghCalls = [];
   let ghHandler = () => ({ code: 200, body: {} });
+  const aiCalls = [];
+  let aiHandler = () => ({ code: 500, body: {} });
   const ctx = {
     SpreadsheetApp: { getActiveSpreadsheet: () => ss },
     PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => props[k] ?? null, setProperty: (k, v) => { props[k] = v; } }) },
@@ -67,6 +69,11 @@ function makeEnv(props) {
           const r = ghHandler(url, opts);
           return { getResponseCode: () => r.code, getContentText: () => JSON.stringify(r.body || {}) };
         }
+        if (String(url).startsWith('https://generativelanguage.googleapis.com/')) {
+          aiCalls.push({ url, opts });
+          const r = aiHandler(url, opts);
+          return { getResponseCode: () => r.code, getContentText: () => JSON.stringify(r.body || {}) };
+        }
         if (String(url).startsWith('https://www.youtube.com/oembed')) {
           oembed.push(url);
           return { getResponseCode: () => (oembedTitle ? 200 : 404), getContentText: () => JSON.stringify({ title: oembedTitle }) };
@@ -83,7 +90,7 @@ function makeEnv(props) {
   vm.createContext(ctx);
   vm.runInContext(code, ctx);
   const post = (body) => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(body) } }).getContent());
-  return { ctx, post, ss, sheets, formats, ghCalls, oembed, setOembed: (t) => { oembedTitle = t; }, setGh: (f) => { ghHandler = f; }, get fetches() { return fetches; } };
+  return { ctx, post, ss, sheets, formats, ghCalls, oembed, setOembed: (t) => { oembedTitle = t; }, setGh: (f) => { ghHandler = f; }, aiCalls, setAi: (f) => { aiHandler = f; }, get fetches() { return fetches; } };
 }
 
 const CID = 'cid.apps.googleusercontent.com';
@@ -696,33 +703,42 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
   check('오늘의 말씀 진행: 비밀번호 필요', !g.post({ action: 'daily_status', password: 'x' }).ok);
 }
 
-// ---------- 관리: 새벽기도 영상 ----------
+// ---------- 잠언 묵상: 관리 실행 · 진행 상황 · 퀴즈 채점 ----------
 {
-  const g = makeEnv({ ADMIN_PASSWORD: 'pw', GITHUB_TOKEN: 't', GITHUB_REPO: 'me/Repo' });
+  const g = makeEnv({ ADMIN_PASSWORD: 'pw', GITHUB_TOKEN: 't', GITHUB_REPO: 'me/Repo', GOOGLE_CLIENT_ID: CID, ALLOWED_EMAILS: 'a@x.com' });
   g.setGh((url, opts) => (opts.method === 'get' ? { code: 200, body: { workflow_runs: [] } } : { code: 204, body: {} }));
   const sent = () => JSON.parse(g.ghCalls.filter((c) => c.opts.method === 'post').pop().opts.payload).inputs;
-  let r = g.post({ action: 'settings_get', password: 'pw' });
-  check('새벽기도 재생목록: 처음엔 기본 재생목록', r.ok && /PLexqr1dnrjPzF_IXx_pR1YRKUx13rX7CT/.test(r.settings.dawn_playlist), JSON.stringify(r));
-  check('새벽기도 재생목록: 잘못된 주소는 거절', !g.post({ action: 'settings_set', password: 'pw', dawn_playlist: 'https://example.com' }).ok);
-  g.post({ action: 'settings_set', password: 'pw', dawn_playlist: 'https://www.youtube.com/playlist?list=PLnewlist12345' });
-  check('새벽기도 재생목록: 관리 화면에서 바꿀 수 있음', /PLnewlist12345/.test(g.post({ action: 'settings_get', password: 'pw' }).settings.dawn_playlist));
-  r = g.post({ action: 'sync_run', password: 'pw', dawn: true });
-  check('새벽기도 수동 업데이트 실행: dawn_video 만 · 다시 확인', r.ok && sent().categories === 'dawn_video' && sent().daily_force === 'true', JSON.stringify(sent()));
+  let r = g.post({ action: 'sync_run', password: 'pw', proverbs: 'missing' });
+  check('잠언: 빠진 장 지금 만들기', r.ok && sent().categories === 'proverbs' && sent().proverbs === 'missing', JSON.stringify(sent()));
+  r = g.post({ action: 'sync_run', password: 'pw', proverbs: '9', force: true, modes: ['study', 'x'] });
+  check('잠언: 장별 부분 다시 만들기', sent().proverbs === '9' && sent().daily_force === 'true' && sent().daily_modes === 'study', JSON.stringify(sent()));
+  const sh = g.ss.insertSheet('Proverbs');
+  sh.rows.push(['chapter', 'status', 'bible_json', 'word_json', 'qt_json', 'study_json', 'commentary_json', 'group_json', 'quiz_json', 'updated_at', 'note']);
+  const quiz = { multiple_choice: [0, 1, 2, 3].map((i) => ({ question: `q${i}`, options: ['a', 'b', 'c', 'd'], answer_index: i })), fill_blank: [{ question: '____', answer: '지혜', accept: [] }] };
+  sh.rows.push(['9', 'done', '{}', '{"a":1}', '{"a":1}', '{"a":1}', '', '{"a":1}', JSON.stringify(quiz), 'T', '']);
+  r = g.post({ action: 'proverbs_status', password: 'pw' });
+  check('잠언: 31장 진행 상황', r.ok && r.chapters.length === 31 && r.chapters[8].status === 'done' && r.chapters[8].quiz && r.chapters[0].status === '', JSON.stringify(r.chapters[8]));
+  r = g.post({ id_token: A, action: 'game_quiz', video_id: 'prov-202610-09', mc: [0, 1, 2, 3], fb: ['지 혜'] });
+  check('잠언 퀴즈: 게임으로 채점 (달마다 새 ID)', r.ok && r.result.right === 5 && r.result.total === 5, JSON.stringify(r.result || r));
+  check('잠언 퀴즈: 없는 장은 안내', /준비되지 않았/.test(g.post({ id_token: A, action: 'game_quiz', video_id: 'prov-202610-10', mc: [], fb: [] }).error || ''));
+}
 
-  const daily = g.ss.insertSheet('Daily');
-  daily.rows.push(['date', 'refs', 'status', 'passages_json', 'qt_json', 'study_json', 'group_json', 'quiz_json', 'videos_json', 'updated_at', 'note']);
-  daily.rows.push(['2026-10-08', '열왕기상 11장', 'done', '[]', '', '', '', '', '', '', '']);
-  r = g.post({ action: 'daily_dawn_set', password: 'pw', date: '2026-10-08', url: 'https://youtu.be/WpOZRTv1hvg' });
-  const head = daily.rows[0];
-  const dawnOf = (row) => JSON.parse(row[head.indexOf('dawn_json')] || 'null');
-  check('새벽기도 직접 연결: 옛 탭에 열을 만들고 그 날짜 줄에 저장 · 사이트 반영 요청', r.ok && head.indexOf('commentary_json') === 11 && head.indexOf('dawn_json') === 12 && dawnOf(daily.rows[1]).video_id === 'WpOZRTv1hvg' && dawnOf(daily.rows[1]).manual === true && sent().export_only === 'true', JSON.stringify([r, head]));
-  r = g.post({ action: 'daily_dawn_set', password: 'pw', date: '2026-10-12', url: 'dAtaD-X_yFE' });
-  check('새벽기도 직접 연결: 줄이 없는 날짜는 새 줄', r.ok && daily.rows.length === 3 && daily.rows[2][0] === '2026-10-12' && dawnOf(daily.rows[2]).video_id === 'dAtaD-X_yFE');
-  r = g.post({ action: 'daily_dawn_set', password: 'pw', date: '2026-10-08', url: '' });
-  check('새벽기도 연결 해제', r.ok && r.cleared && daily.rows[1][head.indexOf('dawn_json')] === '');
-  check('새벽기도 직접 연결: 잘못된 주소 · 날짜는 거절', !g.post({ action: 'daily_dawn_set', password: 'pw', date: '2026-10-08', url: 'https://example.com/x' }).ok && !g.post({ action: 'daily_dawn_set', password: 'pw', date: '10/08', url: 'dAtaD-X_yFE' }).ok);
-  const st = g.post({ action: 'daily_status', password: 'pw' });
-  check('진행 상황에 새벽기도 연결 표시', st.ok && st.days.find((d) => d.date === '2026-10-12').dawn.video_id === 'dAtaD-X_yFE' && st.days.find((d) => d.date === '2026-10-08').dawn === null, JSON.stringify(st.days));
+// ---------- AI 문장 다듬기 ----------
+{
+  const noKey = makeEnv({ GOOGLE_CLIENT_ID: CID, ALLOWED_EMAILS: 'a@x.com' });
+  check('AI 다듬기: 키가 없으면 안내', /GEMINI_API_KEY/.test(noKey.post({ id_token: A, action: 'notes_polish', text: '안녕' }).error || ''));
+  const g = makeEnv({ GOOGLE_CLIENT_ID: CID, ALLOWED_EMAILS: 'a@x.com', GEMINI_API_KEY: 'k' });
+  g.setAi((url, opts) => {
+    const body = JSON.parse(opts.payload);
+    const text = body.contents[0].parts[0].text;
+    return { code: 200, body: { candidates: [{ content: { parts: [{ text: JSON.stringify({ text: text.includes('오늘') ? '오늘 하나님께 감사드립니다.' : 'x', changes: ['띄어쓰기를 고쳤습니다'] }) }] } }] } };
+  });
+  let r = g.post({ id_token: A, action: 'notes_polish', text: '오늘하나님께 감사 드립니다', context: '묵상 질문 1' });
+  check('AI 다듬기: 다듬은 글 + 고친 점', r.ok && r.text === '오늘 하나님께 감사드립니다.' && r.changes[0] === '띄어쓰기를 고쳤습니다' && /gemini-3\.8-flash/.test(g.aiCalls[0].url), JSON.stringify(r));
+  check('AI 다듬기: 로그인 필요', !g.post({ action: 'notes_polish', text: '안녕' }).ok);
+  check('AI 다듬기: 빈 글 · 너무 긴 글은 거절', !g.post({ id_token: A, action: 'notes_polish', text: ' ' }).ok && !g.post({ id_token: A, action: 'notes_polish', text: '가'.repeat(4001) }).ok);
+  g.setAi(() => ({ code: 429, body: {} }));
+  check('AI 다듬기: AI 오류는 안내', /AI 응답 오류/.test(g.post({ id_token: A, action: 'notes_polish', text: '오늘' }).error || ''));
 }
 
 console.log(fails ? `\n${fails}개 실패` : '\n서버 로직 테스트 모두 통과');

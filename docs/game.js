@@ -774,7 +774,7 @@ function renderRank(st) {
 /* ---------- 말씀 퀘스트 (퀴즈 풀기) ---------- */
 let questAbort = null;
 // 퀘스트에서 돌아갈 곳: 설교는 성경공부 화면, 오늘의 말씀은 그날 말씀 화면
-const questHome = (d) => (d.daily ? `#/r/${d.date}/read` : `#/v/${encodeURIComponent(d.id)}/study`);
+const questHome = (d) => (d.proverb ? `#/p/${d.proverb}/word` : d.daily ? `#/r/${d.date}/read` : `#/v/${encodeURIComponent(d.id)}/study`);
 const questHomeLabel = (d) => (d.daily ? '말씀으로 돌아가기' : '설교로 돌아가기');
 async function renderQuest(id) {
   if (questAbort) questAbort();
@@ -782,8 +782,13 @@ async function renderQuest(id) {
   app.replaceChildren(h('div', { class: 'gm' }, h('p', { class: 'loading', text: '퀘스트를 준비하는 중…' })));
   let d;
   try {
+    const pch = typeof provChapterFromQuizId === 'function' ? provChapterFromQuizId(id) : 0;
     const bdate = typeof dateOfDailyId === 'function' ? dateOfDailyId(id) : '';
-    if (bdate) {
+    if (pch) {
+      const pv = await loadProverb(pch);
+      if (!pv || !pv.quiz) throw new Error(`잠언 ${pch}장 퀴즈는 아직 준비 중이에요.`);
+      d = { id, daily: true, proverb: pch, category: 'proverbs', title: `잠언 ${pch}장`, date: localToday(), study: { quiz: pv.quiz } };
+    } else if (bdate) {
       const daily = await loadDaily(bdate);
       if (!daily) throw new Error('이 날의 말씀 퀴즈를 아직 찾지 못했어요.');
       d = { id, daily: true, category: 'daily', title: daily.refs, date: bdate, study: { quiz: daily.quiz || {} } };
@@ -821,11 +826,11 @@ async function renderQuest(id) {
     h(
       'div',
       {},
-      h('p', { class: 'gm-kicker', text: d.daily ? `오늘의 말씀 · ${dateLabel(d.date)}` : `${catLabel(d.category)} · ${formatDate(d.date)}` }),
+      h('p', { class: 'gm-kicker', text: d.proverb ? '잠언 묵상' : d.daily ? `오늘의 말씀 · ${dateLabel(d.date)}` : `${catLabel(d.category)} · ${formatDate(d.date)}` }),
       h('h1', { text: d.title }),
       h('p', { class: 'meta', text: `객관식 ${nMc}문제 · 빈칸 ${nFb}문제 (빈칸은 직접 입력, 띄어쓰기는 상관없어요)` }),
       practice ? h('p', { class: 'gm-practice', text: why }) : h('p', { class: 'gm-stake' }, icon('star'), `모두 맞히면 최대 ${maxXp} XP · 달란트 ×${st.mult} (연속 ${st.streak}일)`),
-      h('div', { class: 'gm-row' }, h('button', { class: 'btn primary gm-big', type: 'button', onclick: () => play() }, '퀘스트 시작'), h('a', { class: 'btn', href: d.daily ? `#/r/${d.date}/read` : `#/v/${encodeURIComponent(d.id)}/study` }, d.daily ? '먼저 말씀 읽기' : '먼저 공부하기')),
+      h('div', { class: 'gm-row' }, h('button', { class: 'btn primary gm-big', type: 'button', onclick: () => play() }, '퀘스트 시작'), h('a', { class: 'btn', href: questHome(d) }, d.daily ? '먼저 말씀 읽기' : '먼저 공부하기')),
     ),
   );
   app.replaceChildren(h('div', { class: 'gm gm-questwrap' }, back, intro));

@@ -34,10 +34,12 @@ import {
   DAILY_HEADERS,
   readDaily,
   writeDailyRow,
+  readTabRows,
+  writeTabRow,
 } from './lib/sheets.mjs';
-import { buildDailyDay, dailyExport, findReadingVideos, torontoDate, isDailyDate, fetchDailyReading, readingRefs } from './lib/daily.mjs';
+import { PROVERBS_TAB, PROVERBS_HEADERS, PROVERB_COLUMNS, PROVERB_CHAPTERS, buildProverbChapter, proverbExport, proverbChaptersToBuild } from './lib/proverbs.mjs';
+import { buildDailyDay, dailyExport, findReadingVideos, torontoDate, isDailyDate } from './lib/daily.mjs';
 import { ensureReadingIndex } from './lib/reading-index.mjs';
-import { findDawnUpdates, dawnPlaylistId } from './lib/dawn.mjs';
 import { extractPlaylistId, fetchPlaylistVideos, fetchVideoStates, fetchPublishDates } from './lib/youtube.mjs';
 import { buildQueue } from './lib/queue.mjs';
 import { attachBibleAudio, buildPrayerMusic, musicIsStale } from './lib/media.mjs';
@@ -72,7 +74,7 @@ export function parseCategories(raw) {
   const list = tokens.filter((c) => CATEGORY_KEYS.includes(c));
   if (list.length) return list;
   // "user"(사용자 영상만) · "none" · "daily"(오늘의 말씀만) 은 재생목록을 확인하지 않고 사용자 영상·다시 정리 표시한 것만 처리합니다
-  return tokens.some((t) => t === 'user' || t === 'none' || t === 'daily' || t === 'dawn_video') ? [] : ['sunday'];
+  return tokens.some((t) => t === 'user' || t === 'none' || t === 'daily' || t === 'proverbs') ? [] : ['sunday'];
 }
 
 const parseJson = (s) => {
@@ -172,7 +174,7 @@ export async function exportDaily(rows, { dataDir = DATA_DIR, quiet = false } = 
   await fs.mkdir(dir, { recursive: true });
   const index = [];
   for (const row of rows) {
-    if (!row.refs && !row.dawn_json) continue; // 본문이 아직 없어도 새벽기도 영상만 있으면 내보냅니다
+    if (!row.refs) continue;
     const d = dailyExport(row);
     await fs.writeFile(path.join(dir, `${row.date}.json`), JSON.stringify(d) + '\n', 'utf8');
     index.push({ date: d.date, refs: d.refs, complete: d.complete });
@@ -236,34 +238,49 @@ async function syncDaily(sheets, spreadsheetId, ai, youtubeKey) {
   }
 }
 
-/** 새벽기도 영상을 날짜별로 연결합니다 (Daily 탭 dawn_json). 관리자가 직접 넣은 영상은 그대로 둡니다. */
-async function syncDawn(sheets, spreadsheetId, youtubeKey, settings, { force = false } = {}) {
-  await ensureTab(sheets, spreadsheetId, DAILY_TAB, DAILY_HEADERS);
-  const rows = await readDaily(sheets, spreadsheetId);
-  const byDate = new Map(rows.map((r) => [r.date, r]));
-  const updates = await findDawnUpdates({ rows, playlistId: dawnPlaylistId(settings.dawn_playlist), apiKey: youtubeKey, force, log: (m) => console.log(m) });
-  for (const u of updates) {
-    const found = byDate.get(u.date);
-    const dawn_json = JSON.stringify(u.dawn);
-    if (found) {
-      await writeDailyRow(sheets, spreadsheetId, found.rowNumber, { ...found, dawn_json });
-      continue;
-    }
-    // 아직 그 날 줄이 없으면 본문(분량)만 먼저 넣어 둡니다 — AI 정리는 다음 오늘의 말씀 동기화가 채웁니다
-    let refs = '';
-    let passages_json = '';
-    try {
-      const passages = await fetchDailyReading(u.date, 'KNKRV');
-      if (passages.length) {
-        refs = readingRefs(passages);
-        passages_json = JSON.stringify(passages);
-      }
-    } catch (e) {
-      console.warn(`   ${u.date} 본문을 가져오지 못했습니다: ${e.message}`);
-    }
-    await writeDailyRow(sheets, spreadsheetId, 0, { date: u.date, refs, passages_json, status: '', updated_at: now(), note: '새벽기도 영상만 먼저 연결', dawn_json });
+/* ---------- 잠언 묵상 ---------- */
+/** Proverbs 탭 → docs/data/proverbs/<장>.json + index.json */
+export async function exportProverbs(rows, { dataDir = DATA_DIR, quiet = false } = {}) {
+  const dir = path.join(dataDir, 'proverbs');
+  await fs.mkdir(dir, { recursive: true });
+  const index = [];
+  for (const row of rows) {
+    const ch = Number(row.chapter);
+    if (!(ch >= 1 && ch <= PROVERB_CHAPTERS)) continue;
+    const d = proverbExport(row);
+    await fs.writeFile(path.join(dir, `${ch}.json`), JSON.stringify(d) + '\n', 'utf8');
+    index.push({ chapter: ch, complete: d.complete, theme: d.word?.theme || '' });
   }
-  return updates.length;
+  index.sort((a, b) => a.chapter - b.chapter);
+  await fs.writeFile(path.join(dir, 'index.json'), JSON.stringify({ updated: now(), chapters: index }, null, 1) + '\n', 'utf8');
+  if (!quiet) console.log(`📜 잠언 묵상 ${index.length}장을 docs/data/proverbs/ 에 내보냈습니다.`);
+  return index.length;
+}
+
+/** 잠언 장 만들기: 자동은 오늘 · 내일 장 + 빠진 장 몇 개, PROVERBS=3,7|missing 로 직접 지정. DAILY_FORCE · DAILY_MODES 로 다시 만들기 */
+async function syncProverbs(sheets, spreadsheetId, ai, { want = process.env.PROVERBS || '', force = false, forceModes = [] } = {}) {
+  await ensureTab(sheets, spreadsheetId, PROVERBS_TAB, PROVERBS_HEADERS);
+  const rows = (await readTabRows(sheets, spreadsheetId, PROVERBS_TAB, PROVERBS_HEADERS)).filter((r) => Number(r.chapter) >= 1);
+  const byCh = new Map(rows.map((r) => [Number(r.chapter), r]));
+  const chapters = proverbChaptersToBuild(rows, { want, force });
+  for (const ch of chapters) {
+    const found = byCh.get(ch);
+    let prev = found;
+    if (force && found) {
+      if (forceModes.length) {
+        prev = { ...found };
+        for (const m of forceModes) for (const col of PROVERB_COLUMNS[m] || []) prev[col] = '';
+      } else prev = { rowNumber: found.rowNumber, chapter: found.chapter, bible_json: found.bible_json };
+    }
+    console.log(`\n📜 잠언 ${ch}장`);
+    try {
+      const row = await buildProverbChapter(ch, prev, { ai, log: (m) => console.log(m) });
+      await writeTabRow(sheets, spreadsheetId, PROVERBS_TAB, PROVERBS_HEADERS, found ? found.rowNumber : 0, row);
+      console.log(`   ✅ 잠언 ${ch}장 (${row.status === 'done' ? '완료' : `일부 실패: ${row.note}`})`);
+    } catch (e) {
+      console.error(`   ❌ 잠언 ${ch}장을 만들지 못했습니다: ${e.message || e}`);
+    }
+  }
 }
 
 /** 이미 정리된 설교 중 성경 본문이 없거나 본문 범위가 바뀐 것에 4역본을 붙입니다 */
@@ -344,6 +361,12 @@ async function main() {
     } catch (e) {
       console.warn(`⚠️  오늘의 말씀 내보내기를 건너뜁니다: ${e.message || e}`);
     }
+    try {
+      await ensureTab(sheets, spreadsheetId, PROVERBS_TAB, PROVERBS_HEADERS);
+      await exportProverbs(await readTabRows(sheets, spreadsheetId, PROVERBS_TAB, PROVERBS_HEADERS));
+    } catch (e) {
+      console.warn(`⚠️  잠언 묵상 내보내기를 건너뜁니다: ${e.message || e}`);
+    }
     return;
   }
 
@@ -352,13 +375,6 @@ async function main() {
   console.log(`🗂  이번 실행의 구분: ${categories.join(', ') || '(재생목록 확인 없음)'} (+ 사용자 영상·다시 정리 표시한 것)`);
   // 앱의 관리 화면에서 고른 설정(Settings 탭)이 있으면 그것을, 없으면 환경변수·기본값을 씁니다.
   const settings = await readSettings(sheets, spreadsheetId);
-  // 새벽기도 영상만 연결하는 짧은 실행 (07:20 · 08:00 예약, 관리 화면 "수동 업데이트 실행")
-  const onlyTokens = String(process.env.ONLY_CATEGORIES || '').toLowerCase().split(/[\s,]+/).filter(Boolean);
-  if (onlyTokens.length && onlyTokens.every((t) => t === 'dawn_video')) {
-    await syncDawn(sheets, spreadsheetId, youtubeKey, settings, { force: String(process.env.DAILY_FORCE || '').toLowerCase() === 'true' });
-    await exportDaily(await readDaily(sheets, spreadsheetId));
-    return;
-  }
   const modelName = /^[\w.-]{3,60}$/.test(settings.gemini_model || '') ? settings.gemini_model : process.env.GEMINI_MODEL || DEFAULT_MODEL;
   console.log(`🤖 Gemini 모델: ${modelName}`);
   const ai = createGemini(need('GEMINI_API_KEY'), modelName);
@@ -479,11 +495,15 @@ async function main() {
     console.error(`❌ 오늘의 말씀 동기화 실패: ${e.message || e}`);
   }
 
-  // 새벽기도 영상 (오늘 것이 아직 없을 때만 재생목록을 읽습니다)
+  // 잠언 묵상 (오늘 · 내일 장 + 빠진 장 몇 개, 또는 관리 화면에서 고른 장)
   try {
-    await syncDawn(sheets, spreadsheetId, youtubeKey, settings);
+    const onlyProverbs = String(process.env.ONLY_CATEGORIES || '').toLowerCase().split(/[\s,]+/).includes('proverbs');
+    await syncProverbs(sheets, spreadsheetId, ai, {
+      force: onlyProverbs && String(process.env.DAILY_FORCE || '').toLowerCase() === 'true',
+      forceModes: onlyProverbs ? String(process.env.DAILY_MODES || '').split(/[\s,]+/).filter((m) => PROVERB_COLUMNS[m]) : [],
+    });
   } catch (e) {
-    console.error(`❌ 새벽기도 영상 연결 실패: ${e.message || e}`);
+    console.error(`❌ 잠언 묵상 동기화 실패: ${e.message || e}`);
   }
 
   // 3) 내보내기
@@ -493,6 +513,11 @@ async function main() {
     await exportDaily(await readDaily(sheets, spreadsheetId));
   } catch (e) {
     console.warn(`⚠️  오늘의 말씀 내보내기 실패: ${e.message || e}`);
+  }
+  try {
+    await exportProverbs(await readTabRows(sheets, spreadsheetId, PROVERBS_TAB, PROVERBS_HEADERS));
+  } catch (e) {
+    console.warn(`⚠️  잠언 묵상 내보내기 실패: ${e.message || e}`);
   }
 }
 

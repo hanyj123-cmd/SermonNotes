@@ -559,3 +559,38 @@
   .rd-listen-btns .btn { flex: 1; justify-content: center; }
   .rd-card-listens { grid-template-columns: 1fr; }
 }
+
+/* ================= 잠언 묵상 ================= */
+.pv-kicker { margin: 0; color: var(--gm-gold-deep); font-weight: 700; font-size: 0.88rem; letter-spacing: 0.02em; }
+.pv-theme { margin: -4px auto 10px; max-width: 32em; font-family: var(--gm-title); font-size: 1.12rem; color: var(--gm-soft); }
+.pv-chapters { display: flex; gap: 4px; overflow-x: auto; padding: 4px 2px 8px; margin: 4px 0 2px; scrollbar-width: thin; }
+.pv-ch { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--gm-line-2); background: var(--gm-paper); color: var(--gm-soft); text-decoration: none; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.pv-ch:hover { border-color: var(--gm-gold); color: var(--gm-ink); }
+.pv-ch.today { border-color: var(--gm-gold); color: var(--gm-gold-deep); font-weight: 700; }
+.pv-ch.on { background: var(--gm-night); border-color: var(--gm-night); color: var(--gm-gold-light); font-weight: 700; }
+.pv-h2 { font-size: 1.25rem; margin: 22px 0 10px; }
+.pv-summary h2 { margin-top: 0; font-size: 1.15rem; }
+.pv-summary p { margin: 0; line-height: 1.8; }
+.pv-key-list { list-style: none; counter-reset: pvk; padding: 0; margin: 0; display: grid; gap: 14px; }
+.pv-key { counter-increment: pvk; position: relative; background: var(--gm-paper); border: 1px solid var(--gm-line); border-radius: var(--gm-r); box-shadow: var(--gm-shadow); padding: 18px 20px 16px 62px; }
+.pv-key::before { content: counter(pvk); position: absolute; left: 18px; top: 18px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--gm-foil); color: #3a2a06; font-weight: 800; font-family: var(--gm-title); }
+.pv-key-title { margin: 2px 0 8px; font-family: var(--gm-title); font-weight: 700; font-size: 1.1rem; }
+.pv-key-verse { margin: 0 0 10px; padding: 12px 16px; border-left: 3px solid var(--gm-gold); background: #fbf6e6; border-radius: 0 12px 12px 0; }
+.pv-key-verse p { margin: 0 0 4px; font-family: var(--gm-title); font-size: 1.06rem; line-height: 1.8; }
+.pv-key-verse cite { font-style: normal; font-size: 0.85rem; color: var(--gm-gold-deep); }
+.pv-key-apply { margin: 8px 0 0; padding-top: 8px; border-top: 1px dashed var(--gm-line-2); font-size: 0.95rem; }
+.pv-outline ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.pv-outline li { display: flex; gap: 10px; align-items: baseline; }
+.pv-group-switch { margin-bottom: 14px; }
+.pv-group-verse { margin: 12px auto 16px; }
+.pv-flow { padding-left: 20px; display: grid; gap: 8px; }
+.pv-flow .gm-chip-soft { margin-left: 8px; }
+.pv-lq-item { margin-bottom: 12px; }
+.pv-lq-q { font-weight: 600; }
+.pv-follow { margin-top: 8px; }
+.pv-tips { padding-left: 20px; display: grid; gap: 6px; }
+.pv-read.done { opacity: 0.75; }
+@media (max-width: 720px) {
+  .pv-key { padding: 16px 16px 14px 54px; }
+  .pv-key::before { left: 14px; }
+}

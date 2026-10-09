@@ -205,7 +205,7 @@ export async function readSettings(sheets, spreadsheetId) {
 
 /* ---------- 오늘의 말씀 (Daily 탭): 날짜마다 한 줄 ---------- */
 export const DAILY_TAB = 'Daily';
-export const DAILY_HEADERS = ['date', 'refs', 'status', 'passages_json', 'qt_json', 'study_json', 'group_json', 'quiz_json', 'videos_json', 'updated_at', 'note', 'commentary_json', 'dawn_json'];
+export const DAILY_HEADERS = ['date', 'refs', 'status', 'passages_json', 'qt_json', 'study_json', 'group_json', 'quiz_json', 'videos_json', 'updated_at', 'note', 'commentary_json'];
 
 export async function readDaily(sheets, spreadsheetId) {
   const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${DAILY_TAB}!A2:${colLetter(DAILY_HEADERS.length)}` });
@@ -228,6 +228,28 @@ export async function writeDailyRow(sheets, spreadsheetId, rowNumber, obj) {
     return rowNumber;
   }
   const res = await sheets.spreadsheets.values.append({ spreadsheetId, range: `${DAILY_TAB}!A1`, valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS', requestBody: { values } });
+  const m = /![A-Z]+(\d+)/.exec(res?.data?.updates?.updatedRange || '');
+  return m ? Number(m[1]) : 0;
+}
+
+/* ---------- 탭 하나를 머리글 이름으로 읽고 쓰기 (잠언 묵상 등) ---------- */
+export async function readTabRows(sheets, spreadsheetId, tab, headers) {
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${tab}!A2:${colLetter(headers.length)}` });
+  return (res.data.values || []).map((r, i) => {
+    const obj = { rowNumber: i + 2 };
+    headers.forEach((h, c) => {
+      obj[h] = r[c] ?? '';
+    });
+    return obj;
+  });
+}
+export async function writeTabRow(sheets, spreadsheetId, tab, headers, rowNumber, obj) {
+  const values = [headers.map((h) => obj[h] ?? '')];
+  if (rowNumber) {
+    await sheets.spreadsheets.values.update({ spreadsheetId, range: `${tab}!A${rowNumber}:${colLetter(headers.length)}${rowNumber}`, valueInputOption: 'RAW', requestBody: { values } });
+    return rowNumber;
+  }
+  const res = await sheets.spreadsheets.values.append({ spreadsheetId, range: `${tab}!A1`, valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS', requestBody: { values } });
   const m = /![A-Z]+(\d+)/.exec(res?.data?.updates?.updatedRange || '');
   return m ? Number(m[1]) : 0;
 }

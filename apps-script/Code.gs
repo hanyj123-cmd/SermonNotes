@@ -77,6 +77,7 @@ function doPost(e) {
   if (action === 'sync_run') return json(guarded(function () { return syncRun(body); }));
   if (action === 'videos_list') return json(guarded(videosList));
   if (action === 'daily_status') return json(guarded(dailyStatus));
+  if (action === 'proverbs_status') return json(guarded(proverbsStatus));
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -87,7 +88,6 @@ function doPost(e) {
     if (action === 'settings_set') return json(settingsSet(body));
     if (action === 'videos_mark') return json(videosMark(body));
     if (action === 'sermon_edit') return json(sermonEdit(body));
-    if (action === 'daily_dawn_set') return json(dailyDawnSet(body));
     return json({ ok: false, error: '알 수 없는 작업입니다.' });
   } catch (err) {
     return json({ ok: false, error: String(err && err.message ? err.message : err) });
@@ -250,6 +250,7 @@ function handleNotes(action, body) {
     return authError(err);
   }
   try {
+    if (action === 'notes_polish') return aiPolish(user, body);
     if (action === 'notes_get') return notesGet(user, body);
     if (action === 'notes_list') return notesList(user);
     if (action === 'notes_marks_save') {
@@ -609,7 +610,7 @@ function syncStatus() {
   return { ok: true, run: latestRun() };
 }
 
-const SYNC_CATEGORIES = ['sunday', 'dawn', 'wednesday', 'youth', 'all', 'user', 'none', 'daily', 'dawn_video'];
+const SYNC_CATEGORIES = ['sunday', 'dawn', 'wednesday', 'youth', 'all', 'user', 'none', 'daily', 'proverbs'];
 
 // 허용된 구분만 골라 쉼표로 잇습니다 (비어 있으면 '' = 청년부를 뺀 기본 구분)
 function cleanCategories(raw) {
@@ -632,7 +633,7 @@ function dispatchSync(maxNew, categories, exportOnly, extra) {
   Object.keys(extra || {}).forEach(function (k) { inputs[k] = extra[k]; });
   // GitHub 에 올라간 sync.yml 에 새 입력이 아직 없으면 422 "Unexpected inputs" 로 거절됩니다.
   // 그때는 거절된 입력만 빼고 다시 요청합니다 (최대 3번). 반환: true = 옛 sync.yml 이라 일부 입력을 뺐음
-  const NEWER = ['export_only', 'daily_dates', 'daily_force', 'daily_modes'];
+  const NEWER = ['export_only', 'daily_dates', 'daily_force', 'daily_modes', 'proverbs'];
   let dropped = false;
   for (let tries = 0; ; tries++) {
     try {
@@ -669,10 +670,19 @@ function syncRun(body) {
   if (latestRun().state === 'running') {
     return { ok: false, error: '이미 실행 중입니다. 끝난 뒤에 다시 눌러 주세요.' };
   }
-  if (body.dawn === true || body.dawn === 'true') {
-    // 새벽기도 영상 "수동 업데이트 실행": 재생목록을 바로 다시 읽어 최근 7일을 연결 (직접 넣은 영상은 그대로)
-    const oldDawn = dispatchSync(1, 'dawn_video', false, { daily_force: 'true' });
-    return { ok: true, dawn: true, workflow_old: oldDawn };
+  if (body.proverbs !== undefined && body.proverbs !== null && body.proverbs !== '') {
+    // 잠언 묵상: 고른 장(최대 8장) 또는 'missing'(빠진 장 6개까지). force 면 다시 만들기(modes 로 부분만)
+    const raw = Array.isArray(body.proverbs) ? body.proverbs.join(',') : String(body.proverbs);
+    const chs = raw.split(/[\s,]+/).map(Number).filter(function (n, i, a) { return n >= 1 && n <= 31 && a.indexOf(n) === i; }).slice(0, 8);
+    const which = /missing/i.test(raw) || !chs.length ? 'missing' : chs.join(',');
+    const pforce = body.force === true || body.force === 'true';
+    const pmodes = (Array.isArray(body.modes) ? body.modes : String(body.modes || '').split(/[\s,]+/))
+      .filter(function (m, i, a) { return ['word', 'qt', 'study', 'group', 'quiz'].indexOf(m) >= 0 && a.indexOf(m) === i; });
+    const pextra = { proverbs: which };
+    if (pforce) pextra.daily_force = 'true';
+    if (pforce && pmodes.length) pextra.daily_modes = pmodes.join(',');
+    const pold = dispatchSync(1, 'proverbs', false, pextra);
+    return { ok: true, proverbs: which, force: pforce, modes: pforce ? pmodes : [], workflow_old: pold };
   }
   if (body.daily === true || body.daily === 'true') {
     // 날짜를 고르면(관리 화면의 날짜별 "다시 만들기") 그 날짜만, 아니면 과거 5일 ~ 미래 2일
@@ -738,10 +748,9 @@ function writeSetting(key, value) {
   sh.getRange(row, 1, 1, 2).setNumberFormat('@').setValues([[key, value]]);
 }
 
-const DAWN_DEFAULT_PLAYLIST = 'https://youtube.com/playlist?list=PLexqr1dnrjPzF_IXx_pR1YRKUx13rX7CT&si=sZADQZD6sK25peYz';
 function settingsGet() {
   const m = readSettingsMap();
-  return { ok: true, settings: { gemini_model: m.gemini_model || '', dawn_playlist: m.dawn_playlist || DAWN_DEFAULT_PLAYLIST, dawn_playlist_default: DAWN_DEFAULT_PLAYLIST } };
+  return { ok: true, settings: { gemini_model: m.gemini_model || '' } };
 }
 
 function settingsSet(body) {
@@ -750,19 +759,7 @@ function settingsSet(body) {
     if (model && !MODEL_PATTERN.test(model)) return { ok: false, error: '모델 이름이 올바르지 않습니다. 예: gemini-3.8-flash' };
     writeSetting('gemini_model', model);
   }
-  if (body.dawn_playlist !== undefined) {
-    // 새벽기도 영상 재생목록: 주소 또는 재생목록 ID (비우면 기본 재생목록)
-    const raw = String(body.dawn_playlist || '').trim();
-    if (raw && !playlistIdOf(raw)) return { ok: false, error: '재생목록 주소가 올바르지 않습니다. 예: https://youtube.com/playlist?list=PL…' };
-    writeSetting('dawn_playlist', raw);
-  }
   return { ok: true };
-}
-function playlistIdOf(s) {
-  const t = String(s || '').trim();
-  if (/^(PL|UU|OL|FL)[\w-]{10,}$/.test(t)) return t;
-  const m = /[?&]list=([\w-]{10,})/.exec(t);
-  return m ? m[1] : '';
 }
 
 /* ---------- 영상 선택 관리 — Sermons 탭 ---------- */
@@ -1409,59 +1406,6 @@ function gameBlankKey(s) {
 }
 
 // 오늘의 말씀 퀴즈 (Daily 탭, GitHub 동기화가 매일 만듭니다)
-/* ---------- 새벽기도 영상 직접 연결 (관리 화면) ---------- */
-// body: { date: 'YYYY-MM-DD', url: 유튜브 주소 또는 영상 ID (비우면 연결 해제 → 다음 자동 실행이 다시 찾음) }
-function dailyDawnSet(body) {
-  const date = String(body.date || '').trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: '날짜가 올바르지 않습니다.' };
-  const raw = String(body.url || '').trim();
-  const vid = raw ? parseVideoId(raw) : '';
-  if (raw && !vid) return { ok: false, error: '유튜브 영상 주소가 올바르지 않습니다.' };
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sh = ss.getSheetByName('Daily');
-  if (!sh) {
-    sh = ss.insertSheet('Daily');
-    sh.getRange(1, 1, 1, 13).setValues([['date', 'refs', 'status', 'passages_json', 'qt_json', 'study_json', 'group_json', 'quiz_json', 'videos_json', 'updated_at', 'note', 'commentary_json', 'dawn_json']]);
-  }
-  const head = sh.getRange(1, 1, 1, Math.max(1, sh.getLastColumn())).getValues()[0].map(String);
-  let cDawn = head.indexOf('dawn_json');
-  if (cDawn < 0) {
-    // 옛 Daily 탭: 맨 뒤에 dawn_json 열을 만듭니다 (동기화가 쓰는 열 순서와 맞추려고 commentary_json 도 없으면 먼저)
-    if (head.indexOf('commentary_json') < 0) head.push('commentary_json');
-    head.push('dawn_json');
-    sh.getRange(1, 1, 1, head.length).setValues([head]);
-    cDawn = head.indexOf('dawn_json');
-  }
-  const cDate = head.indexOf('date');
-  const last = sh.getLastRow();
-  let row = 0;
-  if (last >= 2) {
-    const dates = sh.getRange(2, cDate + 1, last - 1, 1).getValues();
-    for (let i = 0; i < dates.length; i++) if (dailyCellText(dates[i][0]) === date) { row = i + 2; break; }
-  }
-  const value = vid ? JSON.stringify({ video_id: vid, title: youtubeTitle(vid), manual: true, at: new Date().toISOString() }) : '';
-  if (!row) {
-    if (!vid) return { ok: true, date: date, cleared: true };
-    const arr = head.map(function () { return ''; });
-    arr[cDate] = date;
-    arr[cDawn] = value;
-    const cNote = head.indexOf('note');
-    if (cNote >= 0) arr[cNote] = '새벽기도 영상만 먼저 연결';
-    sh.appendRow(arr);
-  } else {
-    sh.getRange(row, cDawn + 1, 1, 1).setValues([[value]]);
-  }
-  // 사이트에 바로 반영 (시트 내용 내보내기만)
-  let dispatched = false;
-  try {
-    dispatchSync(1, 'none', true);
-    dispatched = true;
-  } catch (err) {
-    dispatched = false;
-  }
-  return { ok: true, date: date, video_id: vid, cleared: !vid, dispatched: dispatched };
-}
-
 /* ---------- 오늘의 말씀 진행 상황 (관리 화면) ---------- */
 function dailyCellText(v) {
   if (v instanceof Date) return Utilities.formatDate(v, 'America/Toronto', 'yyyy-MM-dd');
@@ -1484,7 +1428,6 @@ function dailyStatus() {
         status: dailyCellText(r[col('status')]),
         qt: has(r, 'qt_json'), study: has(r, 'study_json'), group: has(r, 'group_json'), quiz: has(r, 'quiz_json'),
         videos: vids.length,
-        dawn: (function () { const d = parseJsonObject(col('dawn_json') >= 0 ? r[col('dawn_json')] : ''); return d && d.video_id ? { video_id: String(d.video_id), manual: !!d.manual, title: String(d.title || '').slice(0, 120) } : null; })(),
         updated_at: dailyCellText(r[col('updated_at')]),
         note: dailyCellText(r[col('note')]).slice(0, 300),
       };
@@ -1501,6 +1444,92 @@ function latestRunSafe() {
     return { state: 'unknown' };
   }
 }
+/* ---------- AI 문장 다듬기 (앱의 모든 기록 칸) ---------- */
+// 스크립트 속성 GEMINI_API_KEY 가 있어야 합니다. 모델은 관리 화면의 AI 모델(Settings 탭 gemini_model)을 씁니다.
+const POLISH_MAX_CHARS = 4000;
+const POLISH_PER_HOUR = 60;
+const POLISH_DEFAULT_MODEL = 'gemini-3.8-flash';
+const POLISH_SYSTEM = [
+  '당신은 교회 성도의 묵상 노트·나눔 글·기도문을 다듬어 주는 한국어 글쓰기 도우미입니다.',
+  '규칙:',
+  '1. 글쓴이의 생각·고백·사실 관계는 그대로 두고, 표현만 다듬습니다. 새로운 내용(성경 구절, 경험, 결심)을 지어내 덧붙이지 않습니다.',
+  '2. 맞춤법·띄어쓰기·문장 부호를 바르게 고치고, 어색한 문장과 중복을 정돈해 매끄럽고 명확하게 합니다.',
+  '3. 어조는 따뜻하고 단정한 신앙적 문체로 하되, 지나치게 꾸미거나 설교조로 바꾸지 않습니다. 원래 존댓말/반말, 1인칭 시점을 유지합니다.',
+  '4. 길이는 원문과 비슷하게(최대 1.3배). 줄바꿈과 목록 구조는 살립니다.',
+  '5. 성경 인용이 있으면 장·절 표기만 바르게 하고 본문은 바꾸지 않습니다.',
+  '반드시 JSON 하나만 출력합니다: {"text": "다듬은 글", "changes": ["무엇을 고쳤는지 짧게 (최대 5개)"]}',
+].join('\n');
+function aiPolish(user, body) {
+  const text = String(body.text || '').trim();
+  if (!text) return { ok: false, error: '다듬을 글을 먼저 적어 주세요.' };
+  if (text.length > POLISH_MAX_CHARS) return { ok: false, error: '글이 너무 깁니다 (' + POLISH_MAX_CHARS + '자까지).' };
+  const key = prop('GEMINI_API_KEY');
+  if (!key) return { ok: false, error: 'AI 문장 다듬기를 쓰려면 Apps Script 스크립트 속성에 GEMINI_API_KEY 를 넣어 주세요.' };
+  const cache = CacheService.getScriptCache();
+  const ck = 'polish:' + sha256(user.email || user.sub || '').slice(0, 16) + ':' + Utilities.formatDate(new Date(), 'America/Toronto', 'yyyyMMddHH');
+  const used = Number(cache.get(ck) || 0);
+  if (used >= POLISH_PER_HOUR) return { ok: false, error: '잠시 뒤에 다시 시도해 주세요 (한 시간에 ' + POLISH_PER_HOUR + '번까지).' };
+  cache.put(ck, String(used + 1), 3600);
+  const settings = readSettingsMap();
+  const model = MODEL_PATTERN.test(settings.gemini_model || '') ? settings.gemini_model : POLISH_DEFAULT_MODEL;
+  const where = String(body.context || '').slice(0, 80);
+  const payload = {
+    systemInstruction: { parts: [{ text: POLISH_SYSTEM }] },
+    contents: [{ role: 'user', parts: [{ text: (where ? '[어디에 쓰는 글] ' + where + '\n\n' : '') + '[다듬을 글]\n' + text }] }],
+    generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens: 8192 },
+  };
+  const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key), {
+    method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true,
+  });
+  if (res.getResponseCode() !== 200) return { ok: false, error: 'AI 응답 오류 (' + res.getResponseCode() + '). 잠시 뒤 다시 시도해 주세요.' };
+  let out = null;
+  try {
+    const data = JSON.parse(res.getContentText());
+    const parts = (((data.candidates || [])[0] || {}).content || {}).parts || [];
+    const raw = parts.map(function (p) { return p.text || ''; }).join('');
+    out = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+  } catch (err) {
+    out = null;
+  }
+  const polished = out && typeof out.text === 'string' ? out.text.trim() : '';
+  if (!polished) return { ok: false, error: 'AI가 다듬은 글을 돌려주지 않았어요. 다시 시도해 주세요.' };
+  const changes = (Array.isArray(out.changes) ? out.changes : []).map(function (c) { return String(c || '').slice(0, 200); }).filter(Boolean).slice(0, 5);
+  return { ok: true, text: polished.slice(0, Math.round(POLISH_MAX_CHARS * 1.5)), changes: changes };
+}
+
+/* ---------- 잠언 묵상 진행 상황 (관리) · 퀴즈 채점 ---------- */
+function proverbsSheetRows() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Proverbs');
+  if (!sh || sh.getLastRow() < 2) return { head: [], rows: [] };
+  const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  return { head: head, rows: sh.getRange(2, 1, sh.getLastRow() - 1, head.length).getValues() };
+}
+function proverbsStatus() {
+  const t = proverbsSheetRows();
+  const col = function (n) { return t.head.indexOf(n); };
+  const has = function (r, n) { const c = col(n); return c >= 0 && String(r[c] || '').length > 2; };
+  const chapters = [];
+  for (let ch = 1; ch <= 31; ch++) {
+    const r = t.rows.filter(function (x) { return Number(x[col('chapter')]) === ch; })[0];
+    chapters.push(r ? { chapter: ch, status: dailyCellText(r[col('status')]), word: has(r, 'word_json'), qt: has(r, 'qt_json'), study: has(r, 'study_json'), group: has(r, 'group_json'), quiz: has(r, 'quiz_json'), updated_at: dailyCellText(r[col('updated_at')]), note: dailyCellText(r[col('note')]).slice(0, 300) } : { chapter: ch, status: '' });
+  }
+  return { ok: true, run: latestRunSafe(), chapters: chapters };
+}
+// 잠언 퀴즈 ID: prov-YYYYMM-CC (달마다 다시 풀 수 있게 달이 들어 있습니다)
+function gameProverbQuiz(id) {
+  const ch = Number(/^prov-\d{6}-(\d{2})$/.exec(id)[1]);
+  const t = proverbsSheetRows();
+  const cCh = t.head.indexOf('chapter');
+  const cQuiz = t.head.indexOf('quiz_json');
+  for (let i = 0; i < t.rows.length; i++) {
+    if (Number(t.rows[i][cCh]) === ch) {
+      const quiz = parseJsonObject(t.rows[i][cQuiz]);
+      if (Array.isArray(quiz.multiple_choice) && quiz.multiple_choice.length) return { mc: quiz.multiple_choice, fb: Array.isArray(quiz.fill_blank) ? quiz.fill_blank : [] };
+    }
+  }
+  throw new Error('이 장의 잠언 퀴즈가 아직 준비되지 않았습니다.');
+}
+
 function gameDailyQuiz(id) {
   const m = /^bible-(\d{4})(\d{2})(\d{2})$/.exec(id);
   const date = m[1] + '-' + m[2] + '-' + m[3];
@@ -1522,6 +1551,7 @@ function gameDailyQuiz(id) {
 
 function gameStudyQuiz(videoId) {
   if (/^bible-\d{8}$/.test(videoId)) return gameDailyQuiz(videoId);
+  if (/^prov-\d{6}-\d{2}$/.test(videoId)) return gameProverbQuiz(videoId);
   const sh = getSermonsSheet();
   const last = sh.getLastRow();
   if (last < 2) throw new Error('설교를 찾을 수 없습니다.');

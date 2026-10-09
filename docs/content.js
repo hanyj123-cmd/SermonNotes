@@ -8,10 +8,10 @@ const CATEGORIES = [
   { key: 'wednesday', label: '수요예배' },
   { key: 'youth', label: '청년부예배' },
 ];
-const EVENT_NAMES = { sunday: '주일예배', dawn: '새벽기도회', wednesday: '수요예배', youth: '청년부예배', user: '사용자 영상', daily: '오늘의 말씀' };
+const EVENT_NAMES = { sunday: '주일예배', dawn: '새벽기도회', wednesday: '수요예배', youth: '청년부예배', user: '사용자 영상', daily: '오늘의 말씀', proverbs: '잠언 묵상' };
 const eventName = (cat) => EVENT_NAMES[cat] || '예배';
 const catLabel = (key) => (key === 'user' ? '사용자 영상' : CATEGORIES.find((c) => c.key === key)?.label || key);
-const footnoteText = (cat) => (cat === 'daily' ? '토론토영락교회 성경 읽기표의 오늘 분량을 바탕으로 AI가 정리하였습니다. 주석과 해설은 성경과 함께 확인해 주세요.' : cat === 'user' ? '직접 올린 영상에서 설교 본문과 메시지를 중심으로 정리하였습니다.' : `${eventName(cat)} 영상으로 설교 전 찬송, 사도신경, 마침기도 등 의전 순서를 제외하고 설교 본문과 메시지를 중심으로 정리하였습니다.`);
+const footnoteText = (cat) => (cat === 'proverbs' ? '잠언 묵상 자료는 잠언 본문을 바탕으로 AI가 정리하였습니다. 주석과 해설은 성경과 함께 확인해 주세요.' : cat === 'daily' ? '토론토영락교회 성경 읽기표의 오늘 분량을 바탕으로 AI가 정리하였습니다. 주석과 해설은 성경과 함께 확인해 주세요.' : cat === 'user' ? '직접 올린 영상에서 설교 본문과 메시지를 중심으로 정리하였습니다.' : `${eventName(cat)} 영상으로 설교 전 찬송, 사도신경, 마침기도 등 의전 순서를 제외하고 설교 본문과 메시지를 중심으로 정리하였습니다.`);
 
 // 4가지 보기 방식 (화면 위 탭 · 핸드아웃 공통)
 const MODES = [
@@ -27,7 +27,17 @@ const DAILY_HO_MODES = [
   { key: 'study', label: '성경공부 · 퀴즈' },
   { key: 'group', label: '소그룹 나눔' },
 ];
-const modeLabel = (key) => (key === 'read' ? '말씀 읽기' : MODES.find((m) => m.key === key)?.label || key);
+// 잠언 묵상 PDF 보기 방식
+const PROV_HO_MODES = [
+  { key: 'word', label: '말씀 (핵심 3구절)' },
+  { key: 'qt', label: 'QT 묵상' },
+  { key: 'study', label: '성경공부' },
+  { key: 'group', label: '소그룹 나눔 (부원용)' },
+  { key: 'leader', label: '소그룹 인도자용 해설서' },
+  { key: 'quiz', label: '퀴즈' },
+];
+const EXTRA_MODE_LABELS = { read: '말씀 읽기', word: '말씀', leader: '인도자용 해설서', quiz: '퀴즈' };
+const modeLabel = (key) => EXTRA_MODE_LABELS[key] || MODES.find((m) => m.key === key)?.label || key;
 
 /* ---------- 선 아이콘 (24×24 격자, 글자 색을 따라감) ---------- */
 // 버튼 안의 그림 글자(이모지) 대신 쓰는 단정한 선 그림입니다. 사용: icon('play') → <svg class="ic ic-play">
