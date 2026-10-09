@@ -1,6 +1,6 @@
 {
- "updated": "2026-10-08T23:39:27.580Z",
- "count": 27,
+ "updated": "2026-10-09T00:06:26.589Z",
+ "count": 30,
  "sermons": [
   {
    "id": "dAtaD-X_yFE",
@@ -32,6 +32,25 @@
    "book": "열왕기상",
    "bookIdx": 11,
    "summary_short": "솔로몬과 여로보암의 실패를 통해 우리의 연약함을 깨닫고, 오직 참된 왕이신 예수 그리스도의 은혜만을 의지하며 말씀에 순종하는 삶을 살아야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "DfnbwbrAsZ8",
+   "category": "dawn",
+   "title": "새벽기도 - 열왕기상 9장",
+   "date": "2026-10-06",
+   "url": "https://www.youtube.com/watch?v=DfnbwbrAsZ8",
+   "preacher": "강삼엘 목사",
+   "scripture": "열왕기상 9장",
+   "book": "열왕기상",
+   "bookIdx": 11,
+   "summary_short": "솔로몬이 성전과 왕궁 건축을 마친 최고의 순간에 하나님은 그에게 과거 기브온의 첫 마음을 상기시키시며 끝까지 말씀에 순종할 것을 엄중히 경고하셨습니다.",
    "modes": [
     "review",
     "qt",
@@ -155,6 +174,25 @@
    "complete": true
   },
   {
+   "id": "6-HiR1JZHAc",
+   "category": "sunday",
+   "title": "주일예배 - 진리를 분별하는 삶",
+   "date": "2026-09-27",
+   "url": "https://www.youtube.com/watch?v=6-HiR1JZHAc",
+   "preacher": "전대혁 목사",
+   "scripture": "계 2:12-17",
+   "book": "요한계시록",
+   "bookIdx": 66,
+   "summary_short": "우상숭배가 가득한 세속 문화 속에서 지식의 착각을 버리고, 평생 말씀을 배우며 영적 분별력을 키워 참된 진리를 좇는 성도가 되어야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": false
+  },
+  {
    "id": "B9zf_uUXUBU",
    "category": "dawn",
    "title": "새벽기도 - 사무엘하21장",
@@ -212,6 +250,25 @@
    "complete": true
   },
   {
+   "id": "9vD6ZcrrzYU",
+   "category": "sunday",
+   "title": "주일예배 - 고난을 두려워하지 않는 믿음",
+   "date": "2026-09-20",
+   "url": "https://www.youtube.com/watch?v=9vD6ZcrrzYU",
+   "preacher": "전대혁 목사",
+   "scripture": "계 2:8:11",
+   "book": "요한계시록",
+   "bookIdx": 66,
+   "summary_short": "성도착적인 세속적 부유함과 우상숭배의 가치관을 거부하고, 오직 주님을 향한 믿음을 지키기 위해 때로는 자발적 고난과 가난을 감내하는 자들에게 주님은 영원한 생명의 면류관을 약속하십니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
    "id": "9c221eiafuk",
    "category": "wednesday",
    "title": "수요예배 - 내가 누구인지 이제 알았습니다",
@@ -241,6 +298,25 @@
    "book": "유다서",
    "bookIdx": 65,
    "summary_short": "하나님은 혼란과 흔들림 속에서도 단번에 주신 믿음과 서로를 향한 세움, 그리고 신실한 보호하심으로 우리의 인생을 끝까지 붙들어 주십니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "-pkBZt1QUgE",
+   "category": "sunday",
+   "title": "주일예배 - 첫 사랑을 되살리다",
+   "date": "2026-09-13",
+   "url": "https://www.youtube.com/watch?v=-pkBZt1QUgE",
+   "preacher": "전대혁 목사",
+   "scripture": "계 2:1-7",
+   "book": "요한계시록",
+   "bookIdx": 66,
+   "summary_short": "오랜 신앙의 연륜과 수고 속에서 잃어버리기 쉬운 예수 그리스도를 향한 처음 사랑과 감격을 회개함으로 되살려야 합니다.",
    "modes": [
     "review",
     "qt",
@@ -392,7 +468,7 @@
    "scripture": "여호수아1:1-9",
    "book": "여호수아",
    "bookIdx": 6,
-   "summary_short": "사람은 지나가고 시대는 변할지라도 하나님의 약속의 말씀은 영원하며, 성도는 주님의 약속을 의지하여 담대히 순종의 길을 걸어가야 합니다.",
+   "summary_short": "눈에 보이는 지도자가 사라지고 막막한 현실 앞에 서 있을지라도, 하나님의 영원한 언약과 함께하심을 믿고 담대히 말씀에 순종하여 전진합시다.",
    "modes": [
     "review",
     "qt",
@@ -411,7 +487,7 @@
    "scripture": "시편23:1-6/",
    "book": "시편",
    "bookIdx": 19,
-   "summary_short": "우리의 선한 목자 되신 하나님께서는 사망의 음침한 골짜기를 지날지라도 우리를 홀로 두지 않으시며, 그분의 선하심과 인자하심으로 끝까지 인도하여 영원한 아버지의 집에 거하게 하십니다.",
+   "summary_short": "우리의 선한 목자 되신 하나님은 어떤 상황 속에서도 우리를 푸른 풀밭과 쉴 만한 물가로 인도하시며, 사망의 음침한 골짜기까지도 함께하시며 지키시는 분이십니다.",
    "modes": [
     "review",
     "qt",
@@ -468,7 +544,7 @@
    "scripture": "이사야6:1-8",
    "book": "이사야",
    "bookIdx": 23,
-   "summary_short": "세상의 절대 권력이 무너지고 절망이 가득한 시대 속에서, 우리는 영원한 하늘 보좌에 앉으신 주님을 바라보고 십자가 은혜로 정결함을 입어 주님의 부르심에 \"내가 여기 있나이다\"로 응답해야 합니다.",
+   "summary_short": "세상 권세가 무너지는 절망의 자리에서 영원한 보좌에 앉으신 하나님을 바라보고, 십자가의 거룩한 은혜를 경험한 자만이 진정한 부르심에 \"내가 여기 있나이다\"라고 응답할 수 있습니다.",
    "modes": [
     "review",
     "qt",
@@ -487,26 +563,7 @@
    "scripture": "출애굽기 3:1-12",
    "book": "출애굽기",
    "bookIdx": 2,
-   "summary_short": "모세의 80년 인생과 호렙산 떨기나무 사건을 통해, 하나님은 우리의 인간적 조건이 아니라 오직 하나님의 부르심과 임재로 우리를 일꾼 삼으십니다.",
-   "modes": [
-    "review",
-    "qt",
-    "study",
-    "group"
-   ],
-   "complete": true
-  },
-  {
-   "id": "PqSsvTrKKIo",
-   "category": "user",
-   "title": "부르심(01) - 복의 통로",
-   "date": "2026-06-14",
-   "url": "https://www.youtube.com/watch?v=PqSsvTrKKIo",
-   "preacher": "송태근 목사",
-   "scripture": "창세기 12:1-4",
-   "book": "창세기",
-   "bookIdx": 1,
-   "summary_short": "아브라함의 부르심은 인간의 탁월한 믿음의 결과가 아니라, 방황하는 인생을 말씀의 레일 위에 끊임없이 올려놓으시는 하나님의 끈질긴 은혜와 설득의 역사입니다.",
+   "summary_short": "모세를 부르신 하나님의 '이제 가라'는 명령은 인간의 스펙과 능력을 의존하는 삶을 내려놓고, 오직 하나님의 임재와 부르심을 자격 삼아 나아가는 은혜의 자리입니다.",
    "modes": [
     "review",
     "qt",
