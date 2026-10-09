@@ -34,6 +34,10 @@ on:
         description: '이미 만든 오늘의 말씀도 다시 만들기 (true/false)'
         required: false
         default: 'false'
+      daily_modes:
+        description: '다시 만들 부분만 (쉼표로: qt,study,group,quiz,videos — 비우면 전부)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -92,6 +96,7 @@ jobs:
           MAX_NEW_PER_RUN: ${{ github.event.inputs.max_new || vars.MAX_NEW_PER_RUN || '5' }}
           DAILY_DATES: ${{ github.event.inputs.daily_dates }}
           DAILY_FORCE: ${{ github.event.inputs.daily_force }}
+          DAILY_MODES: ${{ github.event.inputs.daily_modes }}
         run: node scripts/sync.mjs ${{ github.event.inputs.export_only == 'true' && '--export-only' || '' }}
 
       - name: 변경된 데이터 커밋
