@@ -1,5 +1,5 @@
 {
- "updated": "2026-10-09T11:47:33.609Z",
+ "updated": "2026-10-09T16:15:06.601Z",
  "count": 31,
  "sermons": [
   {
@@ -589,7 +589,7 @@
     "study",
     "group"
    ],
-   "complete": false
+   "complete": true
   }
  ]
 }
