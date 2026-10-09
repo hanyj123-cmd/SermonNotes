@@ -1,15 +1,13 @@
-name: 설교 자막 정리 동기화
+name: 설교 정리 · 오늘의 말씀 동기화
 
 on:
   schedule:
     # GitHub 예약은 UTC만 지원하고 토론토는 서머타임이 있어서, 여름용·겨울용 두 개씩 등록하고
     # 아래 gate 작업이 "지금이 정해진 토론토 시각인지" 보고 맞는 쪽만 실행하게 합니다.
-    - cron: '0 11 * * 4' # 수요예배 목요일 07:00 (여름 EDT)
-    - cron: '0 12 * * 4' # 수요예배 목요일 07:00 (겨울 EST)
     - cron: '0 2 * * 1' # 주일예배 일요일 22:00 (여름 EDT, UTC로는 월요일 02:00)
     - cron: '0 3 * * 1' # 주일예배 일요일 22:00 (겨울 EST)
-    - cron: '0 15 * * *' # 새벽기도회 매일 11:00 (여름 EDT)
-    - cron: '0 16 * * *' # 새벽기도회 매일 11:00 (겨울 EST)
+    - cron: '0 8 * * *' # 오늘의 말씀 매일 04:00 (여름 EDT)
+    - cron: '0 9 * * *' # 오늘의 말씀 매일 04:00 (겨울 EST)
   workflow_dispatch:
     inputs:
       max_new:
@@ -17,7 +15,7 @@ on:
         required: false
         default: '5'
       categories:
-        description: '확인할 구분 (쉼표로: sunday,dawn,wednesday,youth / all = 전부, 비우면 청년부 제외)'
+        description: '확인할 구분 (쉼표로: sunday,dawn,wednesday,youth / all = 전부 / daily = 오늘의 말씀만, 비우면 주일예배만)'
         required: false
         default: ''
       export_only:
@@ -28,6 +26,10 @@ on:
         description: '성경 본문 가져오기 점검만 하기 (true/false)'
         required: false
         default: 'false'
+      daily_dates:
+        description: '오늘의 말씀을 만들 날짜 (쉼표로, 예: 2026-10-08,2026-10-09 — 비우면 오늘·내일)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -84,6 +86,7 @@ jobs:
           AUTO_WITHIN_DAYS: ${{ vars.AUTO_WITHIN_DAYS }}
           RETRY_DAYS: ${{ vars.RETRY_DAYS }}
           MAX_NEW_PER_RUN: ${{ github.event.inputs.max_new || vars.MAX_NEW_PER_RUN || '5' }}
+          DAILY_DATES: ${{ github.event.inputs.daily_dates }}
         run: node scripts/sync.mjs ${{ github.event.inputs.export_only == 'true' && '--export-only' || '' }}
 
       - name: 변경된 데이터 커밋
@@ -94,7 +97,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "변경 없음"
           else
-            git commit -m "데이터 갱신: 설교 정리 업데이트"
+            git commit -m "데이터 갱신: 설교 정리 · 오늘의 말씀"
             # 동기화가 도는 사이 main 에 다른 변경이 올라왔을 수 있으므로, 최신 내용 위에 다시 얹어서 올립니다 (최대 5번 시도)
             for i in 1 2 3 4 5; do
               git pull --rebase -X theirs origin "${GITHUB_REF_NAME}" && git push && exit 0
