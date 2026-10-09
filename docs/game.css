@@ -44,7 +44,7 @@
 .gm-cta-sub { font-family: var(--sans); font-weight: 500; font-size: 0.86rem; color: #5b4310; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* 상단 탭: 얇은 금빛 밑줄 */
-.gm-tabs { display: grid; grid-template-columns: repeat(5, 1fr); margin: 6px 0 18px; border-bottom: 1px solid var(--gm-line); }
+.gm-tabs { display: grid; grid-template-columns: repeat(6, 1fr); margin: 6px 0 18px; border-bottom: 1px solid var(--gm-line); }
 .gm-tab { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 4px 12px; color: var(--gm-soft); text-decoration: none; font-size: 0.92rem; position: relative; }
 .gm-tab .ic { width: 1.35em; height: 1.35em; }
 .gm-tab[aria-current='page'] { color: var(--gm-ink); font-weight: 700; }
@@ -408,4 +408,104 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .gm *, .quiz-cta { animation: none !important; transition: none !important; }
+}
+
+/* ================= 오늘의 말씀 읽기 ================= */
+.rd { max-width: 780px; margin: 0 auto; }
+.rd-head { text-align: center; padding: 6px 0 4px; }
+.rd-datenav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+.rd-navbtn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--gm-line-2); border-radius: 999px; color: var(--gm-soft); text-decoration: none; font-size: 0.9rem; background: var(--gm-paper); }
+.rd-navbtn:hover { color: var(--gm-ink); border-color: var(--gm-gold); }
+.rd-date { display: flex; flex-direction: column; align-items: center; gap: 2px; font-family: var(--gm-title); font-weight: 600; color: var(--gm-ink); }
+.rd-date em { font-style: normal; font-family: var(--sans, inherit); font-size: 0.76rem; font-weight: 700; color: #5b4310; background: var(--gm-foil); padding: 1px 10px; border-radius: 999px; }
+.rd-date a { font-family: var(--sans, inherit); font-size: 0.8rem; font-weight: 500; color: var(--gm-gold-deep); }
+.rd-refs { font-size: clamp(1.55rem, 4.6vw, 2.2rem); margin: 4px 0 12px; line-height: 1.25; }
+.rd-verse { margin: 0 auto 12px; max-width: 34em; padding: 16px 22px; border-radius: 16px; background: var(--gm-night); color: var(--gm-ivory); box-shadow: var(--gm-shadow); position: relative; }
+.rd-verse::before { content: ''; position: absolute; inset: 6px; border: 1px solid rgba(236, 212, 146, 0.35); border-radius: 12px; pointer-events: none; }
+.rd-verse p { margin: 0 0 6px; font-family: var(--gm-title); font-size: 1.08rem; line-height: 1.7; }
+.rd-verse cite { font-style: normal; font-size: 0.85rem; color: var(--gm-gold-light); }
+.rd-status { display: flex; justify-content: center; gap: 6px; min-height: 4px; margin-bottom: 8px; }
+.rd-tabs { display: flex; gap: 4px; overflow-x: auto; margin: 14px 0 18px; padding: 4px; border-radius: 14px; background: #f3eedf; scrollbar-width: none; }
+.rd-tabs::-webkit-scrollbar { display: none; }
+.rd-tab { flex: 1 0 auto; text-align: center; padding: 9px 14px; border-radius: 10px; color: var(--gm-soft); text-decoration: none; font-weight: 600; font-size: 0.94rem; white-space: nowrap; }
+.rd-tab:hover { color: var(--gm-ink); }
+.rd-tab[aria-current='page'] { background: var(--gm-paper); color: var(--gm-ink); box-shadow: 0 2px 8px -3px rgba(31, 35, 64, 0.25); }
+.rd-vers { justify-content: center; margin-bottom: 14px; }
+.rd-text { background: var(--gm-paper); border: 1px solid var(--gm-line); border-radius: var(--gm-r); box-shadow: var(--gm-shadow); padding: 26px clamp(18px, 5vw, 44px); }
+.rd-passage + .rd-passage { margin-top: 34px; padding-top: 26px; border-top: 1px solid var(--gm-line); }
+.rd-passage-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.rd-passage-head h2 { margin: 0; font-size: 1.45rem; }
+.rd-passage-head h2 span { color: var(--gm-gold-deep); }
+.rd-subhead { font-family: var(--gm-title); font-size: 1rem; color: var(--gm-gold-deep); margin: 20px 0 8px; }
+.rd-v { margin: 0 0 9px; font-family: var(--gm-title); font-size: 1.08rem; line-height: 1.95; color: #2a2c3f; }
+.rd-v sup { font-family: var(--sans, inherit); font-size: 0.66em; font-weight: 700; color: var(--gm-gold-deep); margin-right: 5px; vertical-align: 0.45em; }
+.rd-play .ic { color: var(--gm-gold-deep); }
+.rd-done-box { margin: 18px 0 8px; text-align: center; }
+.rd-done-box .gm-cta:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+.rd-sentinel { height: 1px; }
+.rd-wait { text-align: center; }
+.rd-kakao { margin: 6px 0 4px; border: 1px solid var(--gm-line); border-radius: 14px; background: var(--gm-paper); }
+.rd-kakao > summary { list-style: none; display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; text-align: left; }
+.rd-kakao > summary::-webkit-details-marker { display: none; }
+.rd-kakao > summary > span:last-child { display: flex; flex-direction: column; }
+.rd-kakao > summary .meta { font-size: 0.84rem; }
+.rd-kakao-ic { flex: none; width: 34px; height: 34px; border-radius: 11px; background: #fee500; color: #3a1d1d; display: grid; place-items: center; font-weight: 800; font-family: var(--sans, inherit); }
+.rd-kakao[open] { padding-bottom: 12px; }
+.rd-kakao[open] > :not(summary) { margin-left: 16px; margin-right: 16px; }
+.rd-kakao-text { white-space: pre-wrap; word-break: break-word; font: inherit; font-size: 0.9rem; line-height: 1.65; background: #fbf6e6; border: 1px solid var(--gm-line); border-radius: 12px; padding: 14px 16px; max-height: 360px; overflow: auto; text-align: left; }
+
+/* 게임 홈 카드 */
+.rd-card-refs { font-family: var(--gm-title); font-size: 1.35rem; font-weight: 700; margin: 2px 0 8px; }
+.rd-card-sums { list-style: none; padding: 0; margin: 0 0 14px; display: grid; gap: 6px; }
+.rd-card-sums li { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: baseline; font-size: 0.95rem; }
+.rd-card-sums b { color: var(--gm-gold-deep); font-weight: 700; white-space: nowrap; }
+.rd-card-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+.rd-step { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 14px; border: 1px solid var(--gm-line-2); background: var(--gm-ivory); color: var(--gm-ink); text-decoration: none; transition: border-color 0.12s, transform 0.12s; }
+.rd-step:hover { border-color: var(--gm-gold); transform: translateY(-1px); }
+.rd-step > span:last-child { display: flex; flex-direction: column; line-height: 1.3; }
+.rd-step b { font-size: 0.95rem; }
+.rd-step em { font-style: normal; font-size: 0.8rem; color: var(--gm-soft); }
+.rd-step-ic { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--gm-night); color: var(--gm-gold-light); }
+.rd-step-ic .ic { width: 1.15em; height: 1.15em; }
+.rd-step.done { background: var(--gm-green-soft); border-color: #cfe3cc; }
+.rd-step.done .rd-step-ic { background: var(--gm-green); color: #fff; }
+
+/* ================= 성경일독표 ================= */
+.bp-summary { display: grid; grid-template-columns: auto 1fr; gap: 26px; align-items: center; background: linear-gradient(160deg, var(--gm-paper), var(--gm-ivory)); }
+.bp-ring { position: relative; width: 150px; height: 150px; }
+.bp-ring-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.bp-ring-text b { font-family: var(--gm-title); font-size: 1.7rem; color: var(--gm-ink); }
+.bp-ring-text span { font-size: 0.8rem; color: var(--gm-soft); }
+.bp-sum-info h1 { margin: 0 0 6px; font-size: 1.6rem; }
+.bp-testaments { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+.bp-testaments > div { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: baseline; }
+.bp-testaments > div > :last-child { grid-column: 1 / -1; }
+.bp-testaments span { font-weight: 600; }
+.bp-testaments b { font-size: 0.88rem; color: var(--gm-soft); font-weight: 600; }
+.bp-section { margin-top: 26px; }
+.bp-title { display: flex; align-items: baseline; gap: 10px; font-size: 1.3rem; margin: 0 0 12px; }
+.bp-title span { font-family: var(--sans, inherit); font-size: 0.85rem; color: var(--gm-soft); font-weight: 500; }
+.bp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.bp-book { background: var(--gm-paper); border: 1px solid var(--gm-line); border-radius: 14px; padding: 12px 14px 14px; }
+.bp-book.full { border-color: var(--gm-gold); background: linear-gradient(160deg, #fffaf0, #f8eed3); }
+.bp-book-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 9px; }
+.bp-book-head h3 { margin: 0; font-size: 1.02rem; display: flex; gap: 6px; align-items: baseline; }
+.bp-short { font-family: var(--sans, inherit); font-size: 0.75rem; color: var(--gm-soft); font-weight: 500; }
+.bp-count { font-size: 0.8rem; color: var(--gm-soft); font-variant-numeric: tabular-nums; }
+.bp-book.full .bp-count { color: var(--gm-gold-deep); font-weight: 700; }
+.bp-cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(26px, 1fr)); gap: 4px; }
+.bp-cell { aspect-ratio: 1; border: 1px solid var(--gm-line-2); border-radius: 7px; background: #fff; color: var(--gm-soft); font: inherit; font-size: 0.68rem; font-variant-numeric: tabular-nums; cursor: pointer; padding: 0; transition: background 0.12s, color 0.12s; }
+.bp-cell:hover:not(:disabled) { border-color: var(--gm-gold); color: var(--gm-ink); }
+.bp-cell.on { background: var(--gm-night); border-color: var(--gm-night); color: var(--gm-gold-light); font-weight: 700; }
+.bp-cell:disabled { cursor: default; }
+.bp-cell:focus-visible, .rd-step:focus-visible, .rd-tab:focus-visible { outline: 2px solid var(--gm-gold); outline-offset: 2px; }
+
+@media (max-width: 720px) {
+  .rd-navbtn span { display: none; }
+  .rd-card-steps { grid-template-columns: 1fr; }
+  .bp-summary { grid-template-columns: 1fr; justify-items: center; text-align: center; gap: 14px; }
+  .bp-testaments { text-align: left; width: 100%; }
+  .bp-grid { grid-template-columns: 1fr; }
+  .rd-v { font-size: 1.04rem; line-height: 1.9; }
+  .gm-tab span { font-size: 0.74rem; }
 }

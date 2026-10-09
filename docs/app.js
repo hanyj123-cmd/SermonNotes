@@ -97,7 +97,7 @@ async function load() {
   }
 }
 
-/* ---------- 라우팅: #/c/<구분>  #/u  #/u/add  #/v/<영상ID>[/<모드>]  #/h/<영상ID>[/<모드>]  #/g[/<탭>]  #/q/<영상ID>  #/admin ---------- */
+/* ---------- 라우팅: #/c/<구분>  #/u  #/u/add  #/v/<영상ID>[/<모드>]  #/h/<영상ID>[/<모드>]  #/g[/<탭>]  #/q/<영상ID>  #/r[/<날짜>[/<모드>]]  #/admin ---------- */
 function route() {
   const [, kind, arg, arg2] = location.hash.split('/');
   window.scrollTo(0, 0);
@@ -111,16 +111,16 @@ function route() {
   document.body.classList.toggle('handout-mode', kind === 'h');
   // 첫 화면(#/ 또는 주소 없음)은 말씀 게임 메인입니다
   const home = !kind;
-  setActiveMenu(kind === 'u' ? 'user' : home || kind === 'g' || kind === 'q' ? 'game' : kind === 'admin' ? '' : 'church');
+  setActiveMenu(kind === 'r' ? 'read' : kind === 'u' ? 'user' : home || kind === 'g' || kind === 'q' ? 'game' : kind === 'admin' ? '' : 'church');
   if (home) return renderGame('home');
   if (kind === 'admin') return renderAdminRoute();
   if (kind === 'g') return renderGame(arg || 'home');
   if (kind === 'q' && arg) return renderQuest(decodeURIComponent(arg));
+  if (kind === 'r') return renderDaily(arg, arg2);
   if (kind === 'h' && arg) return renderHandout(decodeURIComponent(arg), arg2);
   if (kind === 'v' && arg) return renderDetail(decodeURIComponent(arg), arg2);
   if (kind === 'u') return renderUserRoute(arg);
-  const cat = CATEGORIES.some((c) => c.key === arg) ? arg : CATEGORIES[0].key;
-  renderList(cat);
+  renderList(arg === 'past' || PAST_CATS.includes(arg) ? 'past' : 'sunday');
 }
 
 function setActiveMenu(which) {
@@ -237,35 +237,42 @@ function sermonBrowser(items, emptyNode) {
   return h('div', {}, bar, count, list, more);
 }
 
+// 토론토영락교회 설교: [주일예배] [지난 설교(새벽기도 · 수요예배 · 청년부예배 — 이제 자동 정리는 하지 않고, 이미 정리된 것만 남겨 둡니다)]
+const PAST_CATS = ['dawn', 'wednesday', 'youth'];
+const LIST_TABS = [
+  { key: 'sunday', label: '주일예배' },
+  { key: 'past', label: '지난 설교' },
+];
 function renderList(cat) {
   if (state.lastCat !== cat) {
     state.filter = { q: '', month: '', preacher: '', book: '' };
     state.lastCat = cat;
   }
-  const counts = Object.fromEntries(CATEGORIES.map((c) => [c.key, state.sermons.filter((s) => s.category === c.key).length]));
+  const inTab = (key) => (s) => (key === 'past' ? PAST_CATS.includes(s.category) : s.category === key);
+  const counts = Object.fromEntries(LIST_TABS.map((t) => [t.key, state.sermons.filter(inTab(t.key)).length]));
   const tabs = h(
     'div',
-    { class: 'tabs', role: 'tablist', 'aria-label': '예배 구분' },
-    CATEGORIES.map((c) =>
+    { class: 'tabs', role: 'tablist', 'aria-label': '설교 구분' },
+    LIST_TABS.map((t) =>
       h(
         'button',
         {
           class: 'tab',
           role: 'tab',
-          'aria-selected': String(c.key === cat),
+          'aria-selected': String(t.key === cat),
           onclick: () => {
-            location.hash = `#/c/${c.key}`;
+            location.hash = `#/c/${t.key}`;
           },
         },
-        c.label,
-        h('span', { class: 'count', text: `${counts[c.key]}` }),
+        t.label,
+        h('span', { class: 'count', text: `${counts[t.key]}` }),
       ),
     ),
   );
-  const items = state.sermons.filter((s) => s.category === cat);
-  const empty = h('div', { class: 'empty' }, h('p', {}, h('strong', { text: `아직 ${catLabel(cat)} 정리가 없습니다.` })), h('p', { text: cat === 'youth' ? '청년부예배는 자동 수집이 없습니다. 관리 화면에서 "청년부예배"를 체크해 직접 실행해 보세요.' : 'Google Sheet의 Playlists 탭에 재생목록을 넣으면 정해진 시각에 자동으로 정리됩니다.' }));
-  app.replaceChildren(tabs, sermonBrowser(items, empty));
-  document.title = `${catLabel(cat)} · 말씀결`;
+  const items = state.sermons.filter(inTab(cat));
+  const empty = h('div', { class: 'empty' }, h('p', {}, h('strong', { text: cat === 'past' ? '지난 설교가 없습니다.' : '아직 주일예배 정리가 없습니다.' })), h('p', { text: cat === 'past' ? '새벽기도 · 수요예배 · 청년부예배는 이제 자동으로 정리하지 않고, 이미 정리된 설교만 여기에 남겨 둡니다.' : 'Google Sheet의 Playlists 탭에 주일예배 재생목록을 넣으면 매주 일요일 밤 자동으로 정리됩니다.' }));
+  app.replaceChildren(h('div', { class: 'page-head' }, h('h1', { text: '토론토영락교회 설교' })), tabs, sermonBrowser(items, empty));
+  document.title = `${cat === 'past' ? '지난 설교' : '주일예배'} · 토론토영락교회 설교 · 말씀결`;
 }
 
 /* ---------- 사용자 영상 ---------- */

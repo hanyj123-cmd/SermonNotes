@@ -1,6 +1,6 @@
 // Gemini API 호출 + 결과 검증 (설교 한 편을 4가지 모드로 따로 정리)
 import { GoogleGenAI } from '@google/genai';
-import { MODES, systemPromptFor, buildUserMessage, buildTranscribeMessage } from './prompt.mjs';
+import { MODES, systemPromptFor, buildUserMessage, buildTranscribeMessage, DAILY_MODES, systemPromptForDaily, buildDailyMessage } from './prompt.mjs';
 import { normalizePassages } from './bible-books.mjs';
 
 export const DEFAULT_MODEL = 'gemini-3.8-flash';
@@ -114,8 +114,8 @@ export function normalizeQt(raw) {
   return out;
 }
 
-export function normalizeStudy(raw) {
-  const q = raw.quiz || {};
+/** 퀴즈 정리 (성경공부 · 오늘의 말씀 공통): 정답 번호가 잘못된 객관식, 정답이 빈 빈칸은 걸러 냅니다 */
+export function normalizeQuiz(q = {}) {
   const mc = (Array.isArray(q.multiple_choice) ? q.multiple_choice : [])
     .map((x) => {
       const options = asArray(x?.options).slice(0, 5);
@@ -130,6 +130,11 @@ export function normalizeStudy(raw) {
   const sa = (Array.isArray(q.short_answer) ? q.short_answer : [])
     .map((x) => ({ question: asString(x?.question), answer: asString(x?.answer), explanation: asString(x?.explanation) }))
     .filter((x) => x.question && x.answer);
+  return { multiple_choice: mc, fill_blank: fb, short_answer: sa };
+}
+
+export function normalizeStudy(raw, { requireQuiz = true } = {}) {
+  const { multiple_choice: mc, fill_blank: fb, short_answer: sa } = normalizeQuiz(raw.quiz || {});
   const out = {
     opening_prayer: asString(raw.opening_prayer),
     songs: songItems(raw.songs),
@@ -149,7 +154,7 @@ export function normalizeStudy(raw) {
     closing_prayer: asString(raw.closing_prayer),
   };
   need(out.deep_dive.length, '신학 딥다이브(deep_dive)가 비어 있습니다');
-  need(mc.length >= 3 && fb.length >= 3 && sa.length >= 3, `퀴즈가 부족합니다 (객관식 ${mc.length}, 빈칸 ${fb.length}, 주관식 ${sa.length})`);
+  if (requireQuiz) need(mc.length >= 3 && fb.length >= 3 && sa.length >= 3, `퀴즈가 부족합니다 (객관식 ${mc.length}, 빈칸 ${fb.length}, 주관식 ${sa.length})`);
   need(out.opening_prayer && out.closing_prayer, '기도문이 비어 있습니다');
   return out;
 }
@@ -186,6 +191,29 @@ export function normalizeGroup(raw) {
   need(out.representative_prayer && out.closing_prayer, '기도문이 비어 있습니다');
   return out;
 }
+
+/* ---------- 오늘의 말씀 ---------- */
+export function normalizeDailyQt(raw) {
+  const base = normalizeQt(raw);
+  const kv = raw.key_verse || {};
+  return {
+    ...base,
+    key_verse: { reference: clip(kv.reference, 60), text: clip(kv.text, 400) },
+    summaries: (Array.isArray(raw.summaries) ? raw.summaries : []).map((s) => ({ reference: clip(s?.reference, 40), summary: clip(s?.summary, 200) })).filter((s) => s.reference && s.summary),
+  };
+}
+export function normalizeDailyStudy(raw) {
+  const out = normalizeStudy(raw, { requireQuiz: false });
+  delete out.quiz; // 오늘의 말씀은 퀴즈를 따로 만듭니다
+  return out;
+}
+export function normalizeDailyQuiz(raw) {
+  const quiz = normalizeQuiz(raw.quiz || raw);
+  need(quiz.multiple_choice.length >= 8 && quiz.fill_blank.length >= 3, `퀴즈가 부족합니다 (객관식 ${quiz.multiple_choice.length}, 빈칸 ${quiz.fill_blank.length})`);
+  return quiz;
+}
+const DAILY_NORMALIZERS = { qt: normalizeDailyQt, study: normalizeDailyStudy, group: normalizeGroup, quiz: normalizeDailyQuiz };
+export const normalizeDailyMode = (mode, raw) => DAILY_NORMALIZERS[mode](raw);
 
 const NORMALIZERS = { review: normalizeReview, qt: normalizeQt, study: normalizeStudy, group: normalizeGroup };
 export const normalizeMode = (mode, raw) => NORMALIZERS[mode](raw);
@@ -243,6 +271,12 @@ export function createGemini(apiKey, model = DEFAULT_MODEL, options = {}) {
         buildUserMessage(mode, { category, title, publishedAt, transcript: clipped, info }),
         (text) => normalizeMode(mode, extractJson(text)),
       );
+    },
+
+    /** 오늘의 말씀 한 모드(qt | study | group | quiz)를 만듭니다. text = 그날 본문 전문 */
+    generateDaily(mode, { date, refs, text }) {
+      if (!DAILY_MODES.includes(mode)) throw new Error(`알 수 없는 말씀 읽기 모드: ${mode}`);
+      return call({ systemInstruction: systemPromptForDaily(mode), responseMimeType: 'application/json' }, buildDailyMessage({ date, refs, text }), (t) => normalizeDailyMode(mode, extractJson(t)));
     },
 
     /**

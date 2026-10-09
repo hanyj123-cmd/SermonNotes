@@ -52,6 +52,7 @@ const ICON_PATHS = {
   shirt: [['path', { d: 'M8.5 4.5L4 7l1.8 3.6 2.2-1V19.5h8V9.6l2.2 1L20 7l-4.5-2.5a3.5 3.5 0 0 1-7 0z' }]],
   map: [['path', { d: 'M9 5L4 7v12l5-2 6 2 5-2V5l-5 2z' }], ['path', { d: 'M9 5v12M15 7v12' }]],
   stamp: [['path', { d: 'M9.5 10.5a2.5 2.5 0 1 1 5 0c0 1.6-1.2 2.2-1.2 3.5h-2.6c0-1.3-1.2-1.9-1.2-3.5z' }], ['path', { d: 'M5 16.5h14v3H5zM7.5 14h9' }]],
+  book: [['path', { d: 'M4.5 5.5c2.6-1 5.2-1 7.5.6v13c-2.3-1.6-4.9-1.6-7.5-.6z' }], ['path', { d: 'M19.5 5.5c-2.6-1-5.2-1-7.5.6v13c2.3-1.6 4.9-1.6 7.5-.6z' }]],
   star: [['path', { d: 'M12 3.8l2.5 5.2 5.6.7-4.1 3.9 1 5.6L12 16.5l-5 2.7 1-5.6-4.1-3.9 5.6-.7z' }]],
   gift: [['path', { d: 'M4.5 10h15v3.5h-15zM6 13.5h12V20H6zM12 10v10' }], ['path', { d: 'M12 10c-1.5-3.5-5.5-4-5.5-1.5S10 10 12 10zm0 0c1.5-3.5 5.5-4 5.5-1.5S14 10 12 10z' }]],
   sprout: [['path', { d: 'M12 20v-8' }], ['path', { d: 'M12 12c0-3.5-2.5-6-6.5-6 0 3.8 2.6 6 6.5 6zM12 14c0-3.2 2.3-5.5 6-5.5 0 3.5-2.4 5.5-6 5.5z' }]],
@@ -297,6 +298,7 @@ function renderBibleAudio(bible, gae) {
 
 /** 성경 본문 보기: 개역개정 · NIV · 표준새번역 · 메시지 성경 버튼으로 하나씩 바꿔 봅니다 (동시에 한 역본만 보임) */
 function renderBibleViewer(bible, { open = true, id = 'passage' } = {}) {
+  if (bible === false) return null; // 오늘의 말씀처럼 본문을 따로 보여 주는 화면
   const versions = (bible && bible.versions) || [];
   const byId = new Map(versions.map((v) => [v.id, v]));
   const head = h('div', { class: 'block-head' }, h('h2', { text: '성경 본문' }));

@@ -116,6 +116,7 @@ function stampSvg(size = 40) {
 /* ---------- 게임 상단 탭 ---------- */
 const GAME_TABS = [
   ['home', '홈', 'game'],
+  ['plan', '일독표', 'book'],
   ['journey', '여정', 'map'],
   ['closet', '옷장', 'shirt'],
   ['shop', '상점', 'shop'],
@@ -144,6 +145,7 @@ async function renderGame(tab = 'home') {
   if (!GAME_TABS.some(([k]) => k === tab)) tab = 'home';
   if (!gameCanSave()) {
     app.replaceChildren(renderGameIntro());
+    if (tab === 'home') app.firstChild.after(h('div', { class: 'gm' }, renderDailyCard(null)));
     return;
   }
   app.replaceChildren(h('div', { class: 'gm' }, gameTabs(tab), h('p', { class: 'loading', text: '게임을 불러오는 중…' })));
@@ -165,7 +167,7 @@ async function renderGame(tab = 'home') {
     app.replaceChildren(h('div', { class: 'gm' }, renderMaker(st)));
     return;
   }
-  const body = { home: renderGameHome, journey: renderJourneys, closet: renderCloset, shop: renderShop, rank: renderRank }[tab](st);
+  const body = { home: renderGameHome, plan: renderBiblePlan, journey: renderJourneys, closet: renderCloset, shop: renderShop, rank: renderRank }[tab](st);
   app.replaceChildren(h('div', { class: `gm gm-page-${tab}` }, gameTabs(tab), tab === 'home' ? null : gameTopStats(st), body));
 }
 
@@ -289,8 +291,8 @@ function renderGameHome(st) {
   const quest = h(
     'section',
     { class: 'gm-card gm-quest' },
-    h('div', { class: 'gm-card-head' }, h('h2', {}, icon('star'), '오늘의 말씀 퀘스트'), h('span', { class: 'gm-chip-soft', text: st.dailyLeft ? `점수 퀘스트 ${st.dailyLeft}개 남음` : '오늘 점수 퀘스트 완료 · 연습은 계속 OK' })),
-    h('p', { class: 'meta', text: '객관식과 빈칸(직접 입력)을 풀어요. 절반 이상 맞히면 오늘의 도장을 받아요.' }),
+    h('div', { class: 'gm-card-head' }, h('h2', {}, icon('star'), '설교 말씀 퀘스트'), h('span', { class: 'gm-chip-soft', text: st.dailyLeft ? `점수 퀘스트 ${st.dailyLeft}개 남음` : '오늘 점수 퀘스트 완료 · 연습은 계속 OK' })),
+    h('p', { class: 'meta', text: '토론토영락교회 주일 설교로 만든 퀴즈예요. 객관식과 빈칸(직접 입력)을 풀고, 절반 이상 맞히면 오늘의 도장을 받아요.' }),
     picks.length ? h('a', { class: 'btn gm-cta', href: `#/q/${encodeURIComponent(picks[0].id)}` }, icon('star'), st.quizzes[picks[0].id] ? '다시 풀어 보기' : '오늘의 퀘스트 시작', h('span', { class: 'gm-cta-sub', text: picks[0].title })) : null,
     picks.length
       ? h(
@@ -308,7 +310,7 @@ function renderGameHome(st) {
       : h('p', { class: 'empty', text: '아직 성경공부 퀴즈가 있는 설교가 없어요. 설교가 정리되면 여기에 나타나요.' }),
   );
 
-  return h('div', { class: 'gm-home' }, hero, quest, renderStampBoard(st), renderJourneyMini(st), renderBadges(st), renderBoardMini());
+  return h('div', { class: 'gm-home' }, hero, renderDailyCard(st), quest, renderStampBoard(st), renderJourneyMini(st), renderBadges(st), renderBoardMini());
 }
 
 function renderStampBoard(st) {
@@ -728,13 +730,21 @@ function renderRank(st) {
 
 /* ---------- 말씀 퀘스트 (퀴즈 풀기) ---------- */
 let questAbort = null;
+// 퀘스트에서 돌아갈 곳: 설교는 성경공부 화면, 오늘의 말씀은 그날 말씀 화면
+const questHome = (d) => (d.daily ? `#/r/${d.date}/read` : `#/v/${encodeURIComponent(d.id)}/study`);
+const questHomeLabel = (d) => (d.daily ? '말씀으로 돌아가기' : '설교로 돌아가기');
 async function renderQuest(id) {
   if (questAbort) questAbort();
   document.title = '말씀 퀘스트 · 말씀결';
   app.replaceChildren(h('div', { class: 'gm' }, h('p', { class: 'loading', text: '퀘스트를 준비하는 중…' })));
   let d;
   try {
-    d = await loadDetail(id);
+    const bdate = typeof dateOfDailyId === 'function' ? dateOfDailyId(id) : '';
+    if (bdate) {
+      const daily = await loadDaily(bdate);
+      if (!daily) throw new Error('이 날의 말씀 퀴즈를 아직 찾지 못했어요.');
+      d = { id, daily: true, category: 'daily', title: daily.refs, date: bdate, study: { quiz: daily.quiz || {} } };
+    } else d = await loadDetail(id);
   } catch (e) {
     app.replaceChildren(h('div', { class: 'gm' }, h('div', { class: 'empty' }, h('p', { text: String(e.message || e) }))));
     return;
@@ -748,15 +758,15 @@ async function renderQuest(id) {
   if (!location.hash.startsWith('#/q/')) return;
   const quiz = (d.study && d.study.quiz) || {};
   const items = [...(quiz.multiple_choice || []).map((q) => ({ kind: 'mc', q })), ...(quiz.fill_blank || []).map((q) => ({ kind: 'fb', q }))];
-  const back = h('a', { class: 'back', href: `#/v/${encodeURIComponent(d.id)}/study` }, icon('back'), '설교로 돌아가기');
+  const back = h('a', { class: 'back', href: questHome(d) }, icon('back'), questHomeLabel(d));
   if (!items.length) {
-    app.replaceChildren(back, h('div', { class: 'empty' }, h('p', { text: '이 설교에는 아직 퀴즈가 없어요.' })));
+    app.replaceChildren(back, h('div', { class: 'empty' }, h('p', { text: d.daily ? '이 날의 말씀 퀴즈는 아직 준비 중이에요.' : '이 설교에는 아직 퀴즈가 없어요.' })));
     return;
   }
   const already = !!(st && st.quizzes[d.id]);
   const capped = !!(st && !already && st.dailyLeft === 0);
   const practice = !st || already || capped;
-  const why = !gameCanSave() ? '로그인하지 않아 연습으로만 풀어요 (점수는 저장되지 않아요).' : !st ? '게임 기록을 불러오지 못해 연습으로 풀어요.' : already ? `이미 점수를 받은 퀘스트예요 (${st.quizzes[d.id].s}/${st.quizzes[d.id].t}). 다시 풀면 연습이지만, 절반 이상 맞히면 오늘 도장은 받을 수 있어요.` : capped ? '오늘 점수 퀘스트 2개를 모두 했어요. 지금은 연습이지만, 이 설교는 내일 점수를 받을 수 있어요.' : '';
+  const why = !gameCanSave() ? '로그인하지 않아 연습으로만 풀어요 (점수는 저장되지 않아요).' : !st ? '게임 기록을 불러오지 못해 연습으로 풀어요.' : already ? `이미 점수를 받은 퀘스트예요 (${st.quizzes[d.id].s}/${st.quizzes[d.id].t}). 다시 풀면 연습이지만, 절반 이상 맞히면 오늘 도장은 받을 수 있어요.` : capped ? `오늘 점수 퀘스트 2개를 모두 했어요. 지금은 연습이지만, 이 ${d.daily ? '퀴즈' : '설교'}는 내일 점수를 받을 수 있어요.` : '';
 
   const nMc = (quiz.multiple_choice || []).length;
   const nFb = (quiz.fill_blank || []).length;
@@ -768,11 +778,11 @@ async function renderQuest(id) {
     h(
       'div',
       {},
-      h('p', { class: 'gm-kicker', text: `${catLabel(d.category)} · ${formatDate(d.date)}` }),
+      h('p', { class: 'gm-kicker', text: d.daily ? `오늘의 말씀 · ${dateLabel(d.date)}` : `${catLabel(d.category)} · ${formatDate(d.date)}` }),
       h('h1', { text: d.title }),
       h('p', { class: 'meta', text: `객관식 ${nMc}문제 · 빈칸 ${nFb}문제 (빈칸은 직접 입력, 띄어쓰기는 상관없어요)` }),
       practice ? h('p', { class: 'gm-practice', text: why }) : h('p', { class: 'gm-stake' }, icon('star'), `모두 맞히면 최대 ${maxXp} XP · 달란트 ×${st.mult} (연속 ${st.streak}일)`),
-      h('div', { class: 'gm-row' }, h('button', { class: 'btn primary gm-big', type: 'button', onclick: () => play() }, '퀘스트 시작'), h('a', { class: 'btn', href: `#/v/${encodeURIComponent(d.id)}/study` }, '먼저 공부하기')),
+      h('div', { class: 'gm-row' }, h('button', { class: 'btn primary gm-big', type: 'button', onclick: () => play() }, '퀘스트 시작'), h('a', { class: 'btn', href: d.daily ? `#/r/${d.date}/read` : `#/v/${encodeURIComponent(d.id)}/study` }, d.daily ? '먼저 말씀 읽기' : '먼저 공부하기')),
     ),
   );
   app.replaceChildren(h('div', { class: 'gm gm-questwrap' }, back, intro));
@@ -789,7 +799,7 @@ async function renderQuest(id) {
     const comboEl = h('span', { class: 'gm-combo', 'aria-live': 'polite' });
     const quit = h('button', { class: 'btn small', type: 'button' }, icon('close'), '그만하기');
     quit.addEventListener('click', () => {
-      const sure = h('div', { class: 'gm-quit' }, h('span', { text: '그만두면 이번 기록은 저장되지 않아요.' }), h('button', { class: 'btn small danger', type: 'button', onclick: () => (location.hash = `#/v/${encodeURIComponent(d.id)}/study`) }, '그만두기'), h('button', { class: 'btn small', type: 'button', onclick: () => sure.remove() }, '계속 풀기'));
+      const sure = h('div', { class: 'gm-quit' }, h('span', { text: '그만두면 이번 기록은 저장되지 않아요.' }), h('button', { class: 'btn small danger', type: 'button', onclick: () => (location.hash = questHome(d)) }, '그만두기'), h('button', { class: 'btn small', type: 'button', onclick: () => sure.remove() }, '계속 풀기'));
       stage.prepend(sure);
     });
     const shell = h('div', { class: 'gm gm-questwrap' }, h('div', { class: 'gm-qhead' }, quit, counter, comboEl), bar, stage);
@@ -984,7 +994,7 @@ function renderResult({ d, items, correct, answers, right, total, server, events
         ),
       )
     : null;
-  const actions = h('div', { class: 'gm-row gm-result-actions' }, h('a', { class: 'btn primary gm-big', href: '#/' }, '게임 홈으로'), h('a', { class: 'btn', href: `#/v/${encodeURIComponent(d.id)}/study` }, '설교로 돌아가기'), h('a', { class: 'btn', href: `#/q/${encodeURIComponent(d.id)}`, onclick: (e) => (e.preventDefault(), renderQuest(d.id)) }, '다시 풀기'));
+  const actions = h('div', { class: 'gm-row gm-result-actions' }, h('a', { class: 'btn primary gm-big', href: '#/' }, '게임 홈으로'), h('a', { class: 'btn', href: questHome(d) }, questHomeLabel(d)), h('a', { class: 'btn', href: `#/q/${encodeURIComponent(d.id)}`, onclick: (e) => (e.preventDefault(), renderQuest(d.id)) }, '다시 풀기'));
   const page = h('div', { class: 'gm gm-questwrap' }, head, evBox, review, actions);
   shell.replaceWith(page);
   app.replaceChildren(page);

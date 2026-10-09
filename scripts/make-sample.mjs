@@ -5,7 +5,9 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { normalizeReview, normalizeQt, normalizeStudy, normalizeGroup } from './lib/gemini.mjs';
-import { exportJson } from './sync.mjs';
+import { exportJson, exportDaily } from './sync.mjs';
+import { normalizeDailyQt, normalizeDailyStudy, normalizeDailyQuiz } from './lib/gemini.mjs';
+import { readingRefs } from './lib/daily.mjs';
 import { parseScripture } from './lib/title.mjs';
 import { BIBLE_SOURCES, bibleSignature } from './lib/bible-web.mjs';
 
@@ -186,3 +188,66 @@ await fs.rm(OUT, { recursive: true, force: true });
 await fs.mkdir(OUT, { recursive: true });
 const res = await exportJson(rows, { dataDir: OUT, quiet: true });
 console.log(`샘플 ${res.count}편을 ${path.relative(process.cwd(), OUT)} 에 만들었습니다.`);
+
+/* ---------- 오늘의 말씀 샘플 (2026-10-08: 열왕기상 11장 · 마가복음 10장) ---------- */
+const dPassages = [
+  { bookId: '11', book: '열왕기상', chapter: 11, verses: [1, 2, 3].map((n) => ({ n, text: `(샘플) 열왕기상 11장 ${n}절입니다. 실제 본문은 교회 앱에서 가져옵니다.` })) },
+  { bookId: '41', book: '마가복음', chapter: 10, verses: [1, 2, 3].map((n) => ({ n, text: `(샘플) 마가복음 10장 ${n}절입니다. 실제 본문은 교회 앱에서 가져옵니다.` })) },
+];
+const ccm = [{ title: '주 은혜임을', artist: '샘플 아티스트', kind: 'CCM', reason: '흔들리는 마음을 붙드시는 은혜를 고백하는 곡입니다.' }];
+const mcD = (level, question, options, answer_index, explanation) => ({ level, question, options, answer_index, explanation });
+const dQuiz = normalizeDailyQuiz({ quiz: {
+  multiple_choice: [
+    mcD('쉬움', '솔로몬에게 있었던 후궁과 첩의 수로 맞는 것은?', ['후궁 300명, 첩 700명', '후궁 700명, 첩 300명', '후궁 500명, 첩 500명', '후궁 600명, 첩 400명'], 1, '왕상 11:3'),
+    mcD('쉬움', '영생을 물은 사람이 슬픈 기색을 띠고 근심하며 간 이유는?', ['재물이 많았기 때문에', '율법을 다 지키지 못해서', '부모를 떠날 수 없어서', '바리새인들이 막아서'], 0, '막 10:22'),
+    mcD('쉬움', '여리고에서 예수님께 고침을 받은 맹인의 이름은?', ['디매오', '바디매오', '삭개오', '나사로'], 1, '막 10:46 — 디매오는 그의 아버지 이름입니다.'),
+    mcD('쉬움', '제자들이 어린 아이들을 데려오는 사람들을 꾸짖을 때 예수님은?', ['제자들을 칭찬하셨다', '아이들을 집으로 돌려보내셨다', '부모들을 꾸짖으셨다', '노하시며 아이들이 오는 것을 용납하라 하셨다'], 3, '막 10:14'),
+    mcD('중간', '선지자 아히야는 자기가 입은 새 옷을 몇 조각으로 찢었습니까?', ['열 조각', '열두 조각', '일곱 조각', '두 조각'], 1, '왕상 11:30'),
+    mcD('중간', '아히야가 여로보암에게 가지라고 한 조각은 몇 개입니까?', ['열두 조각', '한 조각', '열 조각', '두 조각'], 2, '왕상 11:31'),
+    mcD('중간', '솔로몬이 예루살렘 앞 산에 산당을 지어 준 "모압의 가증한" 신은?', ['밀곰', '그모스', '아스다롯', '몰록'], 1, '왕상 11:7 — 몰록과 밀곰은 암몬, 아스다롯은 시돈의 신입니다.'),
+    mcD('중간', '"낙타가 바늘귀로 나가는 것이…"라는 말씀을 들은 제자들의 반응은?', ['우리가 무엇을 얻으리이까', '주여 믿나이다', '이 말씀은 어렵도다', '그런즉 누가 구원을 얻을 수 있는가'], 3, '막 10:26'),
+    mcD('중간', '야고보와 요한이 예수님께 구한 것은?', ['주의 영광 중에 좌우편에 앉게 해 달라', '하늘에서 불을 내려 달라', '열두 지파를 다스리게 해 달라', '먼저 아버지를 장사하게 해 달라'], 0, '막 10:37'),
+    mcD('중간', '예루살렘에 올라가며 예수님은 인자가 누구에게 넘겨질 것이라고 하셨습니까?', ['헤롯과 빌라도', '바리새인과 사두개인', '대제사장들과 서기관들', '장로들과 군병들'], 2, '막 10:33'),
+    mcD('어려움', '여호와께서 솔로몬의 대적으로 일으키신 하닷은 어느 나라 사람입니까?', ['모압', '에돔', '수리아', '블레셋'], 1, '왕상 11:14'),
+    mcD('어려움', '엘리아다의 아들 르손이 무리를 모아 가서 왕이 된 곳은?', ['소바', '다메섹', '하맛', '두로'], 1, '왕상 11:24 — 소바 왕 하닷에셀은 그가 도망쳐 나온 주인입니다.'),
+    mcD('어려움', '여로보암의 어머니 이름은?', ['다브네스', '나아마', '마아가', '스루아'], 3, '왕상 11:26 — 다브네스는 애굽 왕비입니다.'),
+    mcD('어려움', '여로보암이 솔로몬을 피해 도망가 머문 애굽 왕은?', ['바로 느고', '시삭', '소', '하닷에셀'], 1, '왕상 11:40'),
+    mcD('어려움', '바리새인들이 예수님을 시험하여 처음 물은 것은 무엇에 관한 질문입니까?', ['안식일', '세금', '아내를 버리는 것', '정결 예식'], 2, '막 10:2'),
+  ],
+  fill_blank: [
+    { question: '솔로몬의 신하 느밧의 아들 ____이 또한 손을 들어 왕을 대적하였으니', answer: '여로보암', accept: [], explanation: '왕상 11:26' },
+    { question: '그 사람은 ____이 많은 고로 이 말씀으로 인하여 슬픈 기색을 띠고 근심하며 가니라', answer: '재물', accept: [], explanation: '막 10:22' },
+    { question: '____가 바늘귀로 나가는 것이 부자가 하나님의 나라에 들어가는 것보다 쉬우니라', answer: '낙타', accept: [], explanation: '막 10:25' },
+    { question: '자기 목숨을 많은 사람의 ____로 주려 함이니라', answer: '대속물', accept: [], explanation: '막 10:45' },
+    { question: '솔로몬이 예루살렘에서 온 이스라엘을 다스린 날 수가 ____ 년이라', answer: '사십', accept: ['40'], explanation: '왕상 11:42' },
+  ],
+  short_answer: [
+    { question: '솔로몬의 마음이 하나님을 떠나게 된 과정을 본문에서 정리해 보세요.', answer: '이방 여인들을 사랑하여 그들의 신들을 따르게 되었고, 나이가 많을 때 마음이 돌아서 산당까지 지었습니다.', explanation: '왕상 11:1-8' },
+    { question: '하나님이 나라를 다 빼앗지 않으신 이유는 무엇입니까?', answer: '다윗과 택하신 예루살렘을 위하여 한 지파를 남겨 두셨습니다. 언약에 신실하신 하나님을 보여 줍니다.', explanation: '왕상 11:12-13, 32-36' },
+    { question: '부자 청년에게 부족했던 "한 가지"는 무엇이라고 생각합니까?', answer: '재물보다 예수님을 따르는 것을 더 귀하게 여기는 마음입니다.', explanation: '막 10:21' },
+    { question: '"크고자 하는 자는 섬기는 자가 되라"는 말씀이 오늘 나에게 주는 의미를 써 보세요.', answer: '예수님이 섬기러 오셨듯이 가정과 교회에서 먼저 섬기는 자리로 가라는 부르심입니다.', explanation: '막 10:43-45' },
+    { question: '바디매오의 믿음은 어떤 모습으로 나타났습니까?', answer: '사람들이 꾸짖어도 더 크게 부르짖었고, 부르실 때 겉옷을 버리고 뛰어 나아갔습니다.', explanation: '막 10:47-52' },
+  ],
+} });
+const dQt = normalizeDailyQt({
+  opening_prayer: '주님, 오늘 말씀 앞에 마음을 엽니다. 솔로몬처럼 마음이 나뉘지 않게 하시고, 섬기러 오신 주님을 따르게 하옵소서. 아멘.',
+  songs: ccm,
+  outline: [
+    { heading: '1. 나뉜 마음의 끝', scripture: '왕상 11:1-13', paragraphs: ['지혜의 왕 솔로몬도 마음이 나뉘자 하나님을 떠났습니다.', '하나님은 그래도 다윗과의 언약을 지키십니다.'], key_summary: '작은 타협이 마음 전체를 돌려놓을 수 있습니다.' },
+    { heading: '2. 섬기러 오신 왕', scripture: '막 10:35-45', paragraphs: ['제자들이 높은 자리를 구할 때 예수님은 섬김의 길을 보여 주셨습니다.'], key_summary: '참된 크기는 섬김에서 드러납니다.' },
+  ],
+  questions: [{ question: '내 마음을 하나님에게서 돌려놓으려는 것은 무엇입니까?', guide: '왕상 11:4를 다시 읽고, 하나님보다 마음을 더 쏟는 것을 떠올려 보세요.', example: '요즘 바쁜 일이 기도 시간을 밀어내고 있습니다. 내일부터 아침 10분을 먼저 드리겠습니다.' }],
+  applications: [{ title: '섬김 하나 실천하기', detail: '오늘 가족이나 동료를 위해 말없이 한 가지를 섬겨 봅니다.' }],
+  closing_prayer: '섬기러 오신 주님, 오늘 하루 섬기는 자리로 가게 하옵소서. 아멘.',
+  key_verse: { reference: '마가복음 10:45', text: '인자가 온 것은 섬김을 받으려 함이 아니라 도리어 섬기려 하고 자기 목숨을 많은 사람의 대속물로 주려 함이니라' },
+  summaries: [
+    { reference: '열왕기상 11장', summary: '이방 여인들로 마음이 돌아선 솔로몬, 나라가 나뉠 것이 예고되고 여로보암이 등장합니다.' },
+    { reference: '마가복음 10장', summary: '부자 청년, 섬기러 오신 인자, 맹인 바디매오 — 무엇을 버리고 누구를 따를지 묻습니다.' },
+  ],
+});
+const dStudy = normalizeDailyStudy({ opening_prayer: '주님, 오늘 본문을 깊이 깨닫게 하옵소서. 아멘.', songs: ccm, deep_dive: [{ heading: '1. 왕국 분열의 원인', scripture: '왕상 11:9-13', paragraphs: ['솔로몬의 우상 숭배는 언약 위반이었고, 그 결과로 나라가 나뉠 것이 선언됩니다.', '그러나 다윗 언약 때문에 한 지파가 남습니다.'], key_summary: '하나님의 심판 속에도 언약의 신실하심이 있습니다.', word_notes: [] }], summary: '솔로몬의 나뉜 마음과 섬기러 오신 예수님이 대조됩니다.', closing_prayer: '주님, 배운 말씀대로 살게 하옵소서. 아멘.' });
+const dGroup = normalizeGroup({ ...group, songs: ccm });
+const dRow = { date: '2026-10-08', refs: readingRefs(dPassages), status: 'done', passages_json: JSON.stringify(dPassages), qt_json: JSON.stringify(dQt), study_json: JSON.stringify(dStudy), group_json: JSON.stringify(dGroup), quiz_json: JSON.stringify(dQuiz), videos_json: JSON.stringify([{ reference: '열왕기상 11장', book: '열왕기상', chapter: 11, video_id: 'sample00011', title: '(샘플) 공동체성경읽기 열왕기상 11장', channel: '샘플 채널' }, { reference: '마가복음 10장', book: '마가복음', chapter: 10, video_id: 'sample00041', title: '(샘플) 공동체성경읽기 마가복음 10장', channel: '샘플 채널' }]), updated_at: '', note: '' };
+const dRow2 = { ...dRow, date: '2026-10-07', refs: '열왕기상 10장 · 마가복음 9장', passages_json: JSON.stringify([{ ...dPassages[0], chapter: 10 }, { ...dPassages[1], chapter: 9 }]), videos_json: '[]' };
+const nDaily = await exportDaily([dRow, dRow2], { dataDir: OUT, quiet: true });
+console.log(`오늘의 말씀 샘플 ${nDaily}일치를 만들었습니다.`);

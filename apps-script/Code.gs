@@ -1040,7 +1040,7 @@ function userVideoChange(user, body, status) {
    날짜는 토론토 기준입니다. 규칙·아이템 값은 아래 GAME_CONF(docs/game-data.js 에서 자동 생성)를 씁니다. */
 
 // <GAME_CONF> (scripts/game-conf.mjs 가 docs/game-data.js 에서 만듭니다 — 직접 고치지 마세요)
-const GAME_CONF = {"rules":{"xp":{"mc":4,"blank":6,"perfect":20,"stamp":20,"reflect":10},"talent":{"mc":2,"blank":3,"perfect":15,"stamp":10,"reflect":5,"week":50,"comeback":20},"passRate":0.5,"dailyScored":2,"freezePrice":120,"freezeMax":2},"streak":[[30,2],[14,1.7],[7,1.5],[3,1.2],[1,1]],"journeys":{"pilgrim":{"steps":11,"xpPerStep":160,"title":"천성에 이른 순례자","rewards":{"1":"staff","3":"scroll","4":"robe_linen","6":"lamp","11":"laurel"}},"armor":{"steps":18,"xpPerStep":100,"title":"믿음의 용사","rewards":{"18":"bg_stars"}},"tree":{"steps":13,"xpPerStep":140,"title":"열매 맺는 나무","rewards":{"4":"bg_garden","13":"halo_flower"}}},"armor":["belt_bronze","chest_bronze","feet_bronze","shield_bronze","helmet_bronze","sword_bronze","belt_silver","chest_silver","feet_silver","shield_silver","helmet_silver","sword_silver","belt_gold","chest_gold","feet_gold","shield_gold","helmet_gold","sword_gold"],"items":{"s1":["skin",0,"start"],"s2":["skin",0,"start"],"s3":["skin",0,"start"],"hair_short":["hair",0,"start"],"hair_bob":["hair",0,"start"],"hair_long":["hair",0,"start"],"hair_bun":["hair",0,"start"],"hair_curly":["hair",60,"shop"],"hair_spiky":["hair",60,"shop"],"black":["hairColor",0,"start"],"brown":["hairColor",0,"start"],"gray":["hairColor",40,"shop"],"auburn":["hairColor",40,"shop"],"blond":["hairColor",40,"shop"],"robe_brown":["robe",0,"start"],"robe_blue":["robe",80,"shop"],"robe_green":["robe",80,"shop"],"robe_red":["robe",120,"shop"],"robe_purple":["robe",200,"shop"],"robe_star":["robe",400,"shop"],"robe_linen":["robe",0,"journey"],"straw_hat":["head",100,"shop"],"scarf":["head",120,"shop"],"laurel":["head",0,"journey"],"halo_flower":["head",0,"journey"],"staff":["handR",0,"journey"],"scroll":["handR",0,"journey"],"lamp":["handL",0,"journey"],"pet_fish":["pet",150,"shop"],"pet_lamb":["pet",250,"shop"],"pet_dove":["pet",300,"shop"],"pet_donkey":["pet",350,"shop"],"bg_dawn":["bg",80,"shop"],"bg_galilee":["bg",120,"shop"],"bg_rainbow":["bg",200,"shop"],"bg_zion":["bg",300,"shop"],"bg_garden":["bg",0,"journey"],"bg_stars":["bg",0,"journey"],"belt_bronze":["belt",0,"journey"],"belt_silver":["belt",0,"journey"],"belt_gold":["belt",0,"journey"],"chest_bronze":["chest",0,"journey"],"chest_silver":["chest",0,"journey"],"chest_gold":["chest",0,"journey"],"feet_bronze":["feet",0,"journey"],"feet_silver":["feet",0,"journey"],"feet_gold":["feet",0,"journey"],"shield_bronze":["handL",0,"journey"],"shield_silver":["handL",0,"journey"],"shield_gold":["handL",0,"journey"],"helmet_bronze":["head",0,"journey"],"helmet_silver":["head",0,"journey"],"helmet_gold":["head",0,"journey"],"sword_bronze":["handR",0,"journey"],"sword_silver":["handR",0,"journey"],"sword_gold":["handR",0,"journey"]},"look":{"skin":"s1","hair":"hair_short","hairColor":"black","robe":"robe_brown","head":"","handR":"","handL":"","chest":"","belt":"","feet":"","pet":"","bg":""},"badges":[["first",20],["streak3",30],["streak7",60],["streak30",200],["perfect1",30],["perfect10",150],["quests10",50],["quests50",200],["reflect10",60],["journey1",100],["journey3",300]],"levelTitles":[[30,"반석"],[20,"등대"],[15,"일꾼"],[10,"제자"],[5,"순례자"],[1,"새싹"]]};
+const GAME_CONF = {"rules":{"xp":{"mc":4,"blank":6,"perfect":20,"stamp":20,"reflect":10,"read":15},"talent":{"mc":2,"blank":3,"perfect":15,"stamp":10,"reflect":5,"read":8,"week":50,"comeback":20},"passRate":0.5,"dailyScored":2,"freezePrice":120,"freezeMax":2},"streak":[[30,2],[14,1.7],[7,1.5],[3,1.2],[1,1]],"journeys":{"pilgrim":{"steps":11,"xpPerStep":160,"title":"천성에 이른 순례자","rewards":{"1":"staff","3":"scroll","4":"robe_linen","6":"lamp","11":"laurel"}},"armor":{"steps":18,"xpPerStep":100,"title":"믿음의 용사","rewards":{"18":"bg_stars"}},"tree":{"steps":13,"xpPerStep":140,"title":"열매 맺는 나무","rewards":{"4":"bg_garden","13":"halo_flower"}}},"armor":["belt_bronze","chest_bronze","feet_bronze","shield_bronze","helmet_bronze","sword_bronze","belt_silver","chest_silver","feet_silver","shield_silver","helmet_silver","sword_silver","belt_gold","chest_gold","feet_gold","shield_gold","helmet_gold","sword_gold"],"items":{"s1":["skin",0,"start"],"s2":["skin",0,"start"],"s3":["skin",0,"start"],"hair_short":["hair",0,"start"],"hair_bob":["hair",0,"start"],"hair_long":["hair",0,"start"],"hair_bun":["hair",0,"start"],"hair_curly":["hair",60,"shop"],"hair_spiky":["hair",60,"shop"],"black":["hairColor",0,"start"],"brown":["hairColor",0,"start"],"gray":["hairColor",40,"shop"],"auburn":["hairColor",40,"shop"],"blond":["hairColor",40,"shop"],"robe_brown":["robe",0,"start"],"robe_blue":["robe",80,"shop"],"robe_green":["robe",80,"shop"],"robe_red":["robe",120,"shop"],"robe_purple":["robe",200,"shop"],"robe_star":["robe",400,"shop"],"robe_linen":["robe",0,"journey"],"straw_hat":["head",100,"shop"],"scarf":["head",120,"shop"],"laurel":["head",0,"journey"],"halo_flower":["head",0,"journey"],"staff":["handR",0,"journey"],"scroll":["handR",0,"journey"],"lamp":["handL",0,"journey"],"pet_fish":["pet",150,"shop"],"pet_lamb":["pet",250,"shop"],"pet_dove":["pet",300,"shop"],"pet_donkey":["pet",350,"shop"],"bg_dawn":["bg",80,"shop"],"bg_galilee":["bg",120,"shop"],"bg_rainbow":["bg",200,"shop"],"bg_zion":["bg",300,"shop"],"bg_garden":["bg",0,"journey"],"bg_stars":["bg",0,"journey"],"belt_bronze":["belt",0,"journey"],"belt_silver":["belt",0,"journey"],"belt_gold":["belt",0,"journey"],"chest_bronze":["chest",0,"journey"],"chest_silver":["chest",0,"journey"],"chest_gold":["chest",0,"journey"],"feet_bronze":["feet",0,"journey"],"feet_silver":["feet",0,"journey"],"feet_gold":["feet",0,"journey"],"shield_bronze":["handL",0,"journey"],"shield_silver":["handL",0,"journey"],"shield_gold":["handL",0,"journey"],"helmet_bronze":["head",0,"journey"],"helmet_silver":["head",0,"journey"],"helmet_gold":["head",0,"journey"],"sword_bronze":["handR",0,"journey"],"sword_silver":["handR",0,"journey"],"sword_gold":["handR",0,"journey"]},"look":{"skin":"s1","hair":"hair_short","hairColor":"black","robe":"robe_brown","head":"","handR":"","handL":"","chest":"","belt":"","feet":"","pet":"","bg":""},"badges":[["first",20],["streak3",30],["streak7",60],["streak30",200],["perfect1",30],["perfect10",150],["quests10",50],["quests50",200],["reflect10",60],["read7",60],["read30",200],["nt",300],["bible",1000],["journey1",100],["journey3",300]],"levelTitles":[[30,"반석"],[20,"등대"],[15,"일꾼"],[10,"제자"],[5,"순례자"],[1,"새싹"]],"bible":[50,40,27,36,34,24,21,4,31,24,22,25,29,36,10,13,10,42,150,31,12,8,66,52,5,48,12,14,3,9,1,4,7,3,3,3,2,14,4,28,16,24,21,28,16,16,13,6,6,4,4,5,3,6,4,3,1,13,5,5,3,5,1,1,1,22]};
 // </GAME_CONF>
 
 const GAME_SHEET = 'Game';
@@ -1077,6 +1077,8 @@ function handleGame(action, body) {
       else if (action === 'game_profile') gameProfile(st, body);
       else if (action === 'game_quiz') out = gameQuiz(st, body, today, events);
       else if (action === 'game_reflect') out = gameReflect(st, user, body, today, events);
+      else if (action === 'game_read') out = gameRead(st, body, today, events);
+      else if (action === 'game_chapter') out = gameChapter(st, body);
       else return { ok: false, error: '알 수 없는 작업입니다.' };
       if (action !== 'game_get' || found.isNew) gameSave(sh, found.row, user, st);
       return Object.assign({ ok: true, state: gameView(st, today), events: events }, out);
@@ -1122,12 +1124,14 @@ function gameNewState() {
     daily: { day: '', n: 0 },
     quizzes: {},
     reflects: {},
+    readDays: {},
+    bible: [],
     journey: { cur: '', prog: prog, done: [] },
     badges: [],
     titles: [],
     title: '',
     nick: '',
-    stats: { quests: 0, perfect: 0, reflects: 0 },
+    stats: { quests: 0, perfect: 0, reflects: 0, reads: 0 },
   };
 }
 
@@ -1272,6 +1276,10 @@ function gameBadges(st, events) {
     quests10: st.stats.quests >= 10,
     quests50: st.stats.quests >= 50,
     reflect10: st.stats.reflects >= 10,
+    read7: (st.stats.reads || 0) >= 7,
+    read30: (st.stats.reads || 0) >= 30,
+    nt: st.bible.length >= 260 && gameBibleDone(st, 40),
+    bible: st.bible.length >= 1189 && gameBibleDone(st, 1),
     journey1: st.journey.done.length >= 1,
     journey3: st.journey.done.length >= 3,
   };
@@ -1346,7 +1354,28 @@ function gameBlankKey(s) {
     .replace(/[\s.,!?·~'"“”‘’()\[\]{}<>「」『』:;\-_/]/g, '');
 }
 
+// 오늘의 말씀 퀴즈 (Daily 탭, GitHub 동기화가 매일 만듭니다)
+function gameDailyQuiz(id) {
+  const m = /^bible-(\d{4})(\d{2})(\d{2})$/.exec(id);
+  const date = m[1] + '-' + m[2] + '-' + m[3];
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Daily');
+  if (!sh || sh.getLastRow() < 2) throw new Error('이 날의 말씀 퀴즈가 아직 준비되지 않았습니다.');
+  const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  const cDate = head.indexOf('date');
+  const cQuiz = head.indexOf('quiz_json');
+  if (cDate < 0 || cQuiz < 0) throw new Error('Daily 탭 형식이 올바르지 않습니다.');
+  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, head.length).getValues();
+  for (let i = 0; i < rows.length; i++) {
+    if (String(rows[i][cDate]) === date) {
+      const quiz = parseJsonObject(rows[i][cQuiz]);
+      return { mc: Array.isArray(quiz.multiple_choice) ? quiz.multiple_choice : [], fb: Array.isArray(quiz.fill_blank) ? quiz.fill_blank : [] };
+    }
+  }
+  throw new Error('이 날의 말씀 퀴즈가 아직 준비되지 않았습니다.');
+}
+
 function gameStudyQuiz(videoId) {
+  if (/^bible-\d{8}$/.test(videoId)) return gameDailyQuiz(videoId);
   const sh = getSermonsSheet();
   const last = sh.getLastRow();
   if (last < 2) throw new Error('설교를 찾을 수 없습니다.');
@@ -1445,6 +1474,65 @@ function gameReflect(st, user, body, today, events) {
   return { result: { already: false, stamped: stamped, xp: r.xp.reflect, talents: talents } };
 }
 
+/* ---------- 오늘의 말씀 읽기 · 성경일독표 ---------- */
+// 일독표 칸 "41:10" = 마가복음 10장 (책 번호 1~66 : 장)
+function gameChapterOk(key) {
+  const m = /^(\d{1,2}):(\d{1,3})$/.exec(String(key || ''));
+  if (!m) return false;
+  const book = Number(m[1]);
+  const ch = Number(m[2]);
+  return book >= 1 && book <= 66 && ch >= 1 && ch <= GAME_CONF.bible[book - 1];
+}
+function gameAddChapters(st, keys) {
+  let added = 0;
+  (Array.isArray(keys) ? keys : []).slice(0, 30).forEach(function (k) {
+    const key = String(k);
+    if (gameChapterOk(key) && st.bible.indexOf(key) < 0) {
+      st.bible.push(key);
+      added += 1;
+    }
+  });
+  return added;
+}
+
+/* 말씀 읽기 완료: 그날 분량의 장들이 일독표에 체크되고, 날마다 한 번 경험치 · 달란트 · 도장 */
+function gameRead(st, body, today, events) {
+  const date = String(body.date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(gameDayNum(date))) throw new Error('날짜가 올바르지 않습니다.');
+  if (gameDayNum(date) > gameDayNum(today)) throw new Error('아직 오지 않은 날의 말씀입니다.');
+  const added = gameAddChapters(st, body.chapters);
+  if (st.readDays[date]) {
+    gameBadges(st, events);
+    return { result: { already: true, added: added } };
+  }
+  st.readDays[date] = today;
+  st.stats.reads = (st.stats.reads || 0) + 1;
+  const stamped = gameStamp(st, today, events);
+  const r = GAME_CONF.rules;
+  const talents = Math.round(r.talent.read * gameMult(st.streak));
+  gameGain(st, r.xp.read, talents, today, events);
+  gameBadges(st, events);
+  return { result: { already: false, added: added, stamped: stamped, xp: r.xp.read, talents: talents } };
+}
+
+/* 일독표를 손으로 체크하거나 지우기 */
+function gameChapter(st, body) {
+  const key = String(body.key || '');
+  if (!gameChapterOk(key)) throw new Error('성경 장 정보가 올바르지 않습니다.');
+  const i = st.bible.indexOf(key);
+  if (body.on === false || body.on === 'false') {
+    if (i >= 0) st.bible.splice(i, 1);
+  } else if (i < 0) st.bible.push(key);
+  return {};
+}
+
+function gameBibleDone(st, fromBook) {
+  for (let b = fromBook; b <= 66; b++) {
+    for (let ch = 1; ch <= GAME_CONF.bible[b - 1]; ch++) if (st.bible.indexOf(b + ':' + ch) < 0) return false;
+  }
+  return true;
+}
+
 /* 화면에 보낼 모습 (계산한 값 덧붙임) */
 function gameView(st, today) {
   const lv = gameLevel(st.xp);
@@ -1473,6 +1561,8 @@ function gameView(st, today) {
     mult: gameMult(Math.max(1, streak)),
     quizzes: st.quizzes,
     reflects: st.reflects,
+    readDays: st.readDays,
+    bible: st.bible,
     journey: st.journey,
     badges: st.badges,
     titles: st.titles,

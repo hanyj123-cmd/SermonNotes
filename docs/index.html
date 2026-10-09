@@ -23,8 +23,8 @@
     // 저장해 둔 글자 크기를 화면이 그려지기 전에 적용합니다 (깜빡임 방지)
     try { var fs = parseInt(localStorage.getItem('sn-fs'), 10); if (fs >= 10 && fs <= 20) document.documentElement.style.setProperty('--fs', String(fs)); } catch (e) {}
   </script>
-  <link rel="stylesheet" href="style.css?v=9.19" />
-  <link rel="stylesheet" href="game.css?v=9.19" />
+  <link rel="stylesheet" href="style.css?v=9.20" />
+  <link rel="stylesheet" href="game.css?v=9.20" />
 </head>
 <body>
   <header class="site-header">
@@ -38,6 +38,7 @@
         </a>
         <nav class="menu" aria-label="주 메뉴">
           <a class="menu-link menu-game" data-menu="game" href="#/">말씀 게임</a>
+          <a class="menu-link" data-menu="read" href="#/r">오늘의 말씀</a>
           <a class="menu-link" data-menu="church" href="#/c/sunday">토론토영락교회 설교</a>
           <a class="menu-link" data-menu="user" href="#/u">사용자 영상</a>
         </nav>
@@ -66,17 +67,18 @@
   </footer>
 
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="config.js?v=9.19"></script>
-  <script src="content.js?v=9.19"></script>
-  <script src="float.js?v=9.19"></script>
-  <script src="notes.js?v=9.19"></script>
-  <script src="marks.js?v=9.19"></script>
-  <script src="admin-extra.js?v=9.19"></script>
-  <script src="handout.js?v=9.19"></script>
-  <script src="game-data.js?v=9.19"></script>
-  <script src="game-art.js?v=9.19"></script>
-  <script src="game.js?v=9.19"></script>
-  <script src="detail.js?v=9.19"></script>
-  <script src="app.js?v=9.19"></script>
+  <script src="config.js?v=9.20"></script>
+  <script src="content.js?v=9.20"></script>
+  <script src="float.js?v=9.20"></script>
+  <script src="notes.js?v=9.20"></script>
+  <script src="marks.js?v=9.20"></script>
+  <script src="admin-extra.js?v=9.20"></script>
+  <script src="handout.js?v=9.20"></script>
+  <script src="game-data.js?v=9.20"></script>
+  <script src="game-art.js?v=9.20"></script>
+  <script src="game.js?v=9.20"></script>
+  <script src="detail.js?v=9.20"></script>
+  <script src="daily.js?v=9.20"></script>
+  <script src="app.js?v=9.20"></script>
 </body>
 </html>

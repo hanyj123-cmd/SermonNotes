@@ -202,3 +202,30 @@ export async function readSettings(sheets, spreadsheetId) {
     return {};
   }
 }
+
+/* ---------- 오늘의 말씀 (Daily 탭): 날짜마다 한 줄 ---------- */
+export const DAILY_TAB = 'Daily';
+export const DAILY_HEADERS = ['date', 'refs', 'status', 'passages_json', 'qt_json', 'study_json', 'group_json', 'quiz_json', 'videos_json', 'updated_at', 'note'];
+
+export async function readDaily(sheets, spreadsheetId) {
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${DAILY_TAB}!A2:${colLetter(DAILY_HEADERS.length)}` });
+  return (res.data.values || [])
+    .map((r, i) => {
+      const obj = { rowNumber: i + 2 };
+      DAILY_HEADERS.forEach((h, c) => {
+        obj[h] = r[c] ?? '';
+      });
+      return obj;
+    })
+    .filter((o) => /^\d{4}-\d{2}-\d{2}$/.test(o.date));
+}
+
+/** 하루치를 저장합니다 (rowNumber 가 있으면 그 줄을 덮어쓰고, 없으면 새 줄) */
+export async function writeDailyRow(sheets, spreadsheetId, rowNumber, obj) {
+  const values = [DAILY_HEADERS.map((h) => obj[h] ?? '')];
+  if (rowNumber) {
+    await sheets.spreadsheets.values.update({ spreadsheetId, range: `${DAILY_TAB}!A${rowNumber}:${colLetter(DAILY_HEADERS.length)}${rowNumber}`, valueInputOption: 'RAW', requestBody: { values } });
+  } else {
+    await sheets.spreadsheets.values.append({ spreadsheetId, range: `${DAILY_TAB}!A1`, valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS', requestBody: { values } });
+  }
+}

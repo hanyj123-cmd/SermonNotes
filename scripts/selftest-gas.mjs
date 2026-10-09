@@ -613,5 +613,43 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
   check('게임: 사람마다 기록이 따로', g.sheets.get('Game').rows.length === 3);
 }
 
+// ---------- 오늘의 말씀: 읽기 완료 · 일독표 · 퀴즈 ----------
+{
+  const g = makeEnv({ GOOGLE_CLIENT_ID: CID, ALLOWED_EMAILS: 'a@x.com' });
+  let today = '2026-10-08';
+  g.ctx.gameToday = () => today;
+  const gp = (o) => g.post({ id_token: A, ...o });
+  const daily = g.ss.insertSheet('Daily');
+  daily.rows.push(['date', 'refs', 'status', 'passages_json', 'qt_json', 'study_json', 'group_json', 'quiz_json', 'videos_json', 'updated_at', 'note']);
+  const quiz = { multiple_choice: [0, 1, 2, 3].map((i) => ({ question: `q${i}`, options: ['a', 'b', 'c', 'd'], answer_index: i })), fill_blank: [{ question: '____', answer: '솔로몬', accept: [] }] };
+  daily.rows.push(['2026-10-08', '열왕기상 11장 · 마가복음 10장', 'done', '[]', '', '', '', JSON.stringify(quiz), '[]', '', '']);
+
+  let r = gp({ action: 'game_read', date: '2026-10-08', chapters: ['11:11', '41:10', '41:99', '99:1', 'x'] });
+  check('말씀 읽기 완료: 경험치·달란트·도장, 올바른 장만 일독표에', r.ok && r.result.xp === 15 && r.result.stamped && r.state.bible.length === 2 && r.state.bible.includes('41:10') && r.state.readDays['2026-10-08'], JSON.stringify(r).slice(0, 300));
+  r = gp({ action: 'game_read', date: '2026-10-08', chapters: ['11:11'] });
+  check('말씀 읽기 완료: 같은 날은 한 번만 점수', r.ok && r.result.already === true && r.state.xp === 15 + 20, String(r.state && r.state.xp));
+  check('말씀 읽기: 아직 오지 않은 날은 안 됨', !gp({ action: 'game_read', date: '2026-10-09', chapters: [] }).ok);
+  r = gp({ action: 'game_read', date: '2026-10-01', chapters: ['11:3', '41:3'] });
+  check('말씀 읽기: 지난 날 분량도 읽으면 점수 (도장은 오늘 이미 받음)', r.ok && r.result.xp === 15 && r.result.stamped === false && r.state.bible.length === 4);
+
+  r = gp({ action: 'game_chapter', key: '1:1' });
+  check('일독표: 손으로 체크', r.ok && r.state.bible.includes('1:1'));
+  r = gp({ action: 'game_chapter', key: '1:1', on: false });
+  check('일독표: 체크 지우기', r.ok && !r.state.bible.includes('1:1'));
+  check('일독표: 없는 장은 거절', !gp({ action: 'game_chapter', key: '1:51' }).ok && !gp({ action: 'game_chapter', key: '67:1' }).ok);
+
+  r = gp({ action: 'game_quiz', video_id: 'bible-20261008', mc: [0, 1, 2, 0], fb: [' 솔 로몬 '] });
+  check('오늘의 말씀 퀴즈: Daily 탭으로 채점', r.ok && r.result.right === 4 && r.result.total === 5 && r.result.scored, JSON.stringify(r.result || r));
+  check('오늘의 말씀 퀴즈: 아직 없는 날은 안내', /준비되지 않았/.test(gp({ action: 'game_quiz', video_id: 'bible-20261009', mc: [], fb: [] }).error || ''));
+
+  // 신약 완독 업적: 신약 260장을 모두 체크하면
+  const nt = [];
+  const counts = [28, 16, 24, 21, 28, 16, 16, 13, 6, 6, 4, 4, 5, 3, 6, 4, 3, 1, 13, 5, 5, 3, 5, 1, 1, 1, 22];
+  counts.forEach((n, i) => { for (let ch = 1; ch <= n; ch++) nt.push(`${40 + i}:${ch}`); });
+  for (let i = 0; i < nt.length; i += 30) gp({ action: 'game_read', date: '2026-09-' + String(1 + (i / 30)).padStart(2, '0'), chapters: nt.slice(i, i + 30) });
+  r = gp({ action: 'game_get' });
+  check('일독표: 신약 260장 → 신약 완독 업적', r.state.badges.includes('nt') && r.state.badges.includes('read7'), JSON.stringify(r.state.badges));
+}
+
 console.log(fails ? `\n${fails}개 실패` : '\n서버 로직 테스트 모두 통과');
 process.exit(fails ? 1 : 0);

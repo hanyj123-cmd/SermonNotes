@@ -7,15 +7,16 @@ import fs from 'node:fs/promises';
 import { parseTitle, parseScripture, preacherName, bookOf, tidyTitle, normalizePreacher, displayTitle } from './lib/title.mjs';
 import { koReference, parseNumberedLines, parseNumberedFlow, parseBskorea, parseBibleGateway, fetchBibleBlock, bibleIsCurrent, bibleSignature, bskoreaUrl, bibleGatewayUrl, BIBLE_SOURCES } from './lib/bible-web.mjs';
 import { normalizePassages, toUsfm } from './lib/bible-books.mjs';
-import { extractJson, normalizeReview, normalizeQt, normalizeStudy, normalizeGroup, readResponseText, blankKey } from './lib/gemini.mjs';
-import { QUIZ_COUNTS } from './lib/prompt.mjs';
+import { extractJson, normalizeReview, normalizeQt, normalizeStudy, normalizeGroup, readResponseText, blankKey, normalizeDailyQt, normalizeDailyStudy, normalizeDailyQuiz } from './lib/gemini.mjs';
+import { QUIZ_COUNTS, systemPromptForDaily, buildDailyMessage } from './lib/prompt.mjs';
 import { MODES, systemPromptFor, buildUserMessage } from './lib/prompt.mjs';
 import { buildQueue } from './lib/queue.mjs';
 import { guessFromTitle, parseAnyTitle } from './lib/title.mjs';
 import { fetchPublishDates } from './lib/youtube.mjs';
 import { processRow, CELL_LIMIT, readExisting, knownInfo } from './lib/process.mjs';
 import { RULES, torontoClock, dueCategories, decide, shouldRun } from './gate.mjs';
-import { parseCategories, toExport, exportJson } from './sync.mjs';
+import { parseCategories, toExport, exportJson, exportDaily } from './sync.mjs';
+import { parseYnResponse, readingRefs, passagesText, dailyId, fetchDailyReading, YN_BIBLE_API, torontoDate, scoreReadingTitle, buildDailyDay, dailyExport } from './lib/daily.mjs';
 import { durationSeconds, musicIsStale, attachSongVideos, attachBibleAudio, scoreAudioTitle } from './lib/media.mjs';
 
 let pass = 0;
@@ -260,11 +261,12 @@ await t('대기열: 최근 실패 재시도는 7일 이내만, 개수 제한, �
   assert.deepEqual(skipped.map((s) => s.row.video_id), ['live']);
 });
 await t('구분 입력값 해석 (ONLY_CATEGORIES)', () => {
-  assert.deepEqual(parseCategories(''), ['sunday', 'dawn', 'wednesday']);
+  assert.deepEqual(parseCategories(''), ['sunday']); // 새벽기도·수요예배는 더 이상 자동으로 정리하지 않음
   assert.deepEqual(parseCategories('all'), ['sunday', 'dawn', 'wednesday', 'youth']);
   assert.deepEqual(parseCategories('youth, sunday'), ['youth', 'sunday']);
   assert.deepEqual(parseCategories('user'), []);
-  assert.deepEqual(parseCategories('엉뚱'), ['sunday', 'dawn', 'wednesday']);
+  assert.deepEqual(parseCategories('daily'), []);
+  assert.deepEqual(parseCategories('엉뚱'), ['sunday']);
 });
 
 /* ===== 예약 시각 (토론토 시간, 서머타임) ===== */
@@ -273,27 +275,113 @@ await t('토론토 시각: 여름(EDT, UTC-4)·겨울(EST, UTC-5)', () => {
   assert.deepEqual(torontoClock(at('2026-10-08T11:00:00Z')), { day: 4, minutes: 7 * 60 }); // 목 07:00 EDT
   assert.deepEqual(torontoClock(at('2026-12-10T12:00:00Z')), { day: 4, minutes: 7 * 60 }); // 목 07:00 EST
 });
-await t('수요예배: 목요일 07:00 에만 (여름/겨울 예약 둘 다 등록하되 맞는 쪽만 통과)', () => {
-  assert.deepEqual(dueCategories(at('2026-10-08T11:03:00Z')), ['wednesday']);
-  assert.deepEqual(dueCategories(at('2026-10-08T12:03:00Z')), []); // 여름에 겨울 예약이 먼저 도는 경우 08:03 → 아님
-  assert.deepEqual(dueCategories(at('2026-12-10T12:03:00Z')), ['wednesday']);
-  assert.deepEqual(dueCategories(at('2026-12-10T11:03:00Z')), []);
+await t('수요예배·새벽기도는 예약 없음', () => {
+  assert.ok(!RULES.some((r) => r.category === 'wednesday' || r.category === 'dawn'));
+  assert.deepEqual(dueCategories(at('2026-10-08T11:03:00Z')), []); // 옛 수요예배 시각
+  assert.deepEqual(dueCategories(at('2026-10-09T15:02:00Z')), []); // 옛 새벽기도 시각
 });
 await t('주일예배: 일요일 22:00 (UTC로는 월요일 02:00/03:00)', () => {
   assert.deepEqual(dueCategories(at('2026-10-05T02:05:00Z')), ['sunday']); // 일 22:05 EDT
   assert.deepEqual(dueCategories(at('2026-12-07T03:05:00Z')), ['sunday']); // 일 22:05 EST
   assert.deepEqual(dueCategories(at('2026-10-05T03:05:00Z')), []);
 });
-await t('새벽기도회: 매일 11:00', () => {
-  assert.deepEqual(dueCategories(at('2026-10-09T15:02:00Z')), ['dawn']);
-  assert.deepEqual(dueCategories(at('2026-12-09T16:02:00Z')), ['dawn']);
-  assert.deepEqual(dueCategories(at('2026-10-09T16:02:00Z')), []);
+await t('오늘의 말씀: 매일 04:00 (여름/겨울)', () => {
+  assert.deepEqual(dueCategories(at('2026-10-09T08:02:00Z')), ['daily']);
+  assert.deepEqual(dueCategories(at('2026-12-09T09:02:00Z')), ['daily']);
+  assert.deepEqual(dueCategories(at('2026-10-09T09:02:00Z')), []);
 });
 await t('청년부는 예약 규칙 없음 · 직접 실행은 항상 실행', () => {
   assert.ok(!RULES.some((r) => r.category === 'youth'));
   assert.deepEqual(decide('workflow_dispatch', at('2026-10-09T03:00:00Z')), { run: true, categories: '' });
   assert.equal(shouldRun('schedule', at('2026-10-09T03:00:00Z')), false);
-  assert.deepEqual(decide('schedule', at('2026-10-08T11:00:00Z')), { run: true, categories: 'wednesday' });
+  assert.deepEqual(decide('schedule', at('2026-10-09T08:00:00Z')), { run: true, categories: 'daily' });
+});
+
+/* ===== 오늘의 말씀 ===== */
+const ynSample = { bibleVerses: [
+  { bookID: '11', bookName: '열왕기상', chapters: [{ chapterNo: 11, verses: [{ verseNo: 1, verse: ' 솔로몬 왕이  바로의 딸 외에 ' }, { verseNo: 2, verse: '여호와께서 일찍이 ' }] }] },
+  { bookID: '41', bookName: '마가복음', chapters: [{ chapterNo: 10, verses: [{ verseNo: 1, verse: '예수께서 거기서 떠나' }] }] },
+] };
+await t('오늘의 말씀: 교회 서버 응답 읽기 · 분량 표시 · AI 용 본문', async () => {
+  const ps = parseYnResponse(ynSample);
+  assert.deepEqual(ps[0], { bookId: '11', book: '열왕기상', chapter: 11, verses: [{ n: 1, text: '솔로몬 왕이 바로의 딸 외에' }, { n: 2, text: '여호와께서 일찍이' }] });
+  assert.equal(readingRefs(ps), '열왕기상 11장 · 마가복음 10장');
+  assert.equal(readingRefs([{ book: '창세기', chapter: 1 }, { book: '창세기', chapter: 2 }, { book: '마태복음', chapter: 1 }]), '창세기 1-2장 · 마태복음 1장');
+  assert.match(passagesText(ps), /\[열왕기상 11장\]\n1 솔로몬/);
+  assert.equal(dailyId('2026-10-08'), 'bible-20261008');
+  let sent = null;
+  const fake = async (url, opts) => { sent = { url, body: JSON.parse(opts.body) }; return { ok: true, json: async () => ynSample }; };
+  const got = await fetchDailyReading('2026-10-08', 'NIV', { fetchImpl: fake });
+  assert.equal(sent.url, YN_BIBLE_API);
+  assert.equal(sent.body.readingDate, '20261008');
+  assert.equal(sent.body.version, 'NIV');
+  assert.equal(got.length, 2);
+  await assert.rejects(() => fetchDailyReading('2026/10/08'), /날짜/);
+});
+await t('오늘의 말씀: 토론토 날짜 (자정 넘어 UTC 와 다를 때)', () => {
+  assert.equal(torontoDate(0, new Date('2026-10-09T02:00:00Z')), '2026-10-08'); // 토론토는 아직 8일 밤 10시
+  assert.equal(torontoDate(1, new Date('2026-10-09T02:00:00Z')), '2026-10-09');
+});
+await t('공동체 성경읽기 영상 제목 점수', () => {
+  assert.ok(scoreReadingTitle('[공동체성경읽기] 열왕기상 11장 | 드라마바이블', '열왕기상', 11) >= 4);
+  assert.equal(scoreReadingTitle('열왕기상 12장', '열왕기상', 11), 0);
+  assert.equal(scoreReadingTitle('열왕기하 11장', '열왕기상', 11), 0);
+  assert.ok(scoreReadingTitle('공동체성경읽기 열왕기상 10-12장', '열왕기상', 11) > 0);
+  assert.equal(scoreReadingTitle('마가복음 1장', '마가복음', 10), 0);
+});
+const dailyAi = (fail = []) => ({
+  calls: [],
+  async generateDaily(mode, { refs, text }) {
+    this.calls.push(mode);
+    if (fail.includes(mode)) throw new Error('일시 오류');
+    assert.match(text, /솔로몬/);
+    if (mode === 'quiz') return normalizeDailyQuiz({ quiz: { multiple_choice: mcq(15), fill_blank: sa(5), short_answer: sa(5) } });
+    if (mode === 'qt') return normalizeDailyQt({ ...rawQt(), key_verse: { reference: '마가복음 10:45', text: '인자가 온 것은' }, summaries: [{ reference: '열왕기상 11장', summary: '솔로몬이 마음을 돌립니다' }] });
+    if (mode === 'study') return normalizeDailyStudy({ ...rawStudy(), quiz: undefined });
+    return normalizeGroup(rawGroup());
+  },
+});
+await t('오늘의 말씀 하루치: 4가지 생성 · 영상 · 일부 실패하면 다음에 빠진 것만', async () => {
+  const fetchReading = async () => parseYnResponse(ynSample);
+  const ai = dailyAi(['group']);
+  const row = await buildDailyDay('2026-10-08', null, { ai, fetchReading, findVideos: async () => [{ reference: '열왕기상 11장', video_id: 'vid12345678' }], now: () => 'T' });
+  assert.equal(row.status, 'error');
+  assert.equal(row.refs, '열왕기상 11장 · 마가복음 10장');
+  assert.match(row.note, /group/);
+  assert.equal(JSON.parse(row.quiz_json).multiple_choice.length, 15);
+  const ai2 = dailyAi();
+  const row2 = await buildDailyDay('2026-10-08', row, { ai: ai2, fetchReading: async () => { throw new Error('다시 가져오면 안 됨'); }, now: () => 'T' });
+  assert.deepEqual(ai2.calls, ['group']);
+  assert.equal(row2.status, 'done');
+  const out = dailyExport(row2);
+  assert.equal(out.id, 'bible-20261008');
+  assert.equal(out.key_verse.reference, '마가복음 10:45');
+  assert.equal(out.summaries[0].summary, '솔로몬이 마음을 돌립니다');
+  assert.equal(out.videos[0].video_id, 'vid12345678');
+  assert.equal(out.study.quiz, undefined);
+  assert.equal(await buildDailyDay('2027-01-01', null, { ai: dailyAi(), fetchReading: async () => [] }), null);
+});
+await t('오늘의 말씀 내보내기: 날짜별 파일 + 목록(최신순)', async () => {
+  const fetchReading = async () => parseYnResponse(ynSample);
+  const r1 = await buildDailyDay('2026-10-08', null, { ai: dailyAi(), fetchReading });
+  const r2 = await buildDailyDay('2026-10-09', null, { ai: dailyAi(), fetchReading });
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sn-'));
+  await exportDaily([r1, r2], { dataDir: dir, quiet: true });
+  const idx = JSON.parse(await fs.readFile(path.join(dir, 'daily', 'index.json'), 'utf8'));
+  assert.deepEqual(idx.days.map((d) => d.date), ['2026-10-09', '2026-10-08']);
+  const one = JSON.parse(await fs.readFile(path.join(dir, 'daily', '2026-10-08.json'), 'utf8'));
+  assert.equal(one.passages[0].book, '열왕기상');
+  await fs.rm(dir, { recursive: true, force: true });
+});
+await t('오늘의 말씀 프롬프트: 본문에서만 출제 · 객관식 15 · 쉬움/중간/어려움 · CCM 한 곡', () => {
+  const q = systemPromptForDaily('quiz');
+  assert.match(q, /반드시 아래에 주어진 오늘의 성경 본문 내용에서만/);
+  assert.match(q, /쉬움 4개, 중간 6개, 어려움 5개/);
+  assert.match(q, /객관식 15개 · 빈칸 5개 · 주관식 5개/);
+  for (const m of ['qt', 'study', 'group']) assert.match(systemPromptForDaily(m), /CCM을 정확히 1곡/);
+  assert.match(systemPromptFor('qt'), /CCM을 정확히 1곡/); // 설교도 CCM 한 곡
+  assert.match(systemPromptForDaily('qt'), /summaries/);
+  assert.match(buildDailyMessage({ date: '2026-10-08', refs: '열왕기상 11장', text: '1 솔로몬' }), /2026\.10\.08 — 열왕기상 11장/);
 });
 
 await t('설교자 이름 통일: 무엇이 와도 "OOO 목사"', () => {

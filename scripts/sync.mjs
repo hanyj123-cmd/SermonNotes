@@ -9,7 +9,8 @@
 // 사용법:
 //   node scripts/sync.mjs                 전체 실행
 //   node scripts/sync.mjs --export-only   시트 내용만 내보내기 (API 키 불필요)
-// 환경변수 ONLY_CATEGORIES=sunday,wednesday  : 이번 실행에서 확인할 구분 (기본: sunday,dawn,wednesday. 청년부는 youth 를 직접 적어야 함, all = 전부)
+// 환경변수 ONLY_CATEGORIES=sunday,wednesday  : 이번 실행에서 확인할 구분 (기본: sunday. 새벽기도·수요예배·청년부는 직접 적어야 함, all = 전부)
+// 오늘의 말씀: 매 실행마다 오늘·내일(토론토 기준) 분량을 교회 앱에서 가져와 AI 정리(QT·성경공부·소그룹·퀴즈)를 만듭니다. DAILY_DATES=2026-10-08,2026-10-09 로 날짜를 직접 지정할 수도 있습니다.
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -29,10 +30,15 @@ import {
   SERMONS_TAB,
   SERMON_HEADERS,
   CATEGORY_KEYS,
+  DAILY_TAB,
+  DAILY_HEADERS,
+  readDaily,
+  writeDailyRow,
 } from './lib/sheets.mjs';
+import { buildDailyDay, dailyExport, findReadingVideos, torontoDate, isDailyDate } from './lib/daily.mjs';
 import { extractPlaylistId, fetchPlaylistVideos, fetchVideoStates, fetchPublishDates } from './lib/youtube.mjs';
 import { buildQueue } from './lib/queue.mjs';
-import { attachSongVideos, attachBibleAudio, buildPrayerMusic, musicIsStale } from './lib/media.mjs';
+import { attachBibleAudio, buildPrayerMusic, musicIsStale } from './lib/media.mjs';
 import { fetchBibleBlock, bibleIsCurrent } from './lib/bible-web.mjs';
 import { processRow, CELL_LIMIT } from './lib/process.mjs';
 import { createGemini, DEFAULT_MODEL } from './lib/gemini.mjs';
@@ -58,13 +64,13 @@ const now = () => new Date().toISOString();
 /** ONLY_CATEGORIES → 이번 실행의 대상 구분 목록 */
 export function parseCategories(raw) {
   const v = String(raw || '').trim().toLowerCase();
-  if (!v) return ['sunday', 'dawn', 'wednesday']; // 청년부는 필요할 때만 직접 지정
+  if (!v) return ['sunday']; // 새벽기도·수요예배·청년부는 자동으로 정리하지 않습니다 (필요할 때 직접 지정)
   const tokens = v.split(/[\s,]+/).filter(Boolean);
   if (tokens.includes('all')) return [...CATEGORY_KEYS];
   const list = tokens.filter((c) => CATEGORY_KEYS.includes(c));
   if (list.length) return list;
-  // "user"(사용자 영상만) · "none" 은 재생목록을 확인하지 않고 사용자 영상·다시 정리 표시한 것만 처리합니다
-  return tokens.some((t) => t === 'user' || t === 'none') ? [] : ['sunday', 'dawn', 'wednesday'];
+  // "user"(사용자 영상만) · "none" · "daily"(오늘의 말씀만) 은 재생목록을 확인하지 않고 사용자 영상·다시 정리 표시한 것만 처리합니다
+  return tokens.some((t) => t === 'user' || t === 'none' || t === 'daily') ? [] : ['sunday'];
 }
 
 const parseJson = (s) => {
@@ -155,6 +161,56 @@ export async function exportJson(sermons, { dataDir = DATA_DIR, quiet = false } 
   return { count: items.length, legacy };
 }
 
+/* ---------- 오늘의 말씀 ---------- */
+const DAILY_DIR = path.join(DATA_DIR, 'daily');
+
+/** Daily 탭 → docs/data/daily/<날짜>.json + index.json */
+export async function exportDaily(rows, { dataDir = DATA_DIR, quiet = false } = {}) {
+  const dir = path.join(dataDir, 'daily');
+  await fs.mkdir(dir, { recursive: true });
+  const index = [];
+  for (const row of rows) {
+    if (!row.refs) continue;
+    const d = dailyExport(row);
+    await fs.writeFile(path.join(dir, `${row.date}.json`), JSON.stringify(d) + '\n', 'utf8');
+    index.push({ date: d.date, refs: d.refs, complete: d.complete });
+  }
+  index.sort((a, b) => b.date.localeCompare(a.date));
+  await fs.writeFile(path.join(dir, 'index.json'), JSON.stringify({ updated: now(), days: index }, null, 1) + '\n', 'utf8');
+  if (!quiet) console.log(`📖 오늘의 말씀 ${index.length}일치를 docs/data/daily/ 에 내보냈습니다.`);
+  return index.length;
+}
+
+/** 오늘·내일(또는 DAILY_DATES) 분량을 만들고 Daily 탭에 저장합니다. 실패해도 설교 동기화는 계속합니다. */
+async function syncDaily(sheets, spreadsheetId, ai, youtubeKey) {
+  await ensureTab(sheets, spreadsheetId, DAILY_TAB, DAILY_HEADERS);
+  const rows = await readDaily(sheets, spreadsheetId);
+  const byDate = new Map(rows.map((r) => [r.date, r]));
+  const wanted = String(process.env.DAILY_DATES || '').split(/[\s,]+/).filter(isDailyDate);
+  const dates = wanted.length ? wanted.slice(0, 14) : [torontoDate(0), torontoDate(1)];
+  for (const date of dates) {
+    const prev = byDate.get(date);
+    const hasVideos = prev && prev.videos_json && prev.videos_json !== '[]';
+    if (prev && prev.status === 'done' && (hasVideos || !youtubeKey)) continue;
+    console.log(`\n📖 오늘의 말씀 ${date}`);
+    try {
+      const row = await buildDailyDay(date, prev, {
+        ai,
+        findVideos: youtubeKey ? (passages) => findReadingVideos(passages, youtubeKey, { log: (m) => console.warn(`   ${m}`) }) : null,
+        log: (m) => console.log(m),
+      });
+      if (!row) {
+        console.log(`   교회 앱에 ${date} 본문이 아직 없습니다.`);
+        continue;
+      }
+      await writeDailyRow(sheets, spreadsheetId, prev ? prev.rowNumber : 0, row);
+      console.log(`   ✅ ${row.refs} (${row.status === 'done' ? '완료' : `일부 실패: ${row.note}`})`);
+    } catch (e) {
+      console.error(`   ❌ ${date} 오늘의 말씀을 만들지 못했습니다: ${e.message || e}`);
+    }
+  }
+}
+
 /** 이미 정리된 설교 중 성경 본문이 없거나 본문 범위가 바뀐 것에 4역본을 붙입니다 */
 async function backfillBible(sheets, spreadsheetId, sermons, youtubeKey, limit = 12, mediaState = {}) {
   let n = 0;
@@ -227,6 +283,12 @@ async function main() {
       console.warn(`⚠️  성경 본문 갱신을 건너뜁니다: ${e.message || e}`);
     }
     await exportJson(sermons);
+    try {
+      await ensureTab(sheets, spreadsheetId, DAILY_TAB, DAILY_HEADERS);
+      await exportDaily(await readDaily(sheets, spreadsheetId));
+    } catch (e) {
+      console.warn(`⚠️  오늘의 말씀 내보내기를 건너뜁니다: ${e.message || e}`);
+    }
     return;
   }
 
@@ -333,7 +395,7 @@ async function main() {
       update: (patch) => updateSermonRow(sheets, spreadsheetId, row.rowNumber, patch),
       supadataKey,
       geminiVideo,
-      enrichSongs: (songs) => attachSongVideos(songs, youtubeKey, { state: mediaState, log: (m) => console.warn(`   ${m}`) }),
+      enrichSongs: null, // 찬양은 CCM 한 곡만, 영상은 화면에서 YouTube 검색 링크로 엽니다 (검색 할당량 아끼기)
       fetchBible: async (passages) => {
         const block = await fetchBibleBlock(passages, { log: (m) => console.warn(`   ${m}`) });
         return block ? attachBibleAudio(block, passages, youtubeKey, { state: mediaState, log: (m) => console.warn(`   ${m}`) }) : block;
@@ -348,9 +410,21 @@ async function main() {
   // 기도 배경음악 목록 갱신 (QT 묵상 화면용)
   await refreshMusic(youtubeKey);
 
+  // 오늘의 말씀 (오늘·내일)
+  try {
+    await syncDaily(sheets, spreadsheetId, ai, youtubeKey);
+  } catch (e) {
+    console.error(`❌ 오늘의 말씀 동기화 실패: ${e.message || e}`);
+  }
+
   // 3) 내보내기
   sermons = await readSermons(sheets, spreadsheetId);
   await exportJson(sermons);
+  try {
+    await exportDaily(await readDaily(sheets, spreadsheetId));
+  } catch (e) {
+    console.warn(`⚠️  오늘의 말씀 내보내기 실패: ${e.message || e}`);
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

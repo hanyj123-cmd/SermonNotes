@@ -137,6 +137,7 @@ function renderQuiz(quiz) {
     all.push({ btn, box });
     return h('li', { class: 'qz-item', value: no }, h('div', { class: 'qz-q' }, inlineMd(it.question)), h('div', { class: 'qz-act' }, btn), box);
   });
+  if (!n) return null;
   const toggleAll = h('button', { class: 'btn small', type: 'button' }, '모든 답 한꺼번에 보기');
   let open = false;
   toggleAll.addEventListener('click', () => {
