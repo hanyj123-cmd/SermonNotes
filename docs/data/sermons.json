@@ -1,6 +1,6 @@
 {
- "updated": "2026-10-09T00:08:17.679Z",
- "count": 30,
+ "updated": "2026-10-09T00:36:16.736Z",
+ "count": 31,
  "sermons": [
   {
    "id": "WpOZRTv1hvg",
@@ -380,7 +380,7 @@
     "study",
     "group"
    ],
-   "complete": true
+   "complete": false
   },
   {
    "id": "_oTtkG7fWEo",
@@ -411,7 +411,7 @@
    "scripture": "고린도후서4:7-18",
    "book": "고린도후서",
    "bookIdx": 47,
-   "summary_short": "우리는 연약한 질그릇 같으나 그 안에 그리스도의 빛을 가졌기에, 하나님의 붙드심을 믿으며 어떤 환난 중에도 낙심하지 않고 주님의 증인으로 살아갈 수 있습니다.",
+   "summary_short": "우리의 연약함과 고난은 하나님의 능력이 드러나는 무대이며, 하나님은 결코 우리를 포기하지 않으시고 끝까지 동행하십니다.",
    "modes": [
     "review",
     "qt",
@@ -456,7 +456,7 @@
     "study",
     "group"
    ],
-   "complete": true
+   "complete": false
   },
   {
    "id": "OTG2qWv7NDk",
@@ -506,14 +506,14 @@
    "scripture": "누가복음 5:1-11",
    "book": "누가복음",
    "bookIdx": 42,
-   "summary_short": "우리의 연약함과 실패의 현장 속에서도 주님의 말씀에 의지하여 순종할 때, 하나님께서는 놀라운 만선의 은혜와 구원의 부르심으로 이끄십니다.",
+   "summary_short": "우리는 진리의 말씀을 맡은 자로서, 밤새 수고하여 얻은 허탈한 일상 속에서도 주의 말씀에 의지하여 깊은 곳에 그물을 던짐으로 하나님의 놀라운 은혜를 경험하게 됩니다.",
    "modes": [
     "review",
     "qt",
     "study",
     "group"
    ],
-   "complete": true
+   "complete": false
   },
   {
    "id": "IybCmH6A3eQ",
@@ -525,7 +525,7 @@
    "scripture": "예레미야 1:4-10",
    "book": "예레미야",
    "bookIdx": 24,
-   "summary_short": "하나님은 세상의 기준이 아닌 주권적인 예정과 부르심으로 우리를 택하시며, 연약한 우리와 동행하심으로 당신의 뜻을 이루어 가십니다.",
+   "summary_short": "연약하고 두려운 청년 예레미야를 부르신 하나님은, 세상의 조건이 아닌 오직 하나님의 말씀과 동행함으로 시대를 깨우는 거룩한 사명을 이루게 하십니다.",
    "modes": [
     "review",
     "qt",
@@ -571,6 +571,25 @@
     "group"
    ],
    "complete": true
+  },
+  {
+   "id": "PqSsvTrKKIo",
+   "category": "user",
+   "title": "사용자 영상",
+   "date": "2026-06-14",
+   "url": "https://www.youtube.com/watch?v=PqSsvTrKKIo",
+   "preacher": "송태근 목사",
+   "scripture": "창세기 12:1-4",
+   "book": "창세기",
+   "bookIdx": 1,
+   "summary_short": "아브라함을 부르신 사건은 인간의 탁월한 믿음 때문이 아니라, 궤도를 이탈하는 연약한 인생을 하나님의 열심과 은혜로 끝까지 붙드시는 구속사의 샘플입니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": false
   }
  ]
 }
