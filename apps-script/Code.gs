@@ -87,6 +87,7 @@ function doPost(e) {
     if (action === 'settings_set') return json(settingsSet(body));
     if (action === 'videos_mark') return json(videosMark(body));
     if (action === 'sermon_edit') return json(sermonEdit(body));
+    if (action === 'daily_dawn_set') return json(dailyDawnSet(body));
     return json({ ok: false, error: '알 수 없는 작업입니다.' });
   } catch (err) {
     return json({ ok: false, error: String(err && err.message ? err.message : err) });
@@ -608,7 +609,7 @@ function syncStatus() {
   return { ok: true, run: latestRun() };
 }
 
-const SYNC_CATEGORIES = ['sunday', 'dawn', 'wednesday', 'youth', 'all', 'user', 'none', 'daily'];
+const SYNC_CATEGORIES = ['sunday', 'dawn', 'wednesday', 'youth', 'all', 'user', 'none', 'daily', 'dawn_video'];
 
 // 허용된 구분만 골라 쉼표로 잇습니다 (비어 있으면 '' = 청년부를 뺀 기본 구분)
 function cleanCategories(raw) {
@@ -667,6 +668,11 @@ function syncRun(body) {
   n = Math.min(SYNC_MAX, Math.max(SYNC_MIN, n));
   if (latestRun().state === 'running') {
     return { ok: false, error: '이미 실행 중입니다. 끝난 뒤에 다시 눌러 주세요.' };
+  }
+  if (body.dawn === true || body.dawn === 'true') {
+    // 새벽기도 영상 "수동 업데이트 실행": 재생목록을 바로 다시 읽어 최근 7일을 연결 (직접 넣은 영상은 그대로)
+    const oldDawn = dispatchSync(1, 'dawn_video', false, { daily_force: 'true' });
+    return { ok: true, dawn: true, workflow_old: oldDawn };
   }
   if (body.daily === true || body.daily === 'true') {
     // 날짜를 고르면(관리 화면의 날짜별 "다시 만들기") 그 날짜만, 아니면 과거 5일 ~ 미래 2일
@@ -732,9 +738,10 @@ function writeSetting(key, value) {
   sh.getRange(row, 1, 1, 2).setNumberFormat('@').setValues([[key, value]]);
 }
 
+const DAWN_DEFAULT_PLAYLIST = 'https://youtube.com/playlist?list=PLexqr1dnrjPzF_IXx_pR1YRKUx13rX7CT&si=sZADQZD6sK25peYz';
 function settingsGet() {
   const m = readSettingsMap();
-  return { ok: true, settings: { gemini_model: m.gemini_model || '' } };
+  return { ok: true, settings: { gemini_model: m.gemini_model || '', dawn_playlist: m.dawn_playlist || DAWN_DEFAULT_PLAYLIST, dawn_playlist_default: DAWN_DEFAULT_PLAYLIST } };
 }
 
 function settingsSet(body) {
@@ -743,7 +750,19 @@ function settingsSet(body) {
     if (model && !MODEL_PATTERN.test(model)) return { ok: false, error: '모델 이름이 올바르지 않습니다. 예: gemini-3.8-flash' };
     writeSetting('gemini_model', model);
   }
+  if (body.dawn_playlist !== undefined) {
+    // 새벽기도 영상 재생목록: 주소 또는 재생목록 ID (비우면 기본 재생목록)
+    const raw = String(body.dawn_playlist || '').trim();
+    if (raw && !playlistIdOf(raw)) return { ok: false, error: '재생목록 주소가 올바르지 않습니다. 예: https://youtube.com/playlist?list=PL…' };
+    writeSetting('dawn_playlist', raw);
+  }
   return { ok: true };
+}
+function playlistIdOf(s) {
+  const t = String(s || '').trim();
+  if (/^(PL|UU|OL|FL)[\w-]{10,}$/.test(t)) return t;
+  const m = /[?&]list=([\w-]{10,})/.exec(t);
+  return m ? m[1] : '';
 }
 
 /* ---------- 영상 선택 관리 — Sermons 탭 ---------- */
@@ -1390,6 +1409,59 @@ function gameBlankKey(s) {
 }
 
 // 오늘의 말씀 퀴즈 (Daily 탭, GitHub 동기화가 매일 만듭니다)
+/* ---------- 새벽기도 영상 직접 연결 (관리 화면) ---------- */
+// body: { date: 'YYYY-MM-DD', url: 유튜브 주소 또는 영상 ID (비우면 연결 해제 → 다음 자동 실행이 다시 찾음) }
+function dailyDawnSet(body) {
+  const date = String(body.date || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: '날짜가 올바르지 않습니다.' };
+  const raw = String(body.url || '').trim();
+  const vid = raw ? parseVideoId(raw) : '';
+  if (raw && !vid) return { ok: false, error: '유튜브 영상 주소가 올바르지 않습니다.' };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName('Daily');
+  if (!sh) {
+    sh = ss.insertSheet('Daily');
+    sh.getRange(1, 1, 1, 13).setValues([['date', 'refs', 'status', 'passages_json', 'qt_json', 'study_json', 'group_json', 'quiz_json', 'videos_json', 'updated_at', 'note', 'commentary_json', 'dawn_json']]);
+  }
+  const head = sh.getRange(1, 1, 1, Math.max(1, sh.getLastColumn())).getValues()[0].map(String);
+  let cDawn = head.indexOf('dawn_json');
+  if (cDawn < 0) {
+    // 옛 Daily 탭: 맨 뒤에 dawn_json 열을 만듭니다 (동기화가 쓰는 열 순서와 맞추려고 commentary_json 도 없으면 먼저)
+    if (head.indexOf('commentary_json') < 0) head.push('commentary_json');
+    head.push('dawn_json');
+    sh.getRange(1, 1, 1, head.length).setValues([head]);
+    cDawn = head.indexOf('dawn_json');
+  }
+  const cDate = head.indexOf('date');
+  const last = sh.getLastRow();
+  let row = 0;
+  if (last >= 2) {
+    const dates = sh.getRange(2, cDate + 1, last - 1, 1).getValues();
+    for (let i = 0; i < dates.length; i++) if (dailyCellText(dates[i][0]) === date) { row = i + 2; break; }
+  }
+  const value = vid ? JSON.stringify({ video_id: vid, title: youtubeTitle(vid), manual: true, at: new Date().toISOString() }) : '';
+  if (!row) {
+    if (!vid) return { ok: true, date: date, cleared: true };
+    const arr = head.map(function () { return ''; });
+    arr[cDate] = date;
+    arr[cDawn] = value;
+    const cNote = head.indexOf('note');
+    if (cNote >= 0) arr[cNote] = '새벽기도 영상만 먼저 연결';
+    sh.appendRow(arr);
+  } else {
+    sh.getRange(row, cDawn + 1, 1, 1).setValues([[value]]);
+  }
+  // 사이트에 바로 반영 (시트 내용 내보내기만)
+  let dispatched = false;
+  try {
+    dispatchSync(1, 'none', true);
+    dispatched = true;
+  } catch (err) {
+    dispatched = false;
+  }
+  return { ok: true, date: date, video_id: vid, cleared: !vid, dispatched: dispatched };
+}
+
 /* ---------- 오늘의 말씀 진행 상황 (관리 화면) ---------- */
 function dailyCellText(v) {
   if (v instanceof Date) return Utilities.formatDate(v, 'America/Toronto', 'yyyy-MM-dd');
@@ -1412,6 +1484,7 @@ function dailyStatus() {
         status: dailyCellText(r[col('status')]),
         qt: has(r, 'qt_json'), study: has(r, 'study_json'), group: has(r, 'group_json'), quiz: has(r, 'quiz_json'),
         videos: vids.length,
+        dawn: (function () { const d = parseJsonObject(col('dawn_json') >= 0 ? r[col('dawn_json')] : ''); return d && d.video_id ? { video_id: String(d.video_id), manual: !!d.manual, title: String(d.title || '').slice(0, 120) } : null; })(),
         updated_at: dailyCellText(r[col('updated_at')]),
         note: dailyCellText(r[col('note')]).slice(0, 300),
       };

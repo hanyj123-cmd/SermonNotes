@@ -167,6 +167,20 @@ function playReadingVideos(groups, from = 0) {
   startPlayback(first.id, first.title, { queue: rest });
 }
 
+/* ---------- 새벽기도 영상 ---------- */
+// 그 날짜의 새벽기도 영상: 동기화가 재생목록에서 연결한 것(또는 관리자가 직접 넣은 것) → 없으면 정리된 새벽기도 설교
+function dawnFor(date, data) {
+  const sermons = (typeof state !== 'undefined' && state.sermons) || [];
+  const sermon = sermons.find((x) => x.category === 'dawn' && x.date === date && (!data || !data.dawn || x.id === data.dawn.video_id)) || sermons.find((x) => x.category === 'dawn' && x.date === date);
+  if (data && data.dawn && data.dawn.video_id) return { video_id: data.dawn.video_id, title: data.dawn.title || '', sermonId: sermon && sermon.id === data.dawn.video_id ? sermon.id : '' };
+  return sermon ? { video_id: sermon.id, title: sermon.title, sermonId: sermon.id } : null;
+}
+function playDawn(dawn, date) {
+  if (dawn && dawn.video_id) startPlayback(dawn.video_id, `새벽기도 · ${dateLabel(date, false)}`);
+}
+const dawnButton = (dawn, date, cls = 'btn small rd-dawn') =>
+  dawn ? h('button', { class: cls, type: 'button', title: '그 날 새벽기도 영상을 떠 있는 창에서 봅니다', onclick: () => playDawn(dawn, date) }, icon('play'), '새벽기도 보기') : null;
+
 /* ---------- 카톡 메시지 ---------- */
 function dailyShareUrl(date) {
   return `${location.origin}${location.pathname.replace(/index\.html$/, '')}#/r/${date}`;
@@ -185,6 +199,8 @@ function kakaoText(date, refs, data) {
     lines.push('', '🎧 공동체 성경읽기');
     groups.forEach((g) => lines.push(`${groupLabel(g)}`, `https://youtu.be/${g.video_id}`));
   }
+  const dawn = dawnFor(date, data);
+  if (dawn) lines.push('', '🙏 새벽기도', `https://youtu.be/${dawn.video_id}`);
   lines.push('', `말씀결에서 함께 읽기 ▶ ${dailyShareUrl(date)}`);
   return lines.join('\n');
 }
@@ -284,15 +300,27 @@ function renderReadingTab(date, id, basePassages, data, st, notes) {
   const text = h('div', { class: 'rd-text' });
   const videos = new Map(((data && data.videos) || []).map((v) => [`${v.book}|${v.chapter}`, v]));
   const groups = videoGroups(data);
-  const listen = groups.length
-    ? h(
-        'div',
-        { class: 'rd-listen' },
-        h('span', { class: 'rd-listen-ic', 'aria-hidden': 'true' }, icon('headphones')),
-        h('span', { class: 'rd-listen-text' }, h('b', { text: '공동체 성경읽기로 함께 듣기' }), h('span', { class: 'meta', text: `${groups.map(groupLabel).join(' → ')} · 떠 있는 창에서 이어서 재생돼요` })),
-        h('button', { class: 'btn primary small', type: 'button', onclick: () => playReadingVideos(groups) }, icon('play'), groups.length > 1 ? '전체 이어 듣기' : '듣기'),
-      )
-    : null;
+  const dawn = dawnFor(date, data);
+  const listen =
+    groups.length || dawn
+      ? h(
+          'div',
+          { class: 'rd-listen' },
+          h('span', { class: 'rd-listen-ic', 'aria-hidden': 'true' }, icon('headphones')),
+          h(
+            'span',
+            { class: 'rd-listen-text' },
+            h('b', { text: groups.length ? '공동체 성경읽기로 함께 듣기' : '오늘의 새벽기도' }),
+            h('span', { class: 'meta', text: groups.length ? `${groups.map(groupLabel).join(' → ')} · 떠 있는 창에서 이어서 재생돼요` : '떠 있는 창에서 재생돼요' }),
+          ),
+          h(
+            'span',
+            { class: 'rd-listen-btns' },
+            groups.length ? h('button', { class: 'btn primary small', type: 'button', onclick: () => playReadingVideos(groups) }, icon('play'), groups.length > 1 ? '전체 이어 듣기' : '공동체 성경읽기') : null,
+            dawnButton(dawn, date, 'btn small rd-dawn-main'),
+          ),
+        )
+      : null;
   // 본문이 2개 이상이면 탭으로 하나씩 (스크롤이 너무 길지 않게). 탭은 역본을 바꿔도 그대로입니다.
   const multi = basePassages.length > 1;
   const labelOf = (p) => `${p.book} ${p.chapter}장`;
@@ -363,7 +391,7 @@ function renderReadingTab(date, id, basePassages, data, st, notes) {
         const first = multi && pi === passages.length - 1 ? h('button', { class: 'btn small rd-first', type: 'button', onclick: () => select(0, true) }, '‹ 첫 본문으로') : null;
         const end = h('div', { class: 'rd-sentinel', 'aria-hidden': 'true', 'data-i': String(pi) });
         if (io) setTimeout(() => io.observe(end), 300);
-        return h('section', { class: 'rd-passage', role: multi ? 'tabpanel' : null, 'aria-label': base ? labelOf(base) : null }, h('div', { class: 'rd-passage-head' }, h('h2', {}, h('span', { text: p.book }), ` ${p.chapter}${version === 'NIV' ? '' : '장'}`), play), verses, h('div', { class: 'rd-passage-foot' }, first, next), end);
+        return h('section', { class: 'rd-passage', role: multi ? 'tabpanel' : null, 'aria-label': base ? labelOf(base) : null }, h('div', { class: 'rd-passage-head' }, h('h2', {}, h('span', { text: p.book }), ` ${p.chapter}${version === 'NIV' ? '' : '장'}`), h('span', { class: 'rd-head-btns' }, play, dawnButton(dawn, date))), verses, h('div', { class: 'rd-passage-foot' }, first, next), end);
       }),
     );
     paintTabs();
@@ -451,7 +479,16 @@ function renderDailyCard(st) {
         ),
       );
       const groups = videoGroups(data);
-      if (groups.length) body.push(h('button', { class: 'btn rd-card-listen', type: 'button', onclick: () => playReadingVideos(groups) }, icon('headphones'), `공동체 성경읽기 듣기 · ${groups.map(groupLabel).join(' → ')}`));
+      const dawn = dawnFor(date, data);
+      if (groups.length || dawn)
+        body.push(
+          h(
+            'div',
+            { class: 'rd-card-listens' },
+            groups.length ? h('button', { class: 'btn rd-card-listen', type: 'button', onclick: () => playReadingVideos(groups) }, icon('headphones'), `공동체 성경읽기 듣기 · ${groups.map(groupLabel).join(' → ')}`) : null,
+            dawnButton(dawn, date, 'btn rd-card-listen rd-card-dawn'),
+          ),
+        );
       body.push(kakaoBox(date, refs, data));
     }
     card.lastChild.replaceWith(h('div', { class: 'rd-card-body' }, body));

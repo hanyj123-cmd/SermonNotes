@@ -544,3 +544,18 @@
 .rd-passage-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--gm-line); }
 .rd-passage-foot:empty { display: none; }
 .rd-next { margin-left: auto; background: var(--gm-night) !important; border-color: var(--gm-night) !important; color: var(--gm-ivory) !important; font-weight: 600; }
+
+/* 새벽기도 보기 */
+.rd-listen-btns { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.gm .rd-listen .rd-dawn-main { background: transparent; border: 1px solid rgba(236, 212, 146, 0.6); color: var(--gm-gold-light); }
+.gm .rd-listen .rd-dawn-main .ic { color: var(--gm-gold-light); }
+.rd-head-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.rd-dawn .ic, .rd-card-dawn .ic { color: var(--gm-gold-deep); }
+.rd-card-listens { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 10px; }
+.rd-card-listens .rd-card-listen { margin-bottom: 0; }
+.rd-card-listens > :only-child { grid-column: 1 / -1; }
+@media (max-width: 720px) {
+  .rd-listen-btns { grid-column: 1 / -1; justify-content: stretch; }
+  .rd-listen-btns .btn { flex: 1; justify-content: center; }
+  .rd-card-listens { grid-template-columns: 1fr; }
+}

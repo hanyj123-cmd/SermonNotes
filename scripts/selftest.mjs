@@ -18,6 +18,8 @@ import { RULES, torontoClock, dueCategories, decide, shouldRun } from './gate.mj
 import { parseCategories, toExport, exportJson, exportDaily } from './sync.mjs';
 import { parseReadingTitle, buildReadingIndex, readingIndexIsStale } from './lib/reading-index.mjs';
 import { fitCommentary, DAILY_CELL_LIMIT } from './lib/daily.mjs';
+import { dawnDateOf, findDawnUpdates, dawnPlaylistId } from './lib/dawn.mjs';
+import { scheduledCategories } from './gate.mjs';
 import { parseYnResponse, readingRefs, passagesText, dailyId, fetchDailyReading, YN_BIBLE_API, torontoDate, scoreReadingTitle, buildDailyDay, dailyExport, findReadingVideos } from './lib/daily.mjs';
 import { durationSeconds, musicIsStale, attachSongVideos, attachBibleAudio, scoreAudioTitle } from './lib/media.mjs';
 
@@ -290,7 +292,7 @@ await t('주일예배: 일요일 22:00 (UTC로는 월요일 02:00/03:00)', () =>
 await t('오늘의 말씀: 매일 07:00 (여름/겨울) — 다음 날 분량', () => {
   assert.deepEqual(dueCategories(at('2026-10-09T11:02:00Z')), ['daily']);
   assert.deepEqual(dueCategories(at('2026-12-09T12:02:00Z')), ['daily']);
-  assert.deepEqual(dueCategories(at('2026-10-09T12:02:00Z')), []);
+  assert.deepEqual(dueCategories(at('2026-10-09T13:02:00Z')), []); // 09:02 EDT
   assert.deepEqual(dueCategories(at('2026-10-09T08:02:00Z')), []); // 옛 04:00
 });
 await t('청년부는 예약 규칙 없음 · 직접 실행은 항상 실행', () => {
@@ -298,6 +300,17 @@ await t('청년부는 예약 규칙 없음 · 직접 실행은 항상 실행', (
   assert.deepEqual(decide('workflow_dispatch', at('2026-10-09T03:00:00Z')), { run: true, categories: '' });
   assert.equal(shouldRun('schedule', at('2026-10-09T03:00:00Z')), false);
   assert.deepEqual(decide('schedule', at('2026-10-09T11:00:00Z')), { run: true, categories: 'daily' });
+});
+
+await t('예약: 울린 cron 의 "정해진 시각"으로 판단 (늦게 시작해도 헷갈리지 않음)', () => {
+  assert.deepEqual(scheduledCategories('0 11 * * *', at('2026-10-09T11:25:00Z')), ['daily']); // 07:00 EDT 예약이 25분 늦게 시작
+  assert.deepEqual(scheduledCategories('20 11 * * *', at('2026-10-09T11:31:00Z')), ['dawn_video']); // 07:20
+  assert.deepEqual(scheduledCategories('0 12 * * *', at('2026-10-09T12:05:00Z')), ['dawn_video']); // 여름 08:00 다시 확인
+  assert.deepEqual(scheduledCategories('0 12 * * *', at('2026-12-09T12:05:00Z')), ['daily']); // 겨울 07:00
+  assert.deepEqual(scheduledCategories('0 13 * * *', at('2026-12-09T13:10:00Z')), ['dawn_video']); // 겨울 08:00
+  assert.deepEqual(scheduledCategories('20 12 * * *', at('2026-10-09T12:25:00Z')), []); // 여름 08:20 — 해당 없음
+  assert.equal(scheduledCategories('', at('2026-10-09T12:25:00Z')), null);
+  assert.deepEqual(decide('schedule', at('2026-10-12T02:10:00Z'), '0 2 * * 1'), { run: true, categories: 'sunday' });
 });
 
 /* ===== 오늘의 말씀 ===== */
@@ -424,6 +437,41 @@ await t('오늘의 말씀 성경공부: 절별 주석은 commentary_json 열에 
   // 아주 길면 셀 크기에 맞게 줄임
   const big = [{ passage: 'x', sections: Array.from({ length: 12 }, () => ({ verses: '1', heading: 'h', paragraphs: ['가'.repeat(2900), '나'.repeat(2900)], cross_refs: ['r'], commentators: [{ name: 'n', view: '다'.repeat(600) }] })) }];
   assert.ok(JSON.stringify(fitCommentary(big)).length <= DAILY_CELL_LIMIT);
+});
+await t('새벽기도 영상: 제목의 날짜 → 없으면 올라온 시각(토론토)', () => {
+  assert.equal(dawnDateOf('[2026.10.09] 새벽기도 - 열왕기상 12장', '2026-10-10T01:00:00Z'), '2026-10-09');
+  assert.equal(dawnDateOf('새벽기도회 26.10.08', ''), '2026-10-08');
+  assert.equal(dawnDateOf('10월 7일 새벽기도', '2026-10-07T10:00:00Z'), '2026-10-07');
+  assert.equal(dawnDateOf('새벽기도', '2026-10-09T03:30:00Z'), '2026-10-08'); // UTC 3:30 = 토론토 전날 밤
+  assert.equal(dawnPlaylistId(''), 'PLexqr1dnrjPzF_IXx_pR1YRKUx13rX7CT');
+  assert.equal(dawnPlaylistId('https://youtube.com/playlist?list=PLabcdefghijk'), 'PLabcdefghijk');
+});
+await t('새벽기도 영상: 날짜별 1:1 연결 · 예정된 라이브 제외 · 직접 넣은 영상은 그대로 · 이미 있으면 재생목록 안 읽음', async () => {
+  let calls = 0;
+  const fetchImpl = async (url) => {
+    calls++;
+    const u = new URL(url);
+    const ep = u.pathname.split('/').pop();
+    const item = (id, title, pub) => ({ snippet: { title }, contentDetails: { videoId: id, videoPublishedAt: pub }, status: { privacyStatus: 'public' } });
+    const body = ep === 'playlistItems'
+      ? { items: [item('vid0009aaaa', '[2026.10.09] 새벽기도', '2026-10-09T10:00:00Z'), item('vid0008aaaa', '[2026.10.08] 새벽기도', '2026-10-08T10:00:00Z'), item('vid0010live', '[2026.10.10] 새벽기도', '2026-10-10T10:00:00Z'), item('vid0007aaaa', '[2026.10.07] 새벽기도', '2026-10-07T10:00:00Z')] }
+      : { items: u.searchParams.get('id').split(',').map((id) => ({ id, snippet: { liveBroadcastContent: id.includes('live') ? 'upcoming' : 'none' }, status: { privacyStatus: 'public', uploadStatus: 'processed' }, contentDetails: { duration: 'PT30M' } })) };
+    return { ok: true, json: async () => body };
+  };
+  const rows = [{ date: '2026-10-08', dawn_json: JSON.stringify({ video_id: 'manualAAAAA', manual: true }) }, { date: '2026-10-07', dawn_json: '' }];
+  const ups = await findDawnUpdates({ rows, playlistId: 'PLx', apiKey: 'k', dates: ['2026-10-10', '2026-10-09', '2026-10-08', '2026-10-07'], fetchImpl, now: new Date('2026-10-10T12:00:00Z') });
+  assert.deepEqual(ups.map((u) => [u.date, u.dawn.video_id]), [['2026-10-09', 'vid0009aaaa'], ['2026-10-07', 'vid0007aaaa']]);
+  calls = 0;
+  const none = await findDawnUpdates({ rows: [{ date: '2026-10-09', dawn_json: JSON.stringify({ video_id: 'x' }) }], playlistId: 'PLx', apiKey: 'k', dates: ['2026-10-09'], fetchImpl });
+  assert.equal(none.length, 0);
+  assert.equal(calls, 0); // 08:00 다시 확인: 오늘 영상이 이미 있으면 재생목록을 읽지 않음
+});
+await t('새벽기도 영상: 오늘의 말씀을 다시 만들어도 연결은 남고, 내보내기에 들어감', async () => {
+  const fetchReading = async () => parseYnResponse(ynSample);
+  const prev = { date: '2026-10-08', dawn_json: JSON.stringify({ video_id: 'dawnVID1234', title: '새벽기도', manual: true }) };
+  const row = await buildDailyDay('2026-10-08', prev, { ai: dailyAi(), fetchReading, now: () => 'T' });
+  assert.equal(JSON.parse(row.dawn_json).video_id, 'dawnVID1234');
+  assert.deepEqual(dailyExport(row).dawn, { video_id: 'dawnVID1234', title: '새벽기도', manual: true });
 });
 await t('오늘의 말씀 내보내기: 날짜별 파일 + 목록(최신순)', async () => {
   const fetchReading = async () => parseYnResponse(ynSample);

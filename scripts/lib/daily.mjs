@@ -188,7 +188,7 @@ export async function buildDailyDay(date, existing, { ai, modes = ['qt', 'study'
   }
   const row = { date, refs, status: failures.length ? 'error' : 'done', updated_at: now(), note: failures.join(' / ').slice(0, 500) };
   // 이번에 만들지 않는 열(다른 모드·주석)은 있던 값을 그대로 둡니다
-  for (const k of ['qt_json', 'study_json', 'group_json', 'quiz_json', 'commentary_json']) if (prev[k]) row[k] = prev[k];
+  for (const k of ['qt_json', 'study_json', 'group_json', 'quiz_json', 'commentary_json', 'dawn_json']) if (prev[k]) row[k] = prev[k];
   const put = (col, value) => {
     const j = value == null ? '' : JSON.stringify(value);
     if (j.length > DAILY_CELL_LIMIT) {
@@ -229,5 +229,9 @@ export function dailyExport(row) {
     group: parseJson(row.group_json),
     quiz: parseJson(row.quiz_json),
     videos: parseJson(row.videos_json) || [],
+    dawn: (() => {
+      const d = parseJson(row.dawn_json);
+      return d && d.video_id ? { video_id: d.video_id, title: d.title || '', manual: !!d.manual } : null;
+    })(),
   };
 }

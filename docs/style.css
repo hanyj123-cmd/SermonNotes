@@ -564,3 +564,9 @@ span.mk-ul { text-decoration-line: underline; text-decoration-thickness: 2px; te
 .cm-notes { background: #fbf7ec; }
 .cm-notes p { margin: 6px 0 0; }
 .site-footer .pushed { margin-top: 4px; }
+.admin-dawn h3 { font-size: 1rem; margin: 16px 0 4px; }
+.admin-dawn .ad-dawn-date { width: auto; }
+.admin-dawn .admin-row input[type='url'] { flex: 1 1 260px; }
+.ad-dawn-list .ad-row { grid-template-columns: 60px 1fr auto auto; }
+.ad-dawn-list .ad-refs a { overflow-wrap: anywhere; }
+.admin-dawn .admin-fields { display: block; } .admin-dawn .admin-fields input { width: 100%; }

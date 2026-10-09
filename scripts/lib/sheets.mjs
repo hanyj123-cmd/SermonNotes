@@ -205,7 +205,7 @@ export async function readSettings(sheets, spreadsheetId) {
 
 /* ---------- 오늘의 말씀 (Daily 탭): 날짜마다 한 줄 ---------- */
 export const DAILY_TAB = 'Daily';
-export const DAILY_HEADERS = ['date', 'refs', 'status', 'passages_json', 'qt_json', 'study_json', 'group_json', 'quiz_json', 'videos_json', 'updated_at', 'note', 'commentary_json'];
+export const DAILY_HEADERS = ['date', 'refs', 'status', 'passages_json', 'qt_json', 'study_json', 'group_json', 'quiz_json', 'videos_json', 'updated_at', 'note', 'commentary_json', 'dawn_json'];
 
 export async function readDaily(sheets, spreadsheetId) {
   const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${DAILY_TAB}!A2:${colLetter(DAILY_HEADERS.length)}` });
