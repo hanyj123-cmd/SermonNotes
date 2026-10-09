@@ -6,8 +6,8 @@ on:
     # 아래 gate 작업이 "지금이 정해진 토론토 시각인지" 보고 맞는 쪽만 실행하게 합니다.
     - cron: '0 2 * * 1' # 주일예배 일요일 22:00 (여름 EDT, UTC로는 월요일 02:00)
     - cron: '0 3 * * 1' # 주일예배 일요일 22:00 (겨울 EST)
-    - cron: '0 8 * * *' # 오늘의 말씀 매일 04:00 (여름 EDT)
-    - cron: '0 9 * * *' # 오늘의 말씀 매일 04:00 (겨울 EST)
+    - cron: '0 11 * * *' # 오늘의 말씀 매일 07:00 — 다음 날 분량 (여름 EDT)
+    - cron: '0 12 * * *' # 오늘의 말씀 매일 07:00 — 다음 날 분량 (겨울 EST)
   workflow_dispatch:
     inputs:
       max_new:
@@ -27,9 +27,13 @@ on:
         required: false
         default: 'false'
       daily_dates:
-        description: '오늘의 말씀을 만들 날짜 (쉼표로, 예: 2026-10-08,2026-10-09 — 비우면 오늘·내일)'
+        description: '오늘의 말씀을 만들 날짜 (쉼표로, 예: 2026-10-08,2026-10-09 — 비우면 내일·오늘 중 빠진 것)'
         required: false
         default: ''
+      daily_force:
+        description: '이미 만든 오늘의 말씀도 다시 만들기 (true/false)'
+        required: false
+        default: 'false'
 
 permissions:
   contents: write
@@ -87,6 +91,7 @@ jobs:
           RETRY_DAYS: ${{ vars.RETRY_DAYS }}
           MAX_NEW_PER_RUN: ${{ github.event.inputs.max_new || vars.MAX_NEW_PER_RUN || '5' }}
           DAILY_DATES: ${{ github.event.inputs.daily_dates }}
+          DAILY_FORCE: ${{ github.event.inputs.daily_force }}
         run: node scripts/sync.mjs ${{ github.event.inputs.export_only == 'true' && '--export-only' || '' }}
 
       - name: 변경된 데이터 커밋
