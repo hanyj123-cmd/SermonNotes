@@ -285,6 +285,21 @@ function buildFloat() {
   return el;
 }
 
+/** 자막(CC) 끄기: 자막 모듈을 내립니다 (모듈이 늦게 붙는 경우를 위해 잠시 뒤 한 번 더) */
+function captionsOff(player) {
+  const off = () => {
+    try {
+      if (player.unloadModule) player.unloadModule('captions');
+      if (player.unloadModule) player.unloadModule('cc');
+      if (player.setOption) player.setOption('captions', 'track', {});
+    } catch {
+      /* 이 영상에 자막이 없으면 그냥 넘어갑니다 */
+    }
+  };
+  off();
+  setTimeout(off, 1500);
+}
+
 /** 재생기 API로 영상을 띄웁니다. API를 못 쓰면 일반 퍼가기 화면으로 대신합니다(조절 막대는 숨김). */
 function mountPlayer(id, title) {
   const el = floatEl;
@@ -301,17 +316,23 @@ function mountPlayer(id, title) {
       if (floatEl !== el || el._vid !== id || !holder.isConnected) return;
       el._player = new YT.Player(holder, {
         videoId: id,
-        host: YT_EMBED_HOST, // youtube-nocookie.com (허브와 같은 방식, 광고 거의 없음)
-        playerVars: { autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1, origin: location.origin },
+        host: YT_EMBED_HOST, // youtube.com — 내 유튜브 계정(프리미엄)으로 재생
+        playerVars: { autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1, cc_load_policy: 0, iv_load_policy: 3, origin: location.origin },
         events: {
           onReady: (e) => {
             const vol = el.querySelector('.fp-vol');
             e.target.setVolume(Number(vol.value));
             e.target.setPlaybackRate(el._speed);
             e.target.playVideo();
+            captionsOff(e.target);
             el._paintVol(false);
           },
           onStateChange: (e) => {
+            // 영상마다 처음 재생될 때 한 번 자막(CC)을 끕니다 (계정 설정으로 자동 켜지는 경우까지). 그 뒤에 직접 켜면 그대로 둡니다.
+            if (e.data === 1 && el._ccOff !== el._vid) {
+              el._ccOff = el._vid;
+              captionsOff(e.target);
+            }
             // 이어 듣기: 영상이 끝나면(0) 다음 영상을 같은 창에서 바로 재생
             if (e.data === 0 && floatEl === el && el._queue && el._queue.length) {
               const next = el._queue.shift();

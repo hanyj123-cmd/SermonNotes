@@ -205,10 +205,11 @@ function displayTitle({ category, title, aiTitle = '', scripture = '' }) {
 }
 
 const ytId = (v) => (/^[A-Za-z0-9_-]{11}$/.test(String(v || '')) ? String(v) : '');
-// 앱 안 재생은 찬양방송팀 허브와 같은 방식으로 youtube-nocookie.com(개인정보 보호 모드) 플레이어를 씁니다.
-// 쿠키·맞춤 광고 추적을 하지 않는 퍼가기 플레이어라, youtube.com 플레이어보다 광고가 붙는 일이 훨씬 적습니다.
-const YT_EMBED_HOST = 'https://www.youtube-nocookie.com';
-const ytEmbed = (id, { autoplay = true } = {}) => `${YT_EMBED_HOST}/embed/${id}?rel=0&modestbranding=1&playsinline=1${autoplay ? '&autoplay=1' : ''}&origin=${encodeURIComponent(location.origin)}`;
+// 앱 안 재생은 youtube.com 플레이어를 씁니다 (개인정보 보호 모드 youtube-nocookie 가 아님):
+// 이 브라우저에서 로그인한 내 유튜브 계정(프리미엄 = 광고 없음)이 앱 안 재생에도 적용되게 하기 위해서입니다.
+// 자막(CC)은 기본으로 끕니다 (cc_load_policy=0, 재생기에서도 자막 모듈을 내림).
+const YT_EMBED_HOST = 'https://www.youtube.com';
+const ytEmbed = (id, { autoplay = true } = {}) => `${YT_EMBED_HOST}/embed/${id}?rel=0&modestbranding=1&playsinline=1&cc_load_policy=0&iv_load_policy=3${autoplay ? '&autoplay=1' : ''}&origin=${encodeURIComponent(location.origin)}`;
 const ytWatch = (id) => `https://www.youtube.com/watch?v=${id}`;
 const ytSearch = (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
 
