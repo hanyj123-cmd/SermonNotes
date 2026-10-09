@@ -127,24 +127,21 @@ function loadReadingIndex() {
       .catch(() => null);
   return readingIndexPromise;
 }
-/** 그날 정리에 영상이 빠진 장은 색인에서 채웁니다 (원본은 그대로 두고 복사본을 돌려줌) */
+/** 장마다 공동체성경읽기(@PRS) 색인의 영상을 우선 씁니다 (색인에 없는 장만 그날 정리의 영상). 원본은 그대로 두고 복사본을 돌려줌 */
 async function withIndexVideos(data, passages) {
-  const have = new Set(((data && data.videos) || []).map((v) => `${v.book}|${v.chapter}`));
-  const missing = (passages || []).filter((p) => !have.has(`${p.book}|${p.chapter}`));
-  if (!missing.length) return data;
+  if (!passages || !passages.length) return data;
   const idx = await loadReadingIndex();
-  if (!idx || !idx.map) return data;
-  const add = missing
+  const own = new Map(((data && data.videos) || []).map((v) => [`${v.book}|${v.chapter}`, v]));
+  const videos = passages
     .map((p) => {
-      const hit = idx.map[`${Number(p.bookId)}:${p.chapter}`];
-      return hit ? { reference: `${p.book} ${p.chapter}장`, book: p.book, chapter: p.chapter, video_id: hit.video_id, title: hit.title } : null;
+      const hit = idx && idx.map ? idx.map[`${Number(p.bookId)}:${p.chapter}`] : null;
+      if (hit) return { reference: `${p.book} ${p.chapter}장`, book: p.book, chapter: p.chapter, video_id: hit.video_id, title: hit.title };
+      return own.get(`${p.book}|${p.chapter}`) || null;
     })
     .filter(Boolean);
-  if (!add.length) return data;
-  const order = (v) => (passages || []).findIndex((p) => p.book === v.book && p.chapter === v.chapter);
-  const videos = [...((data && data.videos) || []), ...add].sort((a, b) => order(a) - order(b));
   return { ...(data || {}), videos };
 }
+
 // 같은 영상이 여러 장을 담고 있으면(예: "마가복음 10-11장") 하나로 묶습니다
 function videoGroups(data) {
   const out = [];
