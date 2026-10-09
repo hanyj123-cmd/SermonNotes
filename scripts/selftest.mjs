@@ -339,26 +339,32 @@ await t('공동체 성경읽기 색인: 영상 제목에서 책·장 범위 읽�
   assert.deepEqual(parseReadingTitle('[하루 20분 공동체성경읽기] 열왕기상 7장, 시편 50편').map((r) => r.id).sort((a, b) => a - b), [11, 19]);
   assert.deepEqual(parseReadingTitle('열왕기상 99장'), []);
 });
-await t('공동체 성경읽기 색인: 재생목록 → 장별 영상 (범위가 좁은 영상 우선) · 색인에 있으면 검색 안 함', async () => {
-  const items = { P1: ['[하루 20분 공동체성경읽기] 4/20 열왕기상 11-12장', '[하루 20분 공동체성경읽기] 10/16 마가복음 10-11장'], P2: ['[2023년 하루 20분 공동체성경읽기] 5/3 열왕기상 11장'] };
+await t('공동체 성경읽기 색인: @PRS 장별 영상 우선 → (개역개정) → CGN 묶음 · 색인에 있으면 검색 안 함', async () => {
+  const items = {
+    UUprs: ['열왕기상 11장 (개역개정)', '열왕기상 11장', '열왕기상 12장 (개역개정)', '공지: 새해 인사'],
+    P1: ['[하루 20분 공동체성경읽기] 4/20 열왕기상 11-12장', '[하루 20분 공동체성경읽기] 10/16 마가복음 10-11장'],
+  };
   const fetchImpl = async (url) => {
     const u = new URL(url);
     const ep = u.pathname.split('/').pop();
-    const body = ep === 'search'
-      ? { items: [{ id: { playlistId: 'P1' }, snippet: { title: '2024 하루 20분 공동체성경읽기', channelTitle: 'CGN' } }, { id: { playlistId: 'P2' }, snippet: { title: '2023 하루 20분 공동체성경읽기', channelTitle: 'CGN' } }, { id: { playlistId: 'PX' }, snippet: { title: '찬양 모음', channelTitle: 'x' } }] }
-      : { items: items[u.searchParams.get('playlistId')].map((title, i) => ({ snippet: { title, resourceId: { videoId: `${u.searchParams.get('playlistId')}_v${i}` } } })) };
+    let body;
+    if (ep === 'channels') body = u.searchParams.get('forHandle') === '@PRS' ? { items: [{ snippet: { title: '공동체성경읽기' }, contentDetails: { relatedPlaylists: { uploads: 'UUprs' } } }] } : { items: [] };
+    else if (ep === 'search') body = { items: [{ id: { playlistId: 'P1' }, snippet: { title: '2024 하루 20분 공동체성경읽기', channelTitle: 'CGN' } }, { id: { playlistId: 'PX' }, snippet: { title: '찬양 모음', channelTitle: 'x' } }] };
+    else body = { items: (items[u.searchParams.get('playlistId')] || []).map((title, i) => ({ snippet: { title, resourceId: { videoId: `${u.searchParams.get('playlistId')}_v${i}` } } })) };
     return { ok: true, json: async () => body };
   };
   const idx = await buildReadingIndex('k', { fetchImpl });
-  assert.equal(idx.playlists.length, 2);
-  assert.equal(idx.map['11:11'].video_id, 'P2_v0'); // 11장 하나만 담은 영상
-  assert.equal(idx.map['11:12'].video_id, 'P1_v0');
-  assert.equal(idx.map['41:11'].video_id, 'P1_v1');
+  assert.equal(idx.playlists[0].channel, '@PRS');
+  assert.equal(idx.map['11:11'].video_id, 'UUprs_v1'); // "열왕기상 11장" (채널 검색 첫 영상)
+  assert.equal(idx.map['11:12'].video_id, 'UUprs_v2'); // 개역개정 판밖에 없으면 그것
+  assert.equal(idx.map['41:10'].video_id, 'P1_v1'); // @PRS 에 없으면 CGN 묶음
+  assert.equal(idx.map['11:11'].rank, undefined);
   assert.ok(readingIndexIsStale(idx)); // 300장 미만이면 다시 만듦
+  assert.ok(readingIndexIsStale({ ...idx, count: 1189, version: 1 })); // 옛 색인(CGN만)도 다시 만듦
   let searched = 0;
-  const got = await findReadingVideos([{ bookId: '11', book: '열왕기상', chapter: 12 }], 'k', { index: idx, search: async () => (searched++, []) });
+  const got = await findReadingVideos([{ bookId: '11', book: '열왕기상', chapter: 11 }], 'k', { index: idx, search: async () => (searched++, []) });
   assert.equal(searched, 0);
-  assert.equal(got[0].video_id, 'P1_v0');
+  assert.equal(got[0].video_id, 'UUprs_v1');
 });
 await t('공동체 성경읽기 영상: 앞 장 검색에 나온 "10-11장" 영상은 다시 검색하지 않음', async () => {
   const queries = [];

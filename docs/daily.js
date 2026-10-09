@@ -349,11 +349,12 @@ function renderReadingTab(date, id, basePassages, data, st, notes) {
     }
     text.replaceChildren(
       ...passages.map((p, pi) => {
-        const v = videos.get(`${p.book}|${p.chapter}`);
+        const kp = basePassages[pi] || p; // 영상은 한글 책 이름(개역개정 기준)으로 찾습니다 — NIV 로 봐도 같은 영상
+        const v = videos.get(`${kp.book}|${kp.chapter}`);
         const gi = v ? groups.findIndex((g) => g.video_id === v.video_id) : -1;
         const play = v
           ? h('button', { class: 'btn small rd-play', type: 'button', title: '떠 있는 창에서 재생 (다른 화면으로 가도 계속 들려요)', onclick: () => playReadingVideos(groups, gi) }, icon('headphones'), '공동체 성경읽기')
-          : h('a', { class: 'btn small', href: ytSearch(`공동체성경읽기 ${p.book} ${p.chapter}장`), target: '_blank', rel: 'noopener noreferrer' }, icon('external'), '공동체 성경읽기 찾기');
+          : h('a', { class: 'btn small', href: `https://www.youtube.com/@PRS/search?query=${encodeURIComponent(`${kp.book} ${kp.chapter}장`)}`, target: '_blank', rel: 'noopener noreferrer' }, icon('external'), '공동체 성경읽기 찾기');
         const verses = [];
         p.verses.forEach((x) => {
           const m = /^<([^>]{1,40})>\s*(.*)$/.exec(x.text); // 표준새번역의 소제목 <…>

@@ -1,5 +1,7 @@
-// 공동체 성경읽기 영상 색인: CGN 의 "하루 20분 공동체성경읽기" 재생목록들을 한 번 훑어서
-// 성경 각 장 → 그 장을 읽어 주는 유튜브 영상 하나를 docs/data/reading-videos.json 에 저장합니다.
+// 공동체 성경읽기 영상 색인: 성경 각 장 → 그 장을 읽어 주는 유튜브 영상 하나를 docs/data/reading-videos.json 에 저장합니다.
+//   1순위: "공동체성경읽기" 채널(@PRS)의 장별 영상 ("열왕기상 11장" — 채널에서 검색하면 맨 처음 나오는 영상).
+//          같은 장의 "(개역개정)" 영상은 그다음.
+//   2순위: CGN "하루 20분 공동체성경읽기" 재생목록 (여러 장을 묶은 날짜별 영상) — @PRS 에 없는 장만.
 //   · 검색(search.list)은 1회 100 할당량이라 매일 장마다 검색하면 금방 바닥나고 결과도 들쭉날쭉합니다.
 //   · 재생목록 읽기(playlistItems)는 50개에 1 할당량이라, 1년 분량(365편)을 다 읽어도 10 남짓입니다.
 // 색인은 30일마다 새로 만들고, 화면도 이 파일을 직접 읽어 영상이 없는 날을 채웁니다.
@@ -12,6 +14,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const READING_INDEX_PATH = path.resolve(__dirname, '../../docs/data/reading-videos.json');
 export const READING_INDEX_MAX_AGE_DAYS = 30;
 export const READING_QUERY = '하루 20분 공동체성경읽기';
+export const PRS_HANDLE = '@PRS';
+export const READING_INDEX_VERSION = 2;
 
 /** 66권 [번호, 이름] — 화면(docs/game-data.js)과 같은 목록을 씁니다 */
 export function bibleBookNames() {
@@ -51,40 +55,74 @@ async function api(endpoint, params, apiKey, fetchImpl) {
   return res.json();
 }
 
-/** 재생목록 찾기 → 영상 제목 읽기 → 장별 색인 */
-export async function buildReadingIndex(apiKey, { fetchImpl = fetch, log = () => {}, books = bibleBookNames(), maxPlaylists = 6, maxPerPlaylist = 450, now = () => new Date().toISOString() } = {}) {
-  const found = await api('search', { part: 'snippet', type: 'playlist', q: READING_QUERY, maxResults: '20', relevanceLanguage: 'ko' }, apiKey, fetchImpl);
-  const year = (t) => Number((/(20\d\d)/.exec(t) || [])[1] || 0);
-  const playlists = (found.items || [])
-    .map((it) => ({ id: it.id?.playlistId, title: String(it.snippet?.title || ''), channel: String(it.snippet?.channelTitle || '') }))
-    .filter((p) => p.id && squash(p.title).includes('공동체성경읽기'))
-    .sort((a, b) => (b.channel === 'CGN') - (a.channel === 'CGN') || year(b.title) - year(a.title))
-    .slice(0, maxPlaylists);
+/** 재생목록 하나의 영상들 [{ video_id, title }] */
+async function playlistVideos(playlistId, apiKey, fetchImpl, max) {
+  const out = [];
+  let pageToken = '';
+  do {
+    const data = await api('playlistItems', { part: 'snippet,status', playlistId, maxResults: '50', ...(pageToken ? { pageToken } : {}) }, apiKey, fetchImpl);
+    for (const it of data.items || []) {
+      const vid = it.snippet?.resourceId?.videoId;
+      const title = String(it.snippet?.title || '');
+      if (!vid || /^(Private|Deleted) video$/.test(title) || it.status?.privacyStatus === 'private') continue;
+      out.push({ video_id: vid, title });
+    }
+    pageToken = data.nextPageToken || '';
+  } while (pageToken && out.length < max);
+  return out;
+}
+
+/** @PRS 채널 영상 → 장별 색인 · CGN 재생목록으로 빈 장 채우기 */
+export async function buildReadingIndex(apiKey, { fetchImpl = fetch, log = () => {}, books = bibleBookNames(), maxPlaylists = 6, maxPerPlaylist = 450, maxPrs = 4000, now = () => new Date().toISOString() } = {}) {
   const map = {};
-  const span = (e) => e.to - e.from;
-  for (const p of playlists) {
-    let pageToken = '';
-    let seen = 0;
-    do {
-      const data = await api('playlistItems', { part: 'snippet,status', playlistId: p.id, maxResults: '50', ...(pageToken ? { pageToken } : {}) }, apiKey, fetchImpl);
-      for (const it of data.items || []) {
-        const vid = it.snippet?.resourceId?.videoId;
-        const title = String(it.snippet?.title || '');
-        if (!vid || /^(Private|Deleted) video$/.test(title) || it.status?.privacyStatus === 'private') continue;
-        for (const r of parseReadingTitle(title, books)) {
-          for (let ch = r.from; ch <= r.to; ch++) {
-            const key = `${r.id}:${ch}`;
-            const entry = { video_id: vid, title, from: r.from, to: r.to };
-            if (!map[key] || span(entry) < span(map[key])) map[key] = entry; // 범위가 좁은(그 장에 더 가까운) 영상을 고릅니다
-          }
-        }
+  const better = (a, b) => !b || a.rank < b.rank || (a.rank === b.rank && a.to - a.from < b.to - b.from);
+  const put = (vid, title, rankOf) => {
+    for (const r of parseReadingTitle(title, books)) {
+      for (let ch = r.from; ch <= r.to; ch++) {
+        const key = `${r.id}:${ch}`;
+        const entry = { video_id: vid, title, from: r.from, to: r.to, rank: rankOf(r) };
+        if (better(entry, map[key])) map[key] = entry;
       }
-      seen += (data.items || []).length;
-      pageToken = data.nextPageToken || '';
-    } while (pageToken && seen < maxPerPlaylist);
-    log(`   공동체 성경읽기 재생목록 "${p.title}" ${seen}편 확인`);
+    }
+  };
+  const sources = [];
+
+  // 1) 공동체성경읽기 채널(@PRS): 업로드 목록 전체 (50편에 할당량 1)
+  try {
+    const ch = await api('channels', { part: 'contentDetails,snippet', forHandle: PRS_HANDLE }, apiKey, fetchImpl);
+    const c = (ch.items || [])[0];
+    const uploads = c?.contentDetails?.relatedPlaylists?.uploads;
+    if (uploads) {
+      const vids = await playlistVideos(uploads, apiKey, fetchImpl, maxPrs);
+      // "열왕기상 11장" 처럼 장 하나만 담은 제목 = 0순위, "(개역개정)" 등 다른 판 = 1순위, 여러 장 묶음 = 2순위
+      vids.forEach((v) => put(v.video_id, v.title, (r) => (r.from !== r.to ? 2 : /개역개정/.test(v.title) ? 1 : 0)));
+      sources.push({ id: uploads, title: c?.snippet?.title || '공동체성경읽기', channel: PRS_HANDLE, videos: vids.length });
+      log(`   공동체성경읽기(@PRS) 채널 영상 ${vids.length}편 확인`);
+    }
+  } catch (e) {
+    log(`   @PRS 채널을 읽지 못했습니다: ${e.message}`);
   }
-  return { updated: now(), query: READING_QUERY, playlists: playlists.map((p) => ({ id: p.id, title: p.title, channel: p.channel })), count: Object.keys(map).length, map };
+
+  // 2) CGN "하루 20분 공동체성경읽기" 재생목록 — @PRS 에 없는 장만 채웁니다
+  try {
+    const found = await api('search', { part: 'snippet', type: 'playlist', q: READING_QUERY, maxResults: '20', relevanceLanguage: 'ko' }, apiKey, fetchImpl);
+    const year = (t) => Number((/(20\d\d)/.exec(t) || [])[1] || 0);
+    const playlists = (found.items || [])
+      .map((it) => ({ id: it.id?.playlistId, title: String(it.snippet?.title || ''), channel: String(it.snippet?.channelTitle || '') }))
+      .filter((p) => p.id && squash(p.title).includes('공동체성경읽기'))
+      .sort((a, b) => (b.channel === 'CGN') - (a.channel === 'CGN') || year(b.title) - year(a.title))
+      .slice(0, maxPlaylists);
+    for (const p of playlists) {
+      const vids = await playlistVideos(p.id, apiKey, fetchImpl, maxPerPlaylist);
+      vids.forEach((v) => put(v.video_id, v.title, () => 10));
+      sources.push({ id: p.id, title: p.title, channel: p.channel, videos: vids.length });
+      log(`   공동체 성경읽기 재생목록 "${p.title}" ${vids.length}편 확인`);
+    }
+  } catch (e) {
+    log(`   CGN 재생목록을 읽지 못했습니다: ${e.message}`);
+  }
+  for (const k of Object.keys(map)) delete map[k].rank;
+  return { version: READING_INDEX_VERSION, updated: now(), playlists: sources, count: Object.keys(map).length, map };
 }
 
 export function readReadingIndex(file = READING_INDEX_PATH) {
@@ -95,7 +133,7 @@ export function readReadingIndex(file = READING_INDEX_PATH) {
   }
 }
 export function readingIndexIsStale(idx, nowMs = Date.now()) {
-  if (!idx || !idx.map || (idx.count || 0) < 300) return true;
+  if (!idx || !idx.map || (idx.count || 0) < 300 || idx.version !== READING_INDEX_VERSION) return true;
   return nowMs - Date.parse(idx.updated || 0) > READING_INDEX_MAX_AGE_DAYS * 86400000;
 }
 
@@ -105,7 +143,7 @@ export async function ensureReadingIndex(apiKey, { file = READING_INDEX_PATH, lo
   if (!apiKey || !readingIndexIsStale(current)) return current;
   try {
     const idx = await buildReadingIndex(apiKey, { log, fetchImpl });
-    if (idx.count >= (current?.count || 1)) {
+    if (idx.count >= 300 || idx.count >= (current?.count || 1)) {
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, JSON.stringify(idx) + '\n', 'utf8');
       log(`🎧 공동체 성경읽기 색인: ${idx.count}장 (${idx.playlists.length}개 재생목록)`);
