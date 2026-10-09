@@ -7,7 +7,10 @@ on:
     - cron: '0 2 * * 1' # 주일예배 일요일 22:00 (여름 EDT, UTC로는 월요일 02:00)
     - cron: '0 3 * * 1' # 주일예배 일요일 22:00 (겨울 EST)
     - cron: '0 11 * * *' # 오늘의 말씀 매일 07:00 — 다음 날 분량 (여름 EDT)
-    - cron: '0 12 * * *' # 오늘의 말씀 매일 07:00 — 다음 날 분량 (겨울 EST)
+    - cron: '0 12 * * *' # 오늘의 말씀 매일 07:00 — 다음 날 분량 (겨울 EST) · 새벽기도 영상 다시 확인 08:00 (여름 EDT)
+    - cron: '20 11 * * *' # 새벽기도 영상 연결 07:20 (여름 EDT)
+    - cron: '20 12 * * *' # 새벽기도 영상 연결 07:20 (겨울 EST)
+    - cron: '0 13 * * *' # 새벽기도 영상 다시 확인 08:00 (겨울 EST)
   workflow_dispatch:
     inputs:
       max_new:
@@ -15,7 +18,7 @@ on:
         required: false
         default: '5'
       categories:
-        description: '확인할 구분 (쉼표로: sunday,dawn,wednesday,youth / all = 전부 / daily = 오늘의 말씀만, 비우면 주일예배만)'
+        description: '확인할 구분 (쉼표로: sunday,dawn,wednesday,youth / all = 전부 / daily = 오늘의 말씀만 / dawn_video = 새벽기도 영상 연결만, 비우면 주일예배만)'
         required: false
         default: ''
       export_only:
@@ -60,6 +63,8 @@ jobs:
           node-version: 22
       - id: gate
         run: node scripts/gate.mjs
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
 
   sync:
     needs: gate
