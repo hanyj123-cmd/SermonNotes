@@ -123,6 +123,33 @@ function route() {
   renderList(arg === 'past' || PAST_CATS.includes(arg) ? 'past' : 'sunday');
 }
 
+// 맨 아래: GitHub 에 새로 푸시되어 사이트에 반영된 시각 (GitHub Pages 가 보내는 index.html 의 Last-Modified)
+let pushTimeShown = false;
+async function showPushTime() {
+  if (pushTimeShown) return;
+  pushTimeShown = true;
+  const foot = document.querySelector('.site-footer');
+  if (!foot) return;
+  let when = '';
+  try {
+    const r = await fetch(`index.html?pushed=${Date.now()}`, { method: 'HEAD', cache: 'no-store' });
+    when = r.headers.get('last-modified') || '';
+  } catch {
+    when = '';
+  }
+  if (!when) when = document.lastModified;
+  const t = new Date(when);
+  if (isNaN(t)) return;
+  const ver = (document.querySelector('script[src^="app.js"]')?.getAttribute('src').match(/v=([\d.]+)/) || [])[1];
+  const text = `앱 업데이트(푸시) ${t.toLocaleString('ko-KR', { timeZone: 'America/Toronto', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })}${ver ? ` · v${ver}` : ''}`;
+  let el = document.getElementById('pushed');
+  if (!el) {
+    el = h('p', { id: 'pushed', class: 'pushed' });
+    foot.append(el);
+  }
+  el.textContent = text;
+}
+
 function setActiveMenu(which) {
   document.querySelectorAll('.menu-link').forEach((a) => {
     if (a.dataset.menu === which) a.setAttribute('aria-current', 'page');
@@ -702,6 +729,31 @@ function renderAdminPanel(password) {
     if (d.status === 'error') return ['err', '일부 실패'];
     return ['', d.status || '대기'];
   };
+  // 날짜별 다시 만들기: 전부 또는 한 부분(QT · 성경공부 · 소그룹 · 퀴즈 · 공동체 성경읽기 영상)
+  const REDO_PARTS = [['', '전부'], ['study', '성경공부'], ['qt', 'QT'], ['group', '소그룹'], ['quiz', '퀴즈'], ['videos', '영상']];
+  const rowRedo = (d, running) => {
+    const sel = h('select', { class: 'search ad-redo-sel', 'aria-label': `${d.date} 다시 만들 부분` }, REDO_PARTS.map(([v, l]) => h('option', { value: v, text: l })));
+    const btn = h('button', { class: 'btn small', type: 'button', disabled: running }, '다시 만들기');
+    btn.addEventListener('click', async () => {
+      const part = REDO_PARTS.find(([v]) => v === sel.value)[1];
+      if (!confirm(`${dayLabel(d.date)} ${d.refs || ''}\n${part === '전부' ? 'QT · 성경공부 · 소그룹 · 퀴즈 · 영상을 모두' : `${part}만`} 새로 만들까요? (몇 분 걸립니다)`)) return;
+      btn.disabled = true;
+      dailyInfo.textContent = '실행을 요청하는 중…';
+      try {
+        const r = await adminPost({ action: 'sync_run', password, daily: true, daily_force: true, dates: [d.date], modes: sel.value ? [sel.value] : [] });
+        if (passwordRejected(r)) return;
+        if (!r.ok) throw new Error(r.error || '실행하지 못했습니다.');
+        dailyInfo.replaceChildren(icon('clock'), r.workflow_old ? ' 실행을 요청했지만 GitHub의 sync.yml 이 옛 버전이라 고른 부분만이 아니라 전부 다시 만들 수 있어요. 새 sync.yml 을 올려 주세요.' : ` ${dayLabel(d.date)} ${part === '전부' ? '전부' : part}을(를) 다시 만드는 중입니다.`);
+        clearTimeout(dailyTimer);
+        dailyTimer = setTimeout(refreshDaily, 8000);
+        syncTimer = setTimeout(refreshSync, 6000);
+      } catch (e) {
+        dailyInfo.textContent = `오류: ${e.message || e}`;
+        btn.disabled = false;
+      }
+    });
+    return h('span', { class: 'ad-redo' }, sel, btn);
+  };
   async function refreshDaily() {
     clearTimeout(dailyTimer);
     try {
@@ -723,6 +775,7 @@ function renderAdminPanel(password) {
               h('span', { class: 'ad-refs', text: d.refs || '—' }),
               h('span', { class: 'ad-parts' }, part(d.qt, 'QT'), part(d.study, '공부'), part(d.group, '소그룹'), part(d.quiz, '퀴즈'), part(d.videos > 0, `영상 ${d.videos}`)),
               h('span', { class: `ad-chip ad-chip-${cls}`, text: label }),
+              rowRedo(d, running),
               d.status === 'running' && !running
                 ? h('span', { class: 'ad-note', text: '지난 실행이 이 날을 끝내지 못했어요. "오늘의 말씀 지금 동기화"를 누르면 빠진 부분만 이어서 만듭니다.' })
                 : d.note && d.status !== 'done' ? h('span', { class: 'ad-note', text: d.note }) : null,
@@ -1031,7 +1084,8 @@ function initFontControl() {
   }
   const upd = document.getElementById('updated');
   const updatedAt = formatDateTime(state.updated);
-  if (upd && updatedAt) upd.textContent = `마지막 업데이트 ${updatedAt}${state.demo ? ' (샘플 데이터)' : ''}`;
+  if (upd && updatedAt) upd.textContent = `설교 · 말씀 자료 업데이트 ${updatedAt}${state.demo ? ' (샘플 데이터)' : ''}`;
+  showPushTime();
   window.addEventListener('hashchange', route);
   window.addEventListener('pagehide', () => {
     if (currentNotes) currentNotes.flush();

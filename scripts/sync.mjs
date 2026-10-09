@@ -183,6 +183,8 @@ export async function exportDaily(rows, { dataDir = DATA_DIR, quiet = false } = 
 }
 
 /** 내일·오늘(또는 DAILY_DATES) 분량을 만들고 Daily 탭에 저장합니다. 실패해도 설교 동기화는 계속합니다. */
+// 관리 화면 "다시 만들기"에서 고를 수 있는 부분 → 비울 열
+const DAILY_MODE_COLUMNS = { qt: ['qt_json'], study: ['study_json', 'commentary_json'], group: ['group_json'], quiz: ['quiz_json'], videos: ['videos_json'] };
 async function syncDaily(sheets, spreadsheetId, ai, youtubeKey) {
   await ensureTab(sheets, spreadsheetId, DAILY_TAB, DAILY_HEADERS);
   const rows = await readDaily(sheets, spreadsheetId);
@@ -191,13 +193,20 @@ async function syncDaily(sheets, spreadsheetId, ai, youtubeKey) {
   // 기본: 다음 날 분량을 하루 전에 만들고, 혹시 오늘 것이 빠졌으면 같이 채웁니다
   const dates = wanted.length ? wanted.slice(0, 14) : [torontoDate(1), torontoDate(0)];
   const force = String(process.env.DAILY_FORCE || '').toLowerCase() === 'true';
+  const forceModes = String(process.env.DAILY_MODES || '').split(/[\s,]+/).filter((m) => DAILY_MODE_COLUMNS[m]);
   const index = youtubeKey ? await ensureReadingIndex(youtubeKey, { log: (m) => console.log(m) }) : null;
   for (const date of dates) {
     const found = byDate.get(date);
     const hasVideos = found && found.videos_json && found.videos_json !== '[]';
     if (!force && found && found.status === 'done' && (hasVideos || !youtubeKey)) continue;
-    // 다시 만들기: 본문만 남기고 AI 정리·영상은 새로 (시트의 같은 줄에 덮어씁니다)
-    const prev = force && found ? { rowNumber: found.rowNumber, passages_json: found.passages_json } : found;
+    // 다시 만들기: DAILY_MODES 가 있으면 그 부분만, 없으면 본문만 남기고 전부 새로 (시트의 같은 줄에 덮어씁니다)
+    let prev = found;
+    if (force && found) {
+      if (forceModes.length) {
+        prev = { ...found };
+        for (const m of forceModes) for (const col of DAILY_MODE_COLUMNS[m] || []) prev[col] = '';
+      } else prev = { rowNumber: found.rowNumber, passages_json: found.passages_json };
+    }
     console.log(`\n📖 오늘의 말씀 ${date}`);
     // 관리 화면에서 "만드는 중"으로 보이게 먼저 표시합니다 (끝나면 결과로 덮어씁니다)
     let rowNumber = found ? found.rowNumber : 0;

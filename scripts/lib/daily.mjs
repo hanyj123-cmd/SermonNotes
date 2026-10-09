@@ -137,6 +137,17 @@ const parseJson = (s) => {
   }
 };
 export const DAILY_CELL_LIMIT = 49_000;
+/** 절별 주석이 한 셀(약 5만 자)을 넘으면 주석가 요지 → 관련 구절 → 마지막 단락 순으로 줄여 맞춥니다 */
+export function fitCommentary(commentary) {
+  const c = JSON.parse(JSON.stringify(commentary || []));
+  const len = () => JSON.stringify(c).length;
+  const steps = [(x) => (x.commentators = []), (x) => (x.cross_refs = []), (x) => x.paragraphs.length > 1 && x.paragraphs.pop()];
+  for (const step of steps) {
+    for (const p of c) for (const x of p.sections) if (len() > DAILY_CELL_LIMIT) step(x);
+  }
+  while (len() > DAILY_CELL_LIMIT && c.some((p) => p.sections.length > 1)) c.forEach((p) => p.sections.length > 1 && p.sections.pop());
+  return c;
+}
 
 /**
  * 하루치를 만들거나(처음) 빠진 부분만 채웁니다(이전에 일부 실패).
@@ -151,6 +162,11 @@ export async function buildDailyDay(date, existing, { ai, modes = ['qt', 'study'
   const text = passagesText(passages);
   const cols = { qt: 'qt_json', study: 'study_json', group: 'group_json', quiz: 'quiz_json' };
   const results = Object.fromEntries(modes.map((m) => [m, parseJson(prev[cols[m]])]));
+  // 성경공부의 절별 주석은 셀 크기 때문에 commentary_json 열에 따로 둡니다 — 다시 읽을 때 붙여 줍니다
+  if (results.study && !results.study.commentary) {
+    const c = parseJson(prev.commentary_json);
+    if (Array.isArray(c)) results.study.commentary = c;
+  }
   const failures = [];
   for (const mode of modes) {
     if (results[mode]) continue;
@@ -171,6 +187,8 @@ export async function buildDailyDay(date, existing, { ai, modes = ['qt', 'study'
     }
   }
   const row = { date, refs, status: failures.length ? 'error' : 'done', updated_at: now(), note: failures.join(' / ').slice(0, 500) };
+  // 이번에 만들지 않는 열(다른 모드·주석)은 있던 값을 그대로 둡니다
+  for (const k of ['qt_json', 'study_json', 'group_json', 'quiz_json', 'commentary_json']) if (prev[k]) row[k] = prev[k];
   const put = (col, value) => {
     const j = value == null ? '' : JSON.stringify(value);
     if (j.length > DAILY_CELL_LIMIT) {
@@ -179,7 +197,13 @@ export async function buildDailyDay(date, existing, { ai, modes = ['qt', 'study'
     } else row[col] = j;
   };
   put('passages_json', passages);
-  for (const m of modes) put(cols[m], results[m]);
+  for (const m of modes) {
+    if (m === 'study' && results.study && Array.isArray(results.study.commentary)) {
+      const { commentary, ...rest } = results.study;
+      put(cols.study, rest);
+      put('commentary_json', fitCommentary(commentary));
+    } else put(cols[m], results[m]);
+  }
   put('videos_json', Array.isArray(videos) ? videos : []);
   return row;
 }
@@ -196,7 +220,12 @@ export function dailyExport(row) {
     key_verse: qt?.key_verse || null,
     summaries: qt?.summaries || [],
     qt,
-    study: parseJson(row.study_json),
+    study: (() => {
+      const st = parseJson(row.study_json);
+      const c = parseJson(row.commentary_json);
+      if (st && Array.isArray(c) && c.length) st.commentary = c;
+      return st;
+    })(),
     group: parseJson(row.group_json),
     quiz: parseJson(row.quiz_json),
     videos: parseJson(row.videos_json) || [],

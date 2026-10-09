@@ -629,20 +629,22 @@ function dispatchSync(maxNew, categories, exportOnly, extra) {
   const ref = prop('GITHUB_REF') || 'main';
   if (exportOnly) inputs.export_only = 'true'; // 새로 정리하지 않고 시트 내용을 사이트에 반영만 합니다
   Object.keys(extra || {}).forEach(function (k) { inputs[k] = extra[k]; });
-  try {
-    ghRequest('post', url, { ref: ref, inputs: inputs });
-    return false;
-  } catch (err) {
-    // GitHub 에 올라간 sync.yml 에 새 입력이 아직 없으면 422 "Unexpected inputs" 로 거절됩니다.
-    // 그때는 그 입력들만 빼고 다시 요청합니다.
-    const msg = String(err && err.message);
-    const newer = ['export_only', 'daily_dates', 'daily_force'].filter(function (k) { return inputs[k] !== undefined && msg.indexOf(k) >= 0; });
-    if (newer.length) {
-      ['export_only', 'daily_dates', 'daily_force'].forEach(function (k) { delete inputs[k]; });
+  // GitHub 에 올라간 sync.yml 에 새 입력이 아직 없으면 422 "Unexpected inputs" 로 거절됩니다.
+  // 그때는 거절된 입력만 빼고 다시 요청합니다 (최대 3번). 반환: true = 옛 sync.yml 이라 일부 입력을 뺐음
+  const NEWER = ['export_only', 'daily_dates', 'daily_force', 'daily_modes'];
+  let dropped = false;
+  for (let tries = 0; ; tries++) {
+    try {
       ghRequest('post', url, { ref: ref, inputs: inputs });
-      return true;
+      return dropped;
+    } catch (err) {
+      const msg = String(err && err.message);
+      const bad = NEWER.filter(function (k) { return inputs[k] !== undefined && msg.indexOf(k) >= 0; });
+      if (!bad.length || tries >= 3) throw err;
+      bad.forEach(function (k) { delete inputs[k]; });
+      if (bad.indexOf('daily_force') >= 0) delete inputs.daily_modes; // 부분 다시 만들기는 daily_force 가 있어야 의미가 있습니다
+      dropped = true;
     }
-    throw err;
   }
 }
 
@@ -667,12 +669,20 @@ function syncRun(body) {
     return { ok: false, error: '이미 실행 중입니다. 끝난 뒤에 다시 눌러 주세요.' };
   }
   if (body.daily === true || body.daily === 'true') {
-    const dates = dailyManualDates();
+    // 날짜를 고르면(관리 화면의 날짜별 "다시 만들기") 그 날짜만, 아니면 과거 5일 ~ 미래 2일
+    const picked = (Array.isArray(body.dates) ? body.dates : String(body.dates || '').split(/[\s,]+/))
+      .map(function (d) { return String(d || '').trim(); })
+      .filter(function (d, i, a) { return /^\d{4}-\d{2}-\d{2}$/.test(d) && a.indexOf(d) === i; })
+      .slice(0, 14);
+    const dates = picked.length ? picked : dailyManualDates();
     const force = body.daily_force === true || body.daily_force === 'true';
+    const modes = (Array.isArray(body.modes) ? body.modes : String(body.modes || '').split(/[\s,]+/))
+      .filter(function (m, i, a) { return ['qt', 'study', 'group', 'quiz', 'videos'].indexOf(m) >= 0 && a.indexOf(m) === i; });
     const extra = { daily_dates: dates.join(',') };
     if (force) extra.daily_force = 'true';
+    if (force && modes.length) extra.daily_modes = modes.join(',');
     const old = dispatchSync(1, 'daily', false, extra);
-    return { ok: true, daily: true, dates: dates, force: force, workflow_old: old };
+    return { ok: true, daily: true, dates: dates, force: force, modes: force ? modes : [], workflow_old: old };
   }
   const categories = cleanCategories(body.categories);
   const exportOnly = body.export_only === true || body.export_only === 'true';

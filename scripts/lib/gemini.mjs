@@ -202,9 +202,34 @@ export function normalizeDailyQt(raw) {
     summaries: (Array.isArray(raw.summaries) ? raw.summaries : []).map((s) => ({ reference: clip(s?.reference, 40), summary: clip(s?.summary, 200) })).filter((s) => s.reference && s.summary),
   };
 }
+const paraList = (v, max = 8, n = 3000) => (Array.isArray(v) ? v : splitParagraphs(v)).map((x) => clip(x, n)).filter(Boolean).slice(0, max);
+/** 오늘의 말씀 성경공부: 배경 · 절별 주석 · 신학적 깊이 보기 */
 export function normalizeDailyStudy(raw) {
   const out = normalizeStudy(raw, { requireQuiz: false });
   delete out.quiz; // 오늘의 말씀은 퀴즈를 따로 만듭니다
+  out.background = (Array.isArray(raw.background) ? raw.background : [])
+    .map((b) => ({ title: clip(b?.title, 120), paragraphs: paraList(b?.paragraphs, 8) }))
+    .filter((b) => b.title && b.paragraphs.length)
+    .slice(0, 4);
+  out.commentary = (Array.isArray(raw.commentary) ? raw.commentary : [])
+    .map((c) => ({
+      passage: clip(c?.passage, 60),
+      sections: (Array.isArray(c?.sections) ? c.sections : [])
+        .map((x) => ({
+          verses: clip(x?.verses, 20),
+          heading: clip(x?.heading, 160),
+          paragraphs: paraList(x?.paragraphs, 6),
+          cross_refs: (Array.isArray(x?.cross_refs) ? x.cross_refs : []).map((r) => clip(r, 200)).filter(Boolean).slice(0, 6),
+          commentators: (Array.isArray(x?.commentators) ? x.commentators : [])
+            .map((m) => ({ name: clip(m?.name, 40), view: clip(m?.view, 700) }))
+            .filter((m) => m.name && m.view)
+            .slice(0, 4),
+        }))
+        .filter((x) => x.heading && x.paragraphs.length)
+        .slice(0, 12),
+    }))
+    .filter((c) => c.passage && c.sections.length)
+    .slice(0, 4);
   return out;
 }
 export function normalizeDailyQuiz(raw) {

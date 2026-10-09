@@ -96,7 +96,7 @@ function buildHandoutDoc(d, mode, opts) {
     h(
       'header',
       { class: 'ho-head' },
-      h('div', { class: 'ho-kicker' }, h('span', { class: 'ho-brand' }, h('img', { class: 'ho-logo', src: 'icons/mark.svg?v=9.25', alt: '' }), h('strong', { text: '말씀결' }), h('span', { text: `  ·  ${modeLabel(mode)}` })), h('span', { text: `${eventName(d.category)}${date ? `  ·  ${date}` : ''}` })),
+      h('div', { class: 'ho-kicker' }, h('span', { class: 'ho-brand' }, h('img', { class: 'ho-logo', src: 'icons/mark.svg?v=9.26', alt: '' }), h('strong', { text: '말씀결' }), h('span', { text: `  ·  ${modeLabel(mode)}` })), h('span', { text: `${eventName(d.category)}${date ? `  ·  ${date}` : ''}` })),
       h('h1', { class: 'ho-title', text: d.title }),
       scripture || preacher ? h('p', { class: 'ho-scripture' }, scripture ? `본문  ${scripture}` : '', scripture && preacher ? '   |   ' : '', preacher) : null,
       d.result.summary_short || d.result.theme ? h('p', { class: 'ho-summary', text: d.result.summary_short || d.result.theme }) : null,
@@ -153,6 +153,25 @@ function buildHandoutDoc(d, mode, opts) {
     const st = d.study || {};
     secs.push(prayer('여는 기도', st.opening_prayer), songsSec(st.songs));
     if (bibleSec && !bibleAtEnd) secs.push(bibleSec);
+    // 오늘의 말씀: 배경 · 절별 주석
+    (st.background || []).forEach((b, i) => secs.push(sec(i === 0 ? '책과 본문의 배경' : b.title, i === 0 ? h('h3', { class: 'ho-point-title', text: b.title }) : null, h('div', { class: 'ho-md' }, b.paragraphs.map((t) => mdBlocks(t))))));
+    (st.commentary || []).forEach((c) => {
+      secs.push(
+        sec(
+          `절별 주석 · ${c.passage}`,
+          c.sections.map((x) =>
+            h(
+              'div',
+              { class: 'ho-point' },
+              h('div', { class: 'ho-keep' }, h('h3', { class: 'ho-point-title', text: `${x.verses ? `${x.verses}절  ` : ''}${x.heading}` }), x.paragraphs.length ? h('div', { class: 'ho-md' }, mdBlocks(x.paragraphs[0])) : null),
+              x.paragraphs.length > 1 ? h('div', { class: 'ho-md' }, x.paragraphs.slice(1).map((t) => mdBlocks(t))) : null,
+              x.cross_refs && x.cross_refs.length ? h('div', { class: 'ho-words' }, h('strong', { class: 'ho-key-label', text: '관련 구절' }), h('ul', {}, x.cross_refs.map((r) => h('li', {}, inlineMd(r))))) : null,
+              x.commentators && x.commentators.length ? h('div', { class: 'ho-key' }, h('strong', { class: 'ho-key-label', text: '주석가들의 해석' }), x.commentators.map((m) => h('p', {}, h('strong', { text: m.name }), ' — ', inlineMd(m.view)))) : null,
+            ),
+          ),
+        ),
+      );
+    });
     secs.push(pointsSec('신학 깊이 보기', st.deep_dive, true), summarySec(st.summary));
     const quiz = st.quiz || {};
     let n = 0;
@@ -219,7 +238,7 @@ function buildHandoutDoc(d, mode, opts) {
 
   // 각주 · 부록
   const creditName = (window.APP_CONFIG && window.APP_CONFIG.CREDIT) || '';
-  secs.push(h('div', { class: 'ho-made' }, h('img', { class: 'ho-logo-lg', src: 'icons/mark.svg?v=9.25', alt: '' }), h('div', {}, h('strong', { text: '말씀결' }), h('span', { text: '  말씀의 결을 따라 읽고 묵상하는 노트' }), creditName ? h('div', { class: 'ho-made-by', text: creditName }) : null)));
+  secs.push(h('div', { class: 'ho-made' }, h('img', { class: 'ho-logo-lg', src: 'icons/mark.svg?v=9.26', alt: '' }), h('div', {}, h('strong', { text: '말씀결' }), h('span', { text: '  말씀의 결을 따라 읽고 묵상하는 노트' }), creditName ? h('div', { class: 'ho-made-by', text: creditName }) : null)));
   secs.push(h('footer', { class: 'ho-foot' }, h('p', { text: `참고: ${footnoteText(d.category)}` }), d.result.caveats ? h('p', { text: `유의: ${d.result.caveats}` }) : null));
   answerPages.forEach((a) => {
     a.classList.add('ho-appendix');
@@ -317,14 +336,14 @@ function loadScriptOnce(src, isReady, errorText) {
 }
 function loadPaged() {
   window.PagedConfig = { auto: false }; // 자동으로 쪽 나누기를 시작하지 않게 (직접 시작합니다)
-  return loadScriptOnce('vendor/paged.polyfill.min.js?v=9.25', () => window.Paged && window.Paged.Previewer, '쪽 나누기 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+  return loadScriptOnce('vendor/paged.polyfill.min.js?v=9.26', () => window.Paged && window.Paged.Previewer, '쪽 나누기 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
 }
-const loadHtml2Canvas = () => loadScriptOnce('vendor/html2canvas.min.js?v=9.25', () => typeof window.html2canvas === 'function', 'PDF 파일 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+const loadHtml2Canvas = () => loadScriptOnce('vendor/html2canvas.min.js?v=9.26', () => typeof window.html2canvas === 'function', 'PDF 파일 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
 
 let handoutCss = null;
 async function loadHandoutCss() {
   if (handoutCss) return handoutCss;
-  const res = await fetch('handout.css?v=9.25');
+  const res = await fetch('handout.css?v=9.26');
   if (!res.ok) throw new Error(`핸드아웃 서식을 불러오지 못했습니다 (${res.status})`);
   handoutCss = await res.text();
   return handoutCss;

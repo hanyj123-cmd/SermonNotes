@@ -17,6 +17,7 @@ import { processRow, CELL_LIMIT, readExisting, knownInfo } from './lib/process.m
 import { RULES, torontoClock, dueCategories, decide, shouldRun } from './gate.mjs';
 import { parseCategories, toExport, exportJson, exportDaily } from './sync.mjs';
 import { parseReadingTitle, buildReadingIndex, readingIndexIsStale } from './lib/reading-index.mjs';
+import { fitCommentary, DAILY_CELL_LIMIT } from './lib/daily.mjs';
 import { parseYnResponse, readingRefs, passagesText, dailyId, fetchDailyReading, YN_BIBLE_API, torontoDate, scoreReadingTitle, buildDailyDay, dailyExport, findReadingVideos } from './lib/daily.mjs';
 import { durationSeconds, musicIsStale, attachSongVideos, attachBibleAudio, scoreAudioTitle } from './lib/media.mjs';
 
@@ -407,6 +408,22 @@ await t('오늘의 말씀 하루치: 4가지 생성 · 영상 · 일부 실패�
   assert.equal(out.videos[0].video_id, 'vid12345678');
   assert.equal(out.study.quiz, undefined);
   assert.equal(await buildDailyDay('2027-01-01', null, { ai: dailyAi(), fetchReading: async () => [] }), null);
+});
+await t('오늘의 말씀 성경공부: 절별 주석은 commentary_json 열에 따로 · 다른 부분만 다시 만들 때도 남아 있음', async () => {
+  const fetchReading = async () => parseYnResponse(ynSample);
+  const commentary = [{ passage: '열왕기상 11장', sections: [{ verses: '1-8', heading: 'h', paragraphs: ['p'], cross_refs: [], commentators: [{ name: '칼빈', view: 'v' }] }] }];
+  const ai = { async generateDaily(mode, args) { const base = await dailyAi().generateDaily(mode, args); return mode === 'study' ? { ...base, commentary } : base; } };
+  const row = await buildDailyDay('2026-10-08', null, { ai, fetchReading, now: () => 'T' });
+  assert.equal(JSON.parse(row.study_json).commentary, undefined);
+  assert.equal(JSON.parse(row.commentary_json)[0].sections[0].commentators[0].name, '칼빈');
+  assert.equal(dailyExport(row).study.commentary[0].passage, '열왕기상 11장');
+  // 퀴즈만 다시 만들기: 성경공부·주석은 그대로
+  const again = await buildDailyDay('2026-10-08', { ...row, quiz_json: '' }, { ai: dailyAi(), fetchReading, now: () => 'T' });
+  assert.equal(again.study_json, row.study_json);
+  assert.equal(JSON.parse(again.commentary_json)[0].passage, '열왕기상 11장');
+  // 아주 길면 셀 크기에 맞게 줄임
+  const big = [{ passage: 'x', sections: Array.from({ length: 12 }, () => ({ verses: '1', heading: 'h', paragraphs: ['가'.repeat(2900), '나'.repeat(2900)], cross_refs: ['r'], commentators: [{ name: 'n', view: '다'.repeat(600) }] })) }];
+  assert.ok(JSON.stringify(fitCommentary(big)).length <= DAILY_CELL_LIMIT);
 });
 await t('오늘의 말씀 내보내기: 날짜별 파일 + 목록(최신순)', async () => {
   const fetchReading = async () => parseYnResponse(ynSample);

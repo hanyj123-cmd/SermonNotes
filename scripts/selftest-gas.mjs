@@ -506,6 +506,21 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
   check('오늘의 말씀 지금 동기화: categories=daily · 8일치 날짜', rd.ok && sent().categories === 'daily' && dd.length === 8 && dd.every((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)) && dd[0] < dd[7] && sent().daily_force === undefined, JSON.stringify(sent()));
   g.post({ action: 'sync_run', password: 'pw', daily: true, daily_force: true });
   check('오늘의 말씀 다시 만들기: daily_force 전달', sent().daily_force === 'true');
+  g.post({ action: 'sync_run', password: 'pw', daily: true, daily_force: true, dates: ['2026-10-07', 'bad', '2026-10-07'], modes: ['study', 'videos', 'x'] });
+  check('날짜별 다시 만들기: 그 날짜만 · 고른 부분만', sent().daily_dates === '2026-10-07' && sent().daily_force === 'true' && sent().daily_modes === 'study,videos', JSON.stringify(sent()));
+  g.post({ action: 'sync_run', password: 'pw', daily: true, dates: ['2026-10-07'], modes: ['study'] });
+  check('다시 만들기 아님(빠진 것만): modes 는 보내지 않음', sent().daily_modes === undefined && sent().daily_force === undefined);
+  {
+    const o3 = makeEnv({ ADMIN_PASSWORD: 'pw', GITHUB_TOKEN: 't', GITHUB_REPO: 'me/Repo' });
+    o3.setGh((url, opts) => {
+      if (opts.method === 'get') return { code: 200, body: { workflow_runs: [] } };
+      const inputs = JSON.parse(opts.payload).inputs;
+      return 'daily_modes' in inputs ? { code: 422, body: { message: 'Unexpected inputs provided: ["daily_modes"]' } } : { code: 204, body: {} };
+    });
+    const r = o3.post({ action: 'sync_run', password: 'pw', daily: true, daily_force: true, dates: ['2026-10-07'], modes: ['study'] });
+    const last = JSON.parse(o3.ghCalls.filter((c) => c.opts.method === 'post').pop().opts.payload).inputs;
+    check('옛 sync.yml(daily_modes 없음): 날짜는 그대로 두고 그 입력만 빼서 다시 요청', r.ok && r.workflow_old && last.daily_dates === '2026-10-07' && last.daily_force === 'true' && !('daily_modes' in last), JSON.stringify(last));
+  }
   {
     const o2 = makeEnv({ ADMIN_PASSWORD: 'pw', GITHUB_TOKEN: 't', GITHUB_REPO: 'me/Repo' });
     o2.setGh((url, opts) => {

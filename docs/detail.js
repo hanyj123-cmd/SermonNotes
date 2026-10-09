@@ -164,12 +164,47 @@ function renderQuizCta(d) {
   );
 }
 
+// 오늘의 말씀 성경공부: 책과 본문의 배경
+function renderStudyBackground(list) {
+  if (!list || !list.length) return null;
+  return block('background', '배경', h('h2', { text: '책과 본문의 배경' }), list.map((b) => h('div', { class: 'point' }, h('h3', { text: b.title }), h('div', { class: 'md' }, b.paragraphs.map((t) => mdBlocks(t))))));
+}
+// 오늘의 말씀 성경공부: 절별 주석 (장마다 접고 펼 수 있게)
+function renderStudyCommentary(list) {
+  if (!list || !list.length) return null;
+  return block(
+    'commentary',
+    '절별 주석',
+    h('h2', { text: '절별 주석' }),
+    h('p', { class: 'meta', text: '오늘 본문을 구간별로 풀었습니다. 주석가들의 해석은 AI가 요지만 정리한 것이니, 깊이 공부할 때는 해당 주석서와 함께 확인해 주세요.' }),
+    list.map((c, ci) =>
+      h(
+        'details',
+        { class: 'cm-passage', open: ci === 0 },
+        h('summary', {}, h('span', { class: 'cm-passage-name', text: c.passage }), h('span', { class: 'meta', text: `${c.sections.length}개 구간` })),
+        c.sections.map((x) =>
+          h(
+            'div',
+            { class: 'point cm-sec' },
+            h('h3', {}, x.verses ? h('span', { class: 'cm-verses', text: `${x.verses}절` }) : null, x.heading),
+            h('div', { class: 'md' }, x.paragraphs.map((t) => mdBlocks(t))),
+            x.cross_refs && x.cross_refs.length ? h('div', { class: 'cm-refs' }, h('strong', { class: 'keybox-label', text: '관련 구절' }), h('ul', {}, x.cross_refs.map((r) => h('li', {}, inlineMd(r))))) : null,
+            x.commentators && x.commentators.length ? h('div', { class: 'cm-notes' }, h('strong', { class: 'keybox-label', text: '주석가들의 해석' }), x.commentators.map((m) => h('p', {}, h('b', { text: m.name }), ' — ', inlineMd(m.view)))) : null,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 function renderStudyMode(d) {
   const st = d.study;
   return [
     renderPrayer('여는 기도', st.opening_prayer, 'open'),
     renderWorshipSection(st.songs, { title: '찬양', intro: '공부를 시작하기 전에 함께 부르면 좋은 찬양입니다.' }),
     renderBibleViewer(d.bible),
+    renderStudyBackground(st.background),
+    renderStudyCommentary(st.commentary),
     block(
       'deep',
       '신학 깊이 보기',

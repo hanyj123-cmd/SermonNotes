@@ -549,3 +549,18 @@ span.mk-ul { text-decoration-line: underline; text-decoration-thickness: 2px; te
   .ad-row { grid-template-columns: 1fr auto; }
   .ad-refs, .ad-parts { grid-column: 1 / -1; }
 }
+.ad-redo { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+.ad-redo .ad-redo-sel { width: auto; padding: 4px 8px; font-size: 0.85rem; }
+
+/* 오늘의 말씀 성경공부: 절별 주석 */
+.cm-passage { margin: 14px 0; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; }
+.cm-passage > summary { cursor: pointer; padding: 12px 16px; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-family: var(--serif); font-size: 1.15rem; font-weight: 700; }
+.cm-passage[open] > summary { border-bottom: 1px solid var(--line); }
+.cm-passage .cm-sec { margin: 0; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+.cm-passage .cm-sec:last-child { border-bottom: 0; }
+.cm-verses { display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 999px; background: #eef4fd; color: var(--blue); font-family: var(--sans, inherit); font-size: 0.78rem; font-weight: 700; vertical-align: 2px; }
+.cm-refs, .cm-notes { margin-top: 10px; padding: 10px 14px; border-radius: 10px; background: #f7f9fc; font-size: 0.93rem; }
+.cm-refs ul { margin: 4px 0 0; padding-left: 18px; }
+.cm-notes { background: #fbf7ec; }
+.cm-notes p { margin: 6px 0 0; }
+.site-footer .pushed { margin-top: 4px; }
