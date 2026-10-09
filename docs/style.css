@@ -524,3 +524,28 @@ span.mk-ul { text-decoration-line: underline; text-decoration-thickness: 2px; te
 .fp-seek::-moz-range-thumb, .fp-vol::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 0; }
 @media (max-width: 420px) { .fp-vol { width: 54px; } .fp-ctl { width: 32px; } }
 .mk-tool[hidden], .mk-pop[hidden], .float-player[hidden] { display: none !important; }
+
+/* 관리: 오늘의 말씀 날짜별 진행 상황 */
+.ad-head { justify-content: space-between; margin-top: 18px; }
+.ad-head h3 { margin: 0; font-size: 1rem; }
+.admin-daily { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+.ad-row { display: grid; grid-template-columns: 118px 1fr auto auto; gap: 6px 12px; align-items: center; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-size: 0.92rem; }
+.ad-row.ad-run { border-color: #9cc0ef; background: #f4f8ff; }
+.ad-row.ad-err { border-color: #efb4b4; background: #fff7f7; }
+.ad-date { font-weight: 700; font-variant-numeric: tabular-nums; }
+.ad-date em { font-style: normal; font-size: 0.72rem; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: var(--blue); color: #fff; }
+.ad-parts { display: flex; flex-wrap: wrap; gap: 4px; }
+.ad-part { font-size: 0.74rem; padding: 2px 7px; border-radius: 999px; background: #f0f1f4; color: #9a9ca6; }
+.ad-part.on { background: #e9f4e6; color: #2f6b3a; font-weight: 600; }
+.ad-chip { font-size: 0.8rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: #eef0f4; color: #555; white-space: nowrap; }
+.ad-chip-ok { background: #e9f4e6; color: #2f6b3a; }
+.ad-chip-run { background: #dde9fb; color: #1f56a8; }
+.ad-chip-run::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; animation: adPulse 1.2s ease-in-out infinite; vertical-align: 1px; }
+.ad-chip-err { background: #fbe5e5; color: #a3243a; }
+.ad-note { grid-column: 1 / -1; font-size: 0.82rem; color: #a3243a; }
+@keyframes adPulse { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .ad-chip-run::before { animation: none; } }
+@media (max-width: 720px) {
+  .ad-row { grid-template-columns: 1fr auto; }
+  .ad-refs, .ad-parts { grid-column: 1 / -1; }
+}

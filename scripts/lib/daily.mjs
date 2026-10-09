@@ -75,7 +75,7 @@ export function scoreReadingTitle(title, book, chapter) {
   const t = norm(title);
   if (!t.includes(norm(book))) return 0;
   const after = t.slice(t.indexOf(norm(book)) + norm(book).length);
-  const m = after.match(/^(\d{1,3})(?:[-~](\d{1,3}))?/) || t.match(new RegExp(`${norm(book)}[^\\d]{0,3}(\\d{1,3})(?:[-~](\\d{1,3}))?`));
+  const m = after.match(/^(\d{1,3})(?:장|편)?(?:[-~](\d{1,3}))?/) || t.match(new RegExp(`${norm(book)}[^\\d]{0,3}(\\d{1,3})(?:장|편)?(?:[-~](\\d{1,3}))?`));
   if (!m) return 0;
   const from = Number(m[1]);
   const to = m[2] ? Number(m[2]) : from;
@@ -94,13 +94,20 @@ export const readingQueries = (book, chapter) => [`공동체성경읽기 ${book}
  * 각 장마다 공동체 성경읽기 유튜브 영상 하나를 찾습니다 (못 찾으면 빼고). 화면에서는 이 영상을 떠 있는 창에서 바로 재생합니다.
  * 앞 장을 찾을 때 나온 영상이 이 장도 담고 있으면(예: "마가복음 10-11장") 다시 검색하지 않습니다. YouTube 할당량이 바닥나면 멈춥니다.
  */
-export async function findReadingVideos(passages, apiKey, { fetchImpl = fetch, log = () => {}, search = searchVideos } = {}) {
+export async function findReadingVideos(passages, apiKey, { fetchImpl = fetch, log = () => {}, search = searchVideos, index = null } = {}) {
   const out = [];
-  if (!apiKey) return out;
+  const fromIndex = (p) => (index && index.map ? index.map[`${Number(p.bookId)}:${p.chapter}`] : null);
+  if (!apiKey && !index) return out;
   const pool = new Map(); // 지금까지 검색에서 나온 영상들
   const bestIn = (list, p) => list.map((v) => ({ v, s: scoreReadingTitle(v.title, p.book, p.chapter) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s)[0] || null;
   for (const p of passages || []) {
     const reference = `${p.book} ${p.chapter}장`;
+    const hit = fromIndex(p); // 공동체 성경읽기 재생목록 색인에 있으면 검색하지 않습니다
+    if (hit) {
+      out.push({ reference, book: p.book, chapter: p.chapter, video_id: hit.video_id, title: hit.title, channel: 'CGN' });
+      continue;
+    }
+    if (!apiKey) continue;
     try {
       let best = bestIn([...pool.values()], p);
       if (!best || best.s < 4) {

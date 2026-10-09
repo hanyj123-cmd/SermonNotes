@@ -220,12 +220,14 @@ export async function readDaily(sheets, spreadsheetId) {
     .filter((o) => /^\d{4}-\d{2}-\d{2}$/.test(o.date));
 }
 
-/** 하루치를 저장합니다 (rowNumber 가 있으면 그 줄을 덮어쓰고, 없으면 새 줄) */
+/** 하루치를 저장합니다 (rowNumber 가 있으면 그 줄을 덮어쓰고, 없으면 새 줄). 저장한 줄 번호를 돌려줍니다 */
 export async function writeDailyRow(sheets, spreadsheetId, rowNumber, obj) {
   const values = [DAILY_HEADERS.map((h) => obj[h] ?? '')];
   if (rowNumber) {
     await sheets.spreadsheets.values.update({ spreadsheetId, range: `${DAILY_TAB}!A${rowNumber}:${colLetter(DAILY_HEADERS.length)}${rowNumber}`, valueInputOption: 'RAW', requestBody: { values } });
-  } else {
-    await sheets.spreadsheets.values.append({ spreadsheetId, range: `${DAILY_TAB}!A1`, valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS', requestBody: { values } });
+    return rowNumber;
   }
+  const res = await sheets.spreadsheets.values.append({ spreadsheetId, range: `${DAILY_TAB}!A1`, valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS', requestBody: { values } });
+  const m = /![A-Z]+(\d+)/.exec(res?.data?.updates?.updatedRange || '');
+  return m ? Number(m[1]) : 0;
 }

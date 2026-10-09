@@ -523,3 +523,5 @@
   .rd-listen { grid-template-columns: auto 1fr; }
   .rd-listen .btn { grid-column: 1 / -1; justify-content: center; }
 }
+.rd-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: -6px 0 14px; }
+.rd-tools .btn .ic { color: var(--gm-gold-deep); }

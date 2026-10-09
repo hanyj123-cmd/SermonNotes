@@ -36,6 +36,7 @@ import {
   writeDailyRow,
 } from './lib/sheets.mjs';
 import { buildDailyDay, dailyExport, findReadingVideos, torontoDate, isDailyDate } from './lib/daily.mjs';
+import { ensureReadingIndex } from './lib/reading-index.mjs';
 import { extractPlaylistId, fetchPlaylistVideos, fetchVideoStates, fetchPublishDates } from './lib/youtube.mjs';
 import { buildQueue } from './lib/queue.mjs';
 import { attachBibleAudio, buildPrayerMusic, musicIsStale } from './lib/media.mjs';
@@ -190,6 +191,7 @@ async function syncDaily(sheets, spreadsheetId, ai, youtubeKey) {
   // 기본: 다음 날 분량을 하루 전에 만들고, 혹시 오늘 것이 빠졌으면 같이 채웁니다
   const dates = wanted.length ? wanted.slice(0, 14) : [torontoDate(1), torontoDate(0)];
   const force = String(process.env.DAILY_FORCE || '').toLowerCase() === 'true';
+  const index = youtubeKey ? await ensureReadingIndex(youtubeKey, { log: (m) => console.log(m) }) : null;
   for (const date of dates) {
     const found = byDate.get(date);
     const hasVideos = found && found.videos_json && found.videos_json !== '[]';
@@ -197,20 +199,29 @@ async function syncDaily(sheets, spreadsheetId, ai, youtubeKey) {
     // 다시 만들기: 본문만 남기고 AI 정리·영상은 새로 (시트의 같은 줄에 덮어씁니다)
     const prev = force && found ? { rowNumber: found.rowNumber, passages_json: found.passages_json } : found;
     console.log(`\n📖 오늘의 말씀 ${date}`);
+    // 관리 화면에서 "만드는 중"으로 보이게 먼저 표시합니다 (끝나면 결과로 덮어씁니다)
+    let rowNumber = found ? found.rowNumber : 0;
+    try {
+      rowNumber = await writeDailyRow(sheets, spreadsheetId, rowNumber, { ...(found || { date }), date, status: 'running', updated_at: now(), note: force ? '다시 만드는 중' : '만드는 중' });
+    } catch (e) {
+      console.warn(`   (진행 표시를 남기지 못했습니다: ${e.message})`);
+    }
     try {
       const row = await buildDailyDay(date, prev, {
         ai,
-        findVideos: youtubeKey ? (passages) => findReadingVideos(passages, youtubeKey, { log: (m) => console.warn(`   ${m}`) }) : null,
+        findVideos: youtubeKey || index ? (passages) => findReadingVideos(passages, youtubeKey, { index, log: (m) => console.warn(`   ${m}`) }) : null,
         log: (m) => console.log(m),
       });
       if (!row) {
         console.log(`   교회 앱에 ${date} 본문이 아직 없습니다.`);
+        if (rowNumber) await writeDailyRow(sheets, spreadsheetId, rowNumber, { ...(found || { date }), date, status: found ? found.status : 'error', updated_at: now(), note: '교회 앱에 이 날 본문이 아직 없습니다' });
         continue;
       }
-      await writeDailyRow(sheets, spreadsheetId, found ? found.rowNumber : 0, row);
+      await writeDailyRow(sheets, spreadsheetId, rowNumber, row);
       console.log(`   ✅ ${row.refs} (${row.status === 'done' ? '완료' : `일부 실패: ${row.note}`})`);
     } catch (e) {
       console.error(`   ❌ ${date} 오늘의 말씀을 만들지 못했습니다: ${e.message || e}`);
+      if (rowNumber) await writeDailyRow(sheets, spreadsheetId, rowNumber, { ...(found || { date }), date, status: 'error', updated_at: now(), note: String(e.message || e).slice(0, 300) }).catch(() => {});
     }
   }
 }

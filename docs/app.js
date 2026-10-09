@@ -111,7 +111,7 @@ function route() {
   document.body.classList.toggle('handout-mode', kind === 'h');
   // 첫 화면(#/ 또는 주소 없음)은 말씀 게임 메인입니다
   const home = !kind;
-  setActiveMenu(kind === 'r' ? 'read' : kind === 'u' ? 'user' : home || kind === 'g' || kind === 'q' ? 'game' : kind === 'admin' ? '' : 'church');
+  setActiveMenu(kind === 'r' || (kind === 'h' && /^bible-/.test(arg || '')) ? 'read' : kind === 'u' ? 'user' : home || kind === 'g' || kind === 'q' ? 'game' : kind === 'admin' ? '' : 'church');
   if (home) return renderGame('home');
   if (kind === 'admin') return renderAdminRoute();
   if (kind === 'g') return renderGame(arg || 'home');
@@ -679,12 +679,66 @@ function renderAdminPanel(password) {
           : ` ${range} ${r.force ? '전부 다시' : '중 빠진 날을'} 만드는 중입니다. 하루치에 몇 분씩 걸려요. 진행 상태는 위 "지금 동기화"에 보입니다.`,
       );
       syncTimer = setTimeout(refreshSync, 6000);
+      clearTimeout(dailyTimer);
+      dailyTimer = setTimeout(refreshDaily, 8000);
     } catch (e) {
       dailyInfo.textContent = `오류: ${e.message || e}`;
     } finally {
       dailyBtn.disabled = false;
     }
   });
+  // 날짜별 진행 상황: 완료 · 만드는 중 · 실패 (실행 중이면 10초마다 새로 봅니다)
+  const dailyList = h('ul', { class: 'admin-daily' }, h('li', { class: 'meta', text: '진행 상황을 불러오는 중…' }));
+  const dailyRefresh = h('button', { class: 'btn small', type: 'button' }, '새로 보기');
+  let dailyTimer = null;
+  const dowKo = ['일', '월', '화', '수', '목', '금', '토'];
+  const dayLabel = (d) => {
+    const x = new Date(`${d}T12:00:00Z`);
+    return `${x.getUTCMonth() + 1}/${x.getUTCDate()} (${dowKo[x.getUTCDay()]})`;
+  };
+  const statusChip = (d, running) => {
+    if (d.status === 'running') return running ? ['run', '만드는 중'] : ['err', '중단됨'];
+    if (d.status === 'done') return d.videos ? ['ok', '완료'] : ['ok', '완료 · 영상 없음'];
+    if (d.status === 'error') return ['err', '일부 실패'];
+    return ['', d.status || '대기'];
+  };
+  async function refreshDaily() {
+    clearTimeout(dailyTimer);
+    try {
+      const r = await adminPost({ action: 'daily_status', password });
+      if (passwordRejected(r)) return;
+      if (!r.ok) throw new Error(/알 수 없는 작업/.test(r.error || '') ? 'Apps Script가 옛 버전입니다. 새 Code.gs로 다시 배포해 주세요.' : r.error || '불러오지 못했습니다.');
+      const running = r.run && r.run.state === 'running';
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+      if (!r.days.length) dailyList.replaceChildren(h('li', { class: 'meta', text: '아직 만든 날이 없습니다.' }));
+      else
+        dailyList.replaceChildren(
+          ...r.days.map((d) => {
+            const [cls, label] = statusChip(d, running);
+            const part = (ok, name) => h('span', { class: `ad-part${ok ? ' on' : ''}`, text: name });
+            return h(
+              'li',
+              { class: `ad-row ad-${cls}` },
+              h('span', { class: 'ad-date' }, dayLabel(d.date), d.date === today ? h('em', { text: '오늘' }) : null),
+              h('span', { class: 'ad-refs', text: d.refs || '—' }),
+              h('span', { class: 'ad-parts' }, part(d.qt, 'QT'), part(d.study, '공부'), part(d.group, '소그룹'), part(d.quiz, '퀴즈'), part(d.videos > 0, `영상 ${d.videos}`)),
+              h('span', { class: `ad-chip ad-chip-${cls}`, text: label }),
+              d.status === 'running' && !running
+                ? h('span', { class: 'ad-note', text: '지난 실행이 이 날을 끝내지 못했어요. "오늘의 말씀 지금 동기화"를 누르면 빠진 부분만 이어서 만듭니다.' })
+                : d.note && d.status !== 'done' ? h('span', { class: 'ad-note', text: d.note }) : null,
+            );
+          }),
+        );
+      if (running || r.days.some((d) => d.status === 'running')) {
+        dailyTimer = setTimeout(() => {
+          if (document.body.contains(dailyList)) refreshDaily();
+        }, 10000);
+      }
+    } catch (e) {
+      dailyList.replaceChildren(h('li', { class: 'meta', text: `진행 상황을 불러오지 못했습니다: ${e.message || e}` }));
+    }
+  }
+  dailyRefresh.addEventListener('click', refreshDaily);
 
   const rowFor = (p) => {
     const cat = h('select', { class: 'search admin-cat', 'aria-label': '구분' }, categoryOptions(p.category));
@@ -748,6 +802,8 @@ function renderAdminPanel(password) {
       h('p', { class: 'meta', text: '자동: 매일 아침 7:00(토론토)에 다음 날 분량의 QT 묵상 · 성경공부 · 소그룹 나눔 · 퀴즈 · 공동체 성경읽기 영상을 미리 만듭니다. 아래 버튼은 과거 5일 ~ 미래 2일(8일치) 중 아직 없거나 실패한 날을 지금 만듭니다.' }),
       h('div', { class: 'admin-row' }, h('label', { class: 'ho-opt' }, dailyForce, '이미 만든 날도 다시 만들기'), dailyBtn),
       dailyInfo,
+      h('div', { class: 'admin-row ad-head' }, h('h3', { text: '날짜별 진행 상황' }), dailyRefresh),
+      dailyList,
     ),
     renderVideoManager(password, passwordRejected, requestSync),
     renderModelSection(password, passwordRejected),
@@ -766,6 +822,7 @@ function renderAdminPanel(password) {
   );
   reload();
   refreshSync();
+  refreshDaily();
 }
 
 /* ---------- 구글 로그인 + 개인 노트 ----------

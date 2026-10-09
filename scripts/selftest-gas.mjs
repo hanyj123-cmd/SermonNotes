@@ -667,5 +667,19 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
   check('일독표: 신약 260장 → 신약 완독 업적', r.state.badges.includes('nt') && r.state.badges.includes('read7'), JSON.stringify(r.state.badges));
 }
 
+// ---------- 관리: 오늘의 말씀 진행 상황 ----------
+{
+  const g = makeEnv({ ADMIN_PASSWORD: 'pw', GITHUB_TOKEN: 't', GITHUB_REPO: 'me/Repo' });
+  g.setGh(() => ({ code: 200, body: { workflow_runs: [{ status: 'in_progress', run_started_at: '2026-10-08T11:00:00Z' }] } }));
+  const daily = g.ss.insertSheet('Daily');
+  daily.rows.push(['date', 'refs', 'status', 'passages_json', 'qt_json', 'study_json', 'group_json', 'quiz_json', 'videos_json', 'updated_at', 'note']);
+  daily.rows.push(['2026-10-08', '열왕기상 11장', 'done', '[]', '{"a":1}', '{"a":1}', '{"a":1}', '{"a":1}', '[{"video_id":"x"}]', 't', '']);
+  daily.rows.push(['2026-10-09', '열왕기상 12장', 'running', '[]', '{"a":1}', '', '', '', '[]', 't', '만드는 중']);
+  daily.rows.push(['2026-10-07', '열왕기상 10장', 'error', '[]', '', '', '', '', '', 't', 'quiz: 시간 초과']);
+  const r = g.post({ action: 'daily_status', password: 'pw' });
+  check('오늘의 말씀 진행: 최신 날짜부터 · 상태 · 만든 것 표시', r.ok && r.run.state === 'running' && r.days.map((d) => d.date).join() === '2026-10-09,2026-10-08,2026-10-07' && r.days[0].status === 'running' && r.days[0].qt && !r.days[0].quiz && r.days[1].videos === 1 && r.days[2].note === 'quiz: 시간 초과', JSON.stringify(r));
+  check('오늘의 말씀 진행: 비밀번호 필요', !g.post({ action: 'daily_status', password: 'x' }).ok);
+}
+
 console.log(fails ? `\n${fails}개 실패` : '\n서버 로직 테스트 모두 통과');
 process.exit(fails ? 1 : 0);

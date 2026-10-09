@@ -118,6 +118,33 @@ async function pickDailyDate() {
 }
 
 /* ---------- 공동체 성경읽기 영상 ---------- */
+// 매달 동기화가 CGN "하루 20분 공동체성경읽기" 재생목록을 훑어 만든 장별 영상 색인 (data/reading-videos.json)
+let readingIndexPromise = null;
+function loadReadingIndex() {
+  if (!readingIndexPromise)
+    readingIndexPromise = fetch(`${dataBase()}reading-videos.json?t=${Math.floor(Date.now() / 3600000)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+  return readingIndexPromise;
+}
+/** 그날 정리에 영상이 빠진 장은 색인에서 채웁니다 (원본은 그대로 두고 복사본을 돌려줌) */
+async function withIndexVideos(data, passages) {
+  const have = new Set(((data && data.videos) || []).map((v) => `${v.book}|${v.chapter}`));
+  const missing = (passages || []).filter((p) => !have.has(`${p.book}|${p.chapter}`));
+  if (!missing.length) return data;
+  const idx = await loadReadingIndex();
+  if (!idx || !idx.map) return data;
+  const add = missing
+    .map((p) => {
+      const hit = idx.map[`${Number(p.bookId)}:${p.chapter}`];
+      return hit ? { reference: `${p.book} ${p.chapter}장`, book: p.book, chapter: p.chapter, video_id: hit.video_id, title: hit.title } : null;
+    })
+    .filter(Boolean);
+  if (!add.length) return data;
+  const order = (v) => (passages || []).findIndex((p) => p.book === v.book && p.chapter === v.chapter);
+  const videos = [...((data && data.videos) || []), ...add].sort((a, b) => order(a) - order(b));
+  return { ...(data || {}), videos };
+}
 // 같은 영상이 여러 장을 담고 있으면(예: "마가복음 10-11장") 하나로 묶습니다
 function videoGroups(data) {
   const out = [];
@@ -182,7 +209,7 @@ async function renderDaily(dateArg, modeArg) {
   const id = dailyIdOf(date);
   document.title = `오늘의 말씀 · ${dateLabel(date, false)} · 말씀결`;
   app.replaceChildren(h('div', { class: 'gm rd' }, h('p', { class: 'loading', text: '오늘의 말씀을 불러오는 중…' })));
-  const [data, live] = await Promise.all([loadDaily(date), fetchReadingLive(date, 'KNKRV')]);
+  const [data0, live] = await Promise.all([loadDaily(date), fetchReadingLive(date, 'KNKRV')]);
   if (!location.hash.startsWith('#/r') && location.hash !== '') return;
   let st = null;
   try {
@@ -190,7 +217,8 @@ async function renderDaily(dateArg, modeArg) {
   } catch {
     st = null;
   }
-  const passages = live && live.length ? live : (data && data.passages) || [];
+  const passages = live && live.length ? live : (data0 && data0.passages) || [];
+  const data = await withIndexVideos(data0, passages);
   const refs = (data && data.refs) || refsOf(passages);
   const today = localToday();
   const isToday = date === today;
@@ -225,7 +253,9 @@ async function renderDaily(dateArg, modeArg) {
   const notes = NOTES_ENABLED && auth.user ? createNotes({ id, title: refs }) : null;
   currentNotes = notes;
   const body = h('div', { class: 'rd-body', id: 'mode-body' });
-  const page = h('div', { class: 'gm rd' }, h('a', { class: 'back', href: '#/' }, icon('back'), '게임 홈'), head, kakaoBox(date, refs, data), tabs, body);
+  const hoMode = mode === 'quiz' ? 'study' : mode; // 퀴즈는 성경공부 PDF 안에 들어 있습니다
+  const tools = h('div', { class: 'rd-tools' }, h('a', { class: 'btn', href: `#/h/${id}/${hoMode}` }, icon('file'), `PDF 미리보기 · 다운로드`), h('span', { class: 'meta', text: mode === 'quiz' ? '퀴즈는 성경공부 PDF에 함께 들어가요' : '' }));
+  const page = h('div', { class: 'gm rd' }, h('a', { class: 'back', href: '#/' }, icon('back'), '게임 홈'), head, kakaoBox(date, refs, data), tabs, tools, body);
   app.replaceChildren(page);
 
   const dLike = { id, category: 'daily', title: refs, date, bible: false, qt: data && data.qt, study: data && data.study ? { ...data.study, quiz: null } : null, group: data && data.group };
@@ -356,8 +386,9 @@ function renderDailyCard(st) {
   const card = h('section', { class: 'gm-card rd-card' }, h('div', { class: 'gm-card-head' }, h('h2', {}, icon('book'), '오늘의 말씀 읽기'), h('span', { class: 'meta', text: dateLabel(localToday()) })), h('p', { class: 'loading', text: '불러오는 중…' }));
   (async () => {
     const date = await pickDailyDate();
-    const [data, live] = await Promise.all([loadDaily(date), fetchReadingLive(date, 'KNKRV')]);
-    const passages = live && live.length ? live : (data && data.passages) || [];
+    const [data0, live] = await Promise.all([loadDaily(date), fetchReadingLive(date, 'KNKRV')]);
+    const passages = live && live.length ? live : (data0 && data0.passages) || [];
+    const data = await withIndexVideos(data0, passages);
     const refs = (data && data.refs) || refsOf(passages);
     const id = dailyIdOf(date);
     const readDone = st && st.readDays && st.readDays[date];
@@ -450,4 +481,39 @@ function renderBiblePlan(st) {
     h('section', { class: 'bp-section' }, h('h2', { class: 'bp-title' }, '구약', h('span', { text: '39권' })), h('div', { class: 'bp-grid' }, BIBLE_BOOKS.slice(0, 39).map(bookCard))),
     h('section', { class: 'bp-section' }, h('h2', { class: 'bp-title' }, '신약', h('span', { text: '27권' })), h('div', { class: 'bp-grid' }, BIBLE_BOOKS.slice(39).map(bookCard))),
   );
+}
+
+/* ---------- PDF (handout.js 가 씁니다) ---------- */
+// 오늘의 말씀 하루치를 설교 PDF 와 같은 모양의 자료로 바꿉니다. 성경 본문은 3역본을 교회 서버에서 가져옵니다.
+const HO_VERSION_IDS = { KNKRV: ['GAE', 'ko'], NIV: ['NIV', 'en'], KSTNR: ['SAE', 'ko'] };
+async function dailyHandoutDetail(id) {
+  const date = dateOfDailyId(id);
+  if (!date) throw new Error('날짜를 알 수 없어요.');
+  const [data, ...lives] = await Promise.all([loadDaily(date), ...READ_VERSIONS.map(([v]) => fetchReadingLive(date, v))]);
+  const versions = [];
+  READ_VERSIONS.forEach(([v, label], i) => {
+    let ps = lives[i];
+    if ((!ps || !ps.length) && v === 'KNKRV') ps = data && data.passages;
+    if (!ps || !ps.length) return;
+    const [hoId, lang] = HO_VERSION_IDS[v];
+    versions.push({ id: hoId, label, lang, passages: ps.map((p) => ({ reference: `${p.book} ${p.chapter}${lang === 'en' ? '' : '장'}`, verses: p.verses.map((x) => ({ n: x.n, text: String(x.text).replace(/^<[^>]{1,40}>\s*/, '') })) })) });
+  });
+  if (!data && !versions.length) throw new Error('이 날의 말씀을 아직 찾지 못했어요.');
+  const refs = (data && data.refs) || refsOf((data && data.passages) || lives[0] || []);
+  const kv = data && data.key_verse;
+  return {
+    id,
+    daily: true,
+    category: 'daily',
+    date,
+    title: refs,
+    scripture: refs,
+    preacher: '',
+    result: { summary_short: kv && kv.text ? `“${kv.text}” (${kv.reference})` : '' },
+    summaries: (data && data.summaries) || [],
+    qt: data && data.qt,
+    study: data && (data.study || data.quiz) ? { ...(data.study || {}), quiz: data.quiz || (data.study && data.study.quiz) || null } : null,
+    group: data && data.group,
+    bible: { versions },
+  };
 }

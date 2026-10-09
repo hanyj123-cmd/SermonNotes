@@ -76,6 +76,7 @@ function doPost(e) {
   if (action === 'settings_get') return json(guarded(settingsGet));
   if (action === 'sync_run') return json(guarded(function () { return syncRun(body); }));
   if (action === 'videos_list') return json(guarded(videosList));
+  if (action === 'daily_status') return json(guarded(dailyStatus));
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -1379,6 +1380,44 @@ function gameBlankKey(s) {
 }
 
 // 오늘의 말씀 퀴즈 (Daily 탭, GitHub 동기화가 매일 만듭니다)
+/* ---------- 오늘의 말씀 진행 상황 (관리 화면) ---------- */
+function dailyCellText(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, 'America/Toronto', 'yyyy-MM-dd');
+  return String(v === undefined || v === null ? '' : v);
+}
+function dailyStatus() {
+  const run = latestRunSafe();
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Daily');
+  if (!sh || sh.getLastRow() < 2) return { ok: true, run: run, days: [] };
+  const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  const col = function (name) { return head.indexOf(name); };
+  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, head.length).getValues();
+  const has = function (r, name) { const c = col(name); return c >= 0 && String(r[c] || '').length > 2; };
+  const days = rows
+    .map(function (r) {
+      const vids = parseJsonArray(col('videos_json') >= 0 ? r[col('videos_json')] : '');
+      return {
+        date: dailyCellText(r[col('date')]),
+        refs: dailyCellText(r[col('refs')]),
+        status: dailyCellText(r[col('status')]),
+        qt: has(r, 'qt_json'), study: has(r, 'study_json'), group: has(r, 'group_json'), quiz: has(r, 'quiz_json'),
+        videos: vids.length,
+        updated_at: dailyCellText(r[col('updated_at')]),
+        note: dailyCellText(r[col('note')]).slice(0, 300),
+      };
+    })
+    .filter(function (d) { return /^\d{4}-\d{2}-\d{2}$/.test(d.date); })
+    .sort(function (a, b) { return a.date < b.date ? 1 : -1; })
+    .slice(0, 21);
+  return { ok: true, run: run, days: days };
+}
+function latestRunSafe() {
+  try {
+    return latestRun();
+  } catch (err) {
+    return { state: 'unknown' };
+  }
+}
 function gameDailyQuiz(id) {
   const m = /^bible-(\d{4})(\d{2})(\d{2})$/.exec(id);
   const date = m[1] + '-' + m[2] + '-' + m[3];

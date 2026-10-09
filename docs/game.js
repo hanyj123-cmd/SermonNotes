@@ -181,10 +181,10 @@ function renderGameIntro() {
       'div',
       { class: 'gm-intro-text' },
       h('h1', { text: '말씀 게임' }),
-      h('p', { text: '설교를 공부하고 퀴즈를 풀면 도장과 달란트를 받아요. 매일 이어서 하면 더 많이 받고, 모은 달란트로 내 캐릭터를 꾸밀 수 있어요.' }),
+      h('p', { text: '오늘의 말씀과 주일 설교를 읽고 퀴즈를 풀면 도장과 달란트를 받아요. 매일 이어서 하면 더 많이 받고, 모은 달란트로 내 캐릭터를 꾸밀 수 있어요.' }),
       h('ul', { class: 'gm-intro-list' }, h('li', {}, icon('stamp'), '하루 한 번 퀘스트를 마치면 도장 하나'), h('li', {}, icon('flame'), '연속으로 하면 달란트가 최대 2배'), h('li', {}, icon('map'), '천로역정 · 전신갑주 · 시냇가의 나무, 세 가지 여정'), h('li', {}, icon('trophy'), '가족끼리 이번 주 순위 겨루기')),
       gameCanSave() ? null : h('p', { class: 'note-hint', text: typeof NOTES_ENABLED !== 'undefined' && NOTES_ENABLED ? '화면 위쪽에서 구글 로그인을 하면 시작할 수 있어요. 로그인하지 않아도 퀘스트는 연습으로 풀어 볼 수 있어요.' : '로그인 기능이 연결되면 점수를 저장할 수 있어요. 지금은 퀘스트를 연습으로만 풀 수 있어요.' }),
-      h('a', { class: 'btn primary', href: '#/c/sunday' }, '설교 고르러 가기'),
+      h('a', { class: 'btn primary', href: '#/r' }, '오늘의 말씀 읽기'),
     ),
   );
 }
@@ -262,6 +262,73 @@ function renderMaker(st) {
 function quizSermons() {
   return (state.sermons || []).filter((s) => (s.modes || []).includes('study'));
 }
+/* ---------- 성경말씀 퀘스트: 주일 설교(그 주) → 오늘의 말씀 → 지난 며칠 말씀 ---------- */
+const dayDiff = (a, b) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86400000);
+const shortDate = (d) => {
+  const x = new Date(`${d}T12:00:00Z`);
+  return `${x.getUTCMonth() + 1}/${x.getUTCDate()}`;
+};
+async function bibleQuestList(st) {
+  const today = st.today;
+  const sundays = quizSermons()
+    .filter((s) => s.category === 'sunday' && s.date && s.date <= today)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  let days = [];
+  try {
+    days = (await loadDailyIndex()).filter((d) => d.complete && d.date <= today).sort((a, b) => b.date.localeCompare(a.date));
+  } catch {
+    days = [];
+  }
+  const sun = (s) => ({ id: s.id, kind: '주일 설교', title: s.title, when: formatDate(s.date) });
+  const day = (d) => ({ id: dailyIdOf(d.date), kind: d.date === today ? '오늘의 말씀' : `${shortDate(d.date)} 말씀`, title: d.refs, when: d.date === today ? '오늘' : shortDate(d.date) });
+  const list = [];
+  const thisWeek = sundays[0] && dayDiff(sundays[0].date, today) <= 6 ? sundays[0] : null;
+  if (thisWeek && !st.quizzes[thisWeek.id]) list.push(sun(thisWeek)); // 주일 설교가 있는 주에는 주일 말씀부터
+  const todayDay = days.find((d) => d.date === today) || days[0];
+  if (todayDay) list.push(day(todayDay));
+  if (thisWeek && st.quizzes[thisWeek.id]) list.push(sun(thisWeek));
+  days.filter((d) => d !== todayDay && dayDiff(d.date, today) <= 6 && !st.quizzes[dailyIdOf(d.date)]).slice(0, 2).forEach((d) => list.push(day(d)));
+  sundays.filter((s) => s !== thisWeek && !st.quizzes[s.id]).slice(0, 1).forEach((s) => list.push(sun(s)));
+  return list.slice(0, 5);
+}
+function renderBibleQuests(st) {
+  const card = h(
+    'section',
+    { class: 'gm-card gm-quest' },
+    h('div', { class: 'gm-card-head' }, h('h2', {}, icon('star'), '성경말씀 퀘스트'), h('span', { class: 'gm-chip-soft', text: st.dailyLeft ? `점수 퀘스트 ${st.dailyLeft}개 남음` : '오늘 점수 퀘스트 완료 · 연습은 계속 OK' })),
+    h('p', { class: 'meta', text: '주일 설교와 매일 성경 읽기 본문으로 만든 퀴즈예요. 주일 설교가 올라온 주에는 주일 말씀부터, 그다음 오늘의 말씀으로 이어져요. 객관식과 빈칸(직접 입력)을 풀고 절반 이상 맞히면 오늘의 도장을 받아요.' }),
+    h('p', { class: 'loading', text: '퀘스트를 고르는 중…' }),
+  );
+  bibleQuestList(st).then((list) => {
+    const slot = card.lastChild;
+    if (!list.length) {
+      slot.replaceWith(h('p', { class: 'empty', text: '아직 퀴즈가 준비된 말씀이 없어요. 오늘의 말씀이나 주일 설교가 정리되면 여기에 나타나요.' }));
+      return;
+    }
+    const first = list.find((q) => !st.quizzes[q.id]) || list[0];
+    const cta = h('a', { class: 'btn gm-cta', href: `#/q/${encodeURIComponent(first.id)}` }, icon('star'), st.quizzes[first.id] ? '다시 풀어 보기' : `${first.kind} 퀘스트 시작`, h('span', { class: 'gm-cta-sub', text: first.title }));
+    const rest = list.filter((q) => q !== first);
+    slot.replaceWith(
+      h(
+        'div',
+        {},
+        cta,
+        rest.length
+          ? h(
+              'ul',
+              { class: 'gm-quest-list' },
+              rest.map((q) => {
+                const done = st.quizzes[q.id];
+                return h('li', {}, h('a', { class: 'gm-quest-item', href: `#/q/${encodeURIComponent(q.id)}` }, h('span', { class: 'gm-quest-date', text: q.kind }), h('span', { class: 'gm-quest-title', text: q.title }), done ? h('span', { class: 'gm-chip-soft ok', text: `${done.s}/${done.t} 완료` }) : h('span', { class: 'gm-go', text: '도전' })));
+              }),
+            )
+          : null,
+      ),
+    );
+  });
+  return card;
+}
+
 function renderGameHome(st) {
   const lvStart = levelXp(st.level);
   const lvNext = levelXp(st.level + 1);
@@ -284,31 +351,7 @@ function renderGameHome(st) {
     ),
   );
 
-  // 오늘의 퀘스트: 아직 점수를 받지 않은 최근 설교부터
-  const all = quizSermons();
-  const fresh = all.filter((s) => !st.quizzes[s.id]);
-  const picks = (fresh.length ? fresh : all).slice(0, 3);
-  const quest = h(
-    'section',
-    { class: 'gm-card gm-quest' },
-    h('div', { class: 'gm-card-head' }, h('h2', {}, icon('star'), '설교 말씀 퀘스트'), h('span', { class: 'gm-chip-soft', text: st.dailyLeft ? `점수 퀘스트 ${st.dailyLeft}개 남음` : '오늘 점수 퀘스트 완료 · 연습은 계속 OK' })),
-    h('p', { class: 'meta', text: '토론토영락교회 주일 설교로 만든 퀴즈예요. 객관식과 빈칸(직접 입력)을 풀고, 절반 이상 맞히면 오늘의 도장을 받아요.' }),
-    picks.length ? h('a', { class: 'btn gm-cta', href: `#/q/${encodeURIComponent(picks[0].id)}` }, icon('star'), st.quizzes[picks[0].id] ? '다시 풀어 보기' : '오늘의 퀘스트 시작', h('span', { class: 'gm-cta-sub', text: picks[0].title })) : null,
-    picks.length
-      ? h(
-          'ul',
-          { class: 'gm-quest-list' },
-          picks.slice(1).map((s) => {
-            const done = st.quizzes[s.id];
-            return h(
-              'li',
-              {},
-              h('a', { class: 'gm-quest-item', href: `#/q/${encodeURIComponent(s.id)}` }, h('span', { class: 'gm-quest-date', text: formatDate(s.date) }), h('span', { class: 'gm-quest-title', text: s.title }), done ? h('span', { class: 'gm-chip-soft ok', text: `${done.s}/${done.t} 완료` }) : h('span', { class: 'gm-go', text: '도전' })),
-            );
-          }),
-        )
-      : h('p', { class: 'empty', text: '아직 성경공부 퀴즈가 있는 설교가 없어요. 설교가 정리되면 여기에 나타나요.' }),
-  );
+  const quest = renderBibleQuests(st);
 
   return h('div', { class: 'gm-home' }, hero, renderDailyCard(st), quest, renderStampBoard(st), renderJourneyMini(st), renderBadges(st), renderBoardMini());
 }

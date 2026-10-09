@@ -16,6 +16,7 @@ import { fetchPublishDates } from './lib/youtube.mjs';
 import { processRow, CELL_LIMIT, readExisting, knownInfo } from './lib/process.mjs';
 import { RULES, torontoClock, dueCategories, decide, shouldRun } from './gate.mjs';
 import { parseCategories, toExport, exportJson, exportDaily } from './sync.mjs';
+import { parseReadingTitle, buildReadingIndex, readingIndexIsStale } from './lib/reading-index.mjs';
 import { parseYnResponse, readingRefs, passagesText, dailyId, fetchDailyReading, YN_BIBLE_API, torontoDate, scoreReadingTitle, buildDailyDay, dailyExport, findReadingVideos } from './lib/daily.mjs';
 import { durationSeconds, musicIsStale, attachSongVideos, attachBibleAudio, scoreAudioTitle } from './lib/media.mjs';
 
@@ -330,6 +331,34 @@ await t('공동체 성경읽기 영상 제목 점수', () => {
   assert.ok(scoreReadingTitle('공동체성경읽기 열왕기상 10-12장', '열왕기상', 11) > 0);
   assert.equal(scoreReadingTitle('마가복음 1장', '마가복음', 10), 0);
   assert.ok(scoreReadingTitle('[하루 20분 공동체성경읽기] 10/16 마가복음 10-11장', '마가복음', 11) >= 4);
+});
+await t('공동체 성경읽기 색인: 영상 제목에서 책·장 범위 읽기', () => {
+  assert.deepEqual(parseReadingTitle('[하루 20분 공동체성경읽기] 4/20 열왕기상 11-12장'), [{ id: 11, from: 11, to: 12 }]);
+  assert.deepEqual(parseReadingTitle('[2022년 하루 20분 공동체성경읽기] 10/17 마가복음 7장-9장'), [{ id: 41, from: 7, to: 9 }]);
+  assert.deepEqual(parseReadingTitle('[하루 20분 공동체성경읽기] 3/1 예레미야애가 1-2장'), [{ id: 25, from: 1, to: 2 }]);
+  assert.deepEqual(parseReadingTitle('[하루 20분 공동체성경읽기] 열왕기상 7장, 시편 50편').map((r) => r.id).sort((a, b) => a - b), [11, 19]);
+  assert.deepEqual(parseReadingTitle('열왕기상 99장'), []);
+});
+await t('공동체 성경읽기 색인: 재생목록 → 장별 영상 (범위가 좁은 영상 우선) · 색인에 있으면 검색 안 함', async () => {
+  const items = { P1: ['[하루 20분 공동체성경읽기] 4/20 열왕기상 11-12장', '[하루 20분 공동체성경읽기] 10/16 마가복음 10-11장'], P2: ['[2023년 하루 20분 공동체성경읽기] 5/3 열왕기상 11장'] };
+  const fetchImpl = async (url) => {
+    const u = new URL(url);
+    const ep = u.pathname.split('/').pop();
+    const body = ep === 'search'
+      ? { items: [{ id: { playlistId: 'P1' }, snippet: { title: '2024 하루 20분 공동체성경읽기', channelTitle: 'CGN' } }, { id: { playlistId: 'P2' }, snippet: { title: '2023 하루 20분 공동체성경읽기', channelTitle: 'CGN' } }, { id: { playlistId: 'PX' }, snippet: { title: '찬양 모음', channelTitle: 'x' } }] }
+      : { items: items[u.searchParams.get('playlistId')].map((title, i) => ({ snippet: { title, resourceId: { videoId: `${u.searchParams.get('playlistId')}_v${i}` } } })) };
+    return { ok: true, json: async () => body };
+  };
+  const idx = await buildReadingIndex('k', { fetchImpl });
+  assert.equal(idx.playlists.length, 2);
+  assert.equal(idx.map['11:11'].video_id, 'P2_v0'); // 11장 하나만 담은 영상
+  assert.equal(idx.map['11:12'].video_id, 'P1_v0');
+  assert.equal(idx.map['41:11'].video_id, 'P1_v1');
+  assert.ok(readingIndexIsStale(idx)); // 300장 미만이면 다시 만듦
+  let searched = 0;
+  const got = await findReadingVideos([{ bookId: '11', book: '열왕기상', chapter: 12 }], 'k', { index: idx, search: async () => (searched++, []) });
+  assert.equal(searched, 0);
+  assert.equal(got[0].video_id, 'P1_v0');
 });
 await t('공동체 성경읽기 영상: 앞 장 검색에 나온 "10-11장" 영상은 다시 검색하지 않음', async () => {
   const queries = [];

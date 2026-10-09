@@ -96,7 +96,7 @@ function buildHandoutDoc(d, mode, opts) {
     h(
       'header',
       { class: 'ho-head' },
-      h('div', { class: 'ho-kicker' }, h('span', { class: 'ho-brand' }, h('img', { class: 'ho-logo', src: 'icons/mark.svg?v=9.21', alt: '' }), h('strong', { text: '말씀결' }), h('span', { text: `  ·  ${modeLabel(mode)}` })), h('span', { text: `${eventName(d.category)}${date ? `  ·  ${date}` : ''}` })),
+      h('div', { class: 'ho-kicker' }, h('span', { class: 'ho-brand' }, h('img', { class: 'ho-logo', src: 'icons/mark.svg?v=9.22', alt: '' }), h('strong', { text: '말씀결' }), h('span', { text: `  ·  ${modeLabel(mode)}` })), h('span', { text: `${eventName(d.category)}${date ? `  ·  ${date}` : ''}` })),
       h('h1', { class: 'ho-title', text: d.title }),
       scripture || preacher ? h('p', { class: 'ho-scripture' }, scripture ? `본문  ${scripture}` : '', scripture && preacher ? '   |   ' : '', preacher) : null,
       d.result.summary_short || d.result.theme ? h('p', { class: 'ho-summary', text: d.result.summary_short || d.result.theme }) : null,
@@ -121,21 +121,26 @@ function buildHandoutDoc(d, mode, opts) {
     );
     const credits = chosen.filter((v) => v.copyright).map((v) => `${v.label}: ${v.copyright}`);
     const chars = chosen.reduce((n, v) => n + (v.passages || []).reduce((m, p) => m + (p.verses || []).reduce((k, x) => k + String(x.text || '').length, 0), 0), 0);
-    bibleAtEnd = chars > LONG_BIBLE_CHARS;
+    bibleAtEnd = mode !== 'read' && chars > LONG_BIBLE_CHARS;
     bibleSec = secPlain(bibleAtEnd ? '부록 · 성경 본문' : '성경 본문', body, credits.length ? h('p', { class: 'ho-credit', text: credits.join('  /  ') }) : null);
     if (bibleAtEnd) bibleSec.classList.add('ho-appendix');
   }
 
   const answerPages = []; // 정답·모범 답안 (옵션을 켠 경우 맨 뒤에 모음)
 
-  if (mode === 'review') {
+  if (mode === 'read') {
+    // 오늘의 말씀: 본문 요약 → 성경 본문 → 묵상 노트
+    if (d.summaries && d.summaries.length) secs.push(sec('오늘 읽을 말씀', h('ul', { class: 'ho-plain' }, d.summaries.map((x) => h('li', {}, h('strong', { text: x.reference }), `  ${x.summary}`)))));
+    if (bibleSec) secs.push(bibleSec);
+    if (opts.lines) secs.push(sec('묵상 노트', h('p', { class: 'ho-note', text: '오늘 마음에 남은 구절과 그 이유, 오늘 붙들고 살 한 가지를 적어 보세요.' }), lines(8)));
+  } else if (mode === 'review') {
     const r = d.result.review || {};
     secs.push(pointsSec('설교 정리', r.outline), summarySec(r.summary));
   } else if (mode === 'qt') {
     const q = d.qt || {};
     secs.push(prayer('여는 기도', q.opening_prayer), songsSec(q.songs));
     if (bibleSec && !bibleAtEnd) secs.push(bibleSec);
-    secs.push(pointsSec('QT 설교 정리', q.outline));
+    secs.push(pointsSec(d.daily ? 'QT 본문 묵상' : 'QT 설교 정리', q.outline));
     if (q.questions?.length) {
       const helpBox = (it) =>
         opts.answers && (it.guide || it.example)
@@ -183,7 +188,7 @@ function buildHandoutDoc(d, mode, opts) {
     const q = g.questions || {};
     secs.push(prayer('대표 기도', g.representative_prayer), songsSec(g.songs));
     if (bibleSec && !bibleAtEnd) secs.push(bibleSec);
-    secs.push(pointsSec('소그룹을 위한 설교 정리', g.outline), appsSec(g.applications));
+    secs.push(pointsSec(d.daily ? '소그룹을 위한 본문 정리' : '소그룹을 위한 설교 정리', g.outline), appsSec(g.applications));
     const gblock = (title, arr) =>
       arr?.length
         ? h('div', { class: 'ho-sg' }, h('h3', { text: title }), h('ol', { class: 'ho-q ho-q-lined' }, arr.map((it) => h('li', {}, h('div', { class: 'ho-q-text' }, inlineMd(it.question)), opts.lines ? lines(3) : null, opts.answers && (it.answer || it.guide) ? h('div', { class: 'ho-model' }, it.guide ? [h('strong', { class: 'ho-key-label', text: '생각의 길잡이' }), h('div', { class: 'ho-md' }, splitParas(it.guide).map((t) => h('p', {}, inlineMd(t))))] : null, it.answer ? [h('strong', { class: 'ho-key-label', text: '예시 답안' }), h('div', { class: 'ho-md' }, splitParas(it.answer).map((t) => h('p', {}, inlineMd(t))))] : null) : null))))
@@ -214,7 +219,7 @@ function buildHandoutDoc(d, mode, opts) {
 
   // 각주 · 부록
   const creditName = (window.APP_CONFIG && window.APP_CONFIG.CREDIT) || '';
-  secs.push(h('div', { class: 'ho-made' }, h('img', { class: 'ho-logo-lg', src: 'icons/mark.svg?v=9.21', alt: '' }), h('div', {}, h('strong', { text: '말씀결' }), h('span', { text: '  말씀의 결을 따라 읽고 묵상하는 노트' }), creditName ? h('div', { class: 'ho-made-by', text: creditName }) : null)));
+  secs.push(h('div', { class: 'ho-made' }, h('img', { class: 'ho-logo-lg', src: 'icons/mark.svg?v=9.22', alt: '' }), h('div', {}, h('strong', { text: '말씀결' }), h('span', { text: '  말씀의 결을 따라 읽고 묵상하는 노트' }), creditName ? h('div', { class: 'ho-made-by', text: creditName }) : null)));
   secs.push(h('footer', { class: 'ho-foot' }, h('p', { text: `참고: ${footnoteText(d.category)}` }), d.result.caveats ? h('p', { text: `유의: ${d.result.caveats}` }) : null));
   answerPages.forEach((a) => {
     a.classList.add('ho-appendix');
@@ -312,14 +317,14 @@ function loadScriptOnce(src, isReady, errorText) {
 }
 function loadPaged() {
   window.PagedConfig = { auto: false }; // 자동으로 쪽 나누기를 시작하지 않게 (직접 시작합니다)
-  return loadScriptOnce('vendor/paged.polyfill.min.js?v=9.21', () => window.Paged && window.Paged.Previewer, '쪽 나누기 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+  return loadScriptOnce('vendor/paged.polyfill.min.js?v=9.22', () => window.Paged && window.Paged.Previewer, '쪽 나누기 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
 }
-const loadHtml2Canvas = () => loadScriptOnce('vendor/html2canvas.min.js?v=9.21', () => typeof window.html2canvas === 'function', 'PDF 파일 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+const loadHtml2Canvas = () => loadScriptOnce('vendor/html2canvas.min.js?v=9.22', () => typeof window.html2canvas === 'function', 'PDF 파일 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
 
 let handoutCss = null;
 async function loadHandoutCss() {
   if (handoutCss) return handoutCss;
-  const res = await fetch('handout.css?v=9.21');
+  const res = await fetch('handout.css?v=9.22');
   if (!res.ok) throw new Error(`핸드아웃 서식을 불러오지 못했습니다 (${res.status})`);
   handoutCss = await res.text();
   return handoutCss;
@@ -485,23 +490,27 @@ function downloadPdf(pdf) {
 
 async function renderHandout(id, modeArg) {
   teardownHandout();
-  const item = state.sermons.find((x) => x.id === id);
+  const isDaily = /^bible-\d{8}$/.test(id); // 오늘의 말씀
+  const item = isDaily || state.sermons.find((x) => x.id === id);
   const back = (href, text) => h('a', { class: 'back', href }, icon('back'), text.replace(/^←\s*/, ''));
+  const homeHref = (m) => (isDaily ? `#/r/${dateOfDailyId(id)}/${m || 'read'}` : `#/v/${encodeURIComponent(id)}${m ? `/${m}` : ''}`);
+  const homeText = isDaily ? '← 말씀으로 돌아가기' : '← 설교로 돌아가기';
   if (!item) {
     app.replaceChildren(back('#/c/sunday', '← 목록으로'), h('div', { class: 'empty' }, h('p', { text: '해당 설교를 찾을 수 없습니다.' })));
     return;
   }
-  app.replaceChildren(back(`#/v/${encodeURIComponent(id)}`, '← 설교로 돌아가기'), h('p', { class: 'loading', text: '불러오는 중…' }));
+  app.replaceChildren(back(homeHref(modeArg), homeText), h('p', { class: 'loading', text: '불러오는 중…' }));
   let d;
   try {
-    d = await loadDetail(id);
+    d = isDaily ? await dailyHandoutDetail(id) : await loadDetail(id);
   } catch (e) {
-    app.replaceChildren(back(`#/v/${encodeURIComponent(id)}`, '← 설교로 돌아가기'), h('div', { class: 'empty' }, h('p', { text: String(e.message || e) })));
+    app.replaceChildren(back(homeHref(modeArg), homeText), h('div', { class: 'empty' }, h('p', { text: String(e.message || e) })));
     return;
   }
   if (!location.hash.startsWith('#/h/')) return; // 불러오는 사이 다른 화면으로 옮겼다면 그리지 않습니다
-  const modes = availableModes(d);
-  let mode = MODES.some((m) => m.key === modeArg) && modes.includes(modeArg) ? modeArg : modes.includes(savedMode()) ? savedMode() : 'review';
+  const modeList = isDaily ? DAILY_HO_MODES : MODES;
+  const modes = isDaily ? DAILY_HO_MODES.filter((m) => m.key === 'read' || d[m.key]).map((m) => m.key) : availableModes(d);
+  let mode = modeList.some((m) => m.key === modeArg) && modes.includes(modeArg) ? modeArg : !isDaily && modes.includes(savedMode()) ? savedMode() : modes[0];
   const fileTitle = (m) => `말씀결_${(d.date || '').replace(/-/g, '.')}_${d.title}_${modeLabel(m)}`.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim(); // PDF 파일 이름
   const pdfName = (o) => `${fileTitle(o.mode)}_${PAGE_SIZES[o.size].short}.pdf`;
   document.title = fileTitle(mode);
@@ -544,12 +553,12 @@ async function renderHandout(id, modeArg) {
     syncButtons();
   };
 
-  const modeSel = h('select', { class: 'search ho-size', 'aria-label': '보기 방식' }, MODES.map((m) => h('option', { value: m.key, text: m.label, disabled: !modes.includes(m.key) })));
+  const modeSel = h('select', { class: 'search ho-size', 'aria-label': '보기 방식' }, modeList.map((m) => h('option', { value: m.key, text: m.label, disabled: !modes.includes(m.key) })));
   modeSel.value = mode;
   modeSel.addEventListener('change', () => {
     mode = modeSel.value;
     document.title = fileTitle(mode);
-    rememberMode(mode);
+    if (!isDaily) rememberMode(mode);
     try {
       history.replaceState(null, '', `#/h/${encodeURIComponent(id)}/${mode}`);
     } catch {
@@ -571,8 +580,8 @@ async function renderHandout(id, modeArg) {
   const bibleSel = h(
     'select',
     { class: 'search ho-size', 'aria-label': '성경 본문 역본' },
-    BIBLE_VERSIONS.map((b) => h('option', { value: b.id, text: b.label })),
-    h('option', { value: BIBLE_ALL, text: '4개 역본 모두' }),
+    BIBLE_VERSIONS.map((b) => h('option', { value: b.id, text: b.label, disabled: isDaily && !(d.bible.versions || []).some((v) => v.id === b.id) })),
+    h('option', { value: BIBLE_ALL, text: isDaily ? `${(d.bible.versions || []).length}개 역본 모두` : '4개 역본 모두' }),
     h('option', { value: 'NONE', text: '넣지 않음' }),
   );
   bibleSel.value = prefs.bible;
@@ -595,7 +604,7 @@ async function renderHandout(id, modeArg) {
   const answersOpt = toggle('answers', '정답·길잡이·예시 답안 포함');
   const syncVisibility = () => {
     bibleLabel.hidden = mode === 'review';
-    songsOpt.hidden = mode === 'review';
+    songsOpt.hidden = mode === 'review' || mode === 'read';
     linesOpt.hidden = mode === 'review';
     answersOpt.hidden = !(mode === 'study' || mode === 'group' || mode === 'qt');
   };
@@ -681,7 +690,7 @@ async function renderHandout(id, modeArg) {
     ? '아래 옵션을 고르고 "미리보기 새로고침"을 누르세요. 미리보기와 PDF 파일이 함께 만들어지고, "PDF 다운로드"를 누르면 나오는 공유 창에서 "파일에 저장"(또는 GoodNotes 같은 필기 앱)을 고르면 됩니다.'
     : '옵션을 고르고 "미리보기 새로고침"을 누르면 미리보기와 PDF 파일이 만들어지고, "PDF 다운로드"로 저장합니다. 옵션을 바꾸면 다시 새로고침해 주세요.';
   app.replaceChildren(
-    back(`#/v/${encodeURIComponent(d.id)}/${mode}`, '← 설교로 돌아가기'),
+    back(homeHref(mode), homeText),
     h(
       'div',
       { class: 'ho-toolbar' },
