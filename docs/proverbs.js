@@ -1,5 +1,5 @@
-// 잠언 묵상 / 성경공부 — 잠언 1~31장, 날짜의 "일"이 곧 장 (1일 = 1장 … 31일 = 31장, 매달 되풀이)
-//   #/p              오늘의 장
+// 잠언 묵상 / 성경공부 — 한 달에 한 장, 잠언 1~31장 중에서 골라 깊이 묵상합니다
+//   #/p              장 고르기 (31장 목록)
 //   #/p/9[/모드]      잠언 9장 · 모드: word(말씀) | qt | study | group | quiz
 // 자료: data/proverbs/<장>.json (동기화가 Proverbs 탭에서 만들어 내보냄). 화면 틀은 "오늘의 말씀"과 같습니다.
 // 이 파일은 app.js · detail.js · notes.js · marks.js · game.js · daily.js(localToday, dateLabel) 를 씁니다.
@@ -14,7 +14,64 @@ const PROV_MODES = [
 const PROV_GROUP_KEY = 'sn-prov-group-view';
 const provCache = new Map();
 const provPad = (n) => String(n).padStart(2, '0');
-const provChapterOf = (date) => Math.min(31, Math.max(1, Number(String(date).slice(8, 10)) || 1));
+const PROV_LAST_KEY = 'sn-prov-last'; // 마지막으로 고른 장 (이번 달 묵상하는 장)
+function provLast() {
+  try {
+    const n = Number(localStorage.getItem(PROV_LAST_KEY));
+    return n >= 1 && n <= 31 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+function setProvLast(n) {
+  try {
+    localStorage.setItem(PROV_LAST_KEY, String(n));
+  } catch {
+    /* 괜찮습니다 */
+  }
+}
+let provIndexCache = null;
+async function loadProverbIndex() {
+  if (provIndexCache) return provIndexCache;
+  try {
+    const r = await fetch(`${dataBase()}proverbs/index.json?t=${Math.floor(Date.now() / 600000)}`);
+    provIndexCache = r.ok ? (await r.json()).chapters || [] : [];
+  } catch {
+    provIndexCache = [];
+  }
+  return provIndexCache;
+}
+
+/* ---------- 장 고르기 ---------- */
+async function renderProverbPicker() {
+  document.title = '잠언 묵상 · 말씀결';
+  app.replaceChildren(h('div', { class: 'gm rd pv' }, h('p', { class: 'loading', text: '불러오는 중…' })));
+  const idx = await loadProverbIndex();
+  if (!location.hash.startsWith('#/p')) return;
+  const byCh = new Map(idx.map((c) => [c.chapter, c]));
+  const last = provLast();
+  const card = (n) => {
+    const c = byCh.get(n);
+    const ready = !!(c && c.complete);
+    return h(
+      'a',
+      { class: `pv-pick${n === last ? ' last' : ''}${c ? '' : ' wait'}`, href: `#/p/${n}/word` },
+      h('span', { class: 'pv-pick-no', text: String(n) }),
+      h('span', { class: 'pv-pick-body' }, h('b', { text: `잠언 ${n}장` }), h('span', { class: 'pv-pick-theme', text: (c && c.theme) || (c ? '정리 중' : '아직 준비 중') })),
+      n === last ? h('span', { class: 'gm-chip-soft ok', text: '묵상 중' }) : c && !ready ? h('span', { class: 'gm-chip-soft', text: '일부 준비' }) : null,
+    );
+  };
+  app.replaceChildren(
+    h(
+      'div',
+      { class: 'gm rd pv' },
+      h('a', { class: 'back', href: '#/' }, icon('back'), '게임 홈'),
+      h('header', { class: 'rd-head' }, h('p', { class: 'pv-kicker', text: '한 달에 한 장, 깊이' }), h('h1', { class: 'rd-refs', text: '잠언 묵상 · 성경공부' }), h('p', { class: 'pv-theme', text: '이번 달 함께 묵상할 장을 고르세요. 말씀 · QT 묵상 · 성경공부 · 소그룹 나눔 · 퀴즈를 한 장으로 깊이 다룹니다.' })),
+      last ? h('a', { class: 'btn gm-cta pv-continue', href: `#/p/${last}/word` }, icon('book'), `잠언 ${last}장 이어서 묵상하기`, h('span', { class: 'gm-cta-sub', text: (byCh.get(last) && byCh.get(last).theme) || '지난번에 고른 장' })) : null,
+      h('div', { class: 'pv-picks' }, Array.from({ length: 31 }, (_, i) => card(i + 1))),
+    ),
+  );
+}
 const provId = (ch) => `prov-${provPad(ch)}`; // 노트 · 형광펜 · PDF
 const provQuizId = (ch, date = localToday()) => `prov-${date.slice(0, 4)}${date.slice(5, 7)}-${provPad(ch)}`; // 게임 퀴즈 (달마다 새로)
 const provChapterFromQuizId = (id) => {
@@ -36,9 +93,10 @@ async function loadProverb(ch) {
 }
 
 async function renderProverbs(chArg, modeArg) {
+  if (!(Number(chArg) >= 1 && Number(chArg) <= 31)) return renderProverbPicker();
   const today = localToday();
-  const todayCh = provChapterOf(today);
-  const ch = Number(chArg) >= 1 && Number(chArg) <= 31 ? Number(chArg) : todayCh;
+  const ch = Number(chArg);
+  setProvLast(ch);
   const mode = PROV_MODES.some(([k]) => k === modeArg) ? modeArg : 'word';
   const id = provId(ch);
   document.title = `잠언 ${ch}장 묵상 · 말씀결`;
@@ -57,7 +115,7 @@ async function renderProverbs(chArg, modeArg) {
     'div',
     { class: 'rd-datenav' },
     h('a', { class: 'rd-navbtn', href: `#/p/${prev}/${mode}`, 'aria-label': `잠언 ${prev}장` }, '‹', h('span', { text: `${prev}장` })),
-    h('div', { class: 'rd-date' }, h('span', { text: ch === todayCh ? `${dateLabel(today)}의 잠언` : `매달 ${ch}일의 잠언` }), ch === todayCh ? h('em', { text: '오늘' }) : h('a', { href: `#/p/${todayCh}/${mode}`, text: '오늘의 장으로' })),
+    h('div', { class: 'rd-date' }, h('span', { text: '이번 달 묵상하는 장' }), h('a', { href: '#/p', text: '장 고르기' })),
     h('a', { class: 'rd-navbtn next', href: `#/p/${next}/${mode}`, 'aria-label': `잠언 ${next}장` }, h('span', { text: `${next}장` }), '›'),
   );
   const word = d && d.word;
@@ -72,10 +130,10 @@ async function renderProverbs(chArg, modeArg) {
   const chips = h(
     'nav',
     { class: 'pv-chapters', 'aria-label': '잠언 장 고르기' },
-    Array.from({ length: 31 }, (_, i) => i + 1).map((n) => h('a', { class: `pv-ch${n === ch ? ' on' : ''}${n === todayCh ? ' today' : ''}`, href: `#/p/${n}/${mode}`, 'aria-current': n === ch ? 'page' : false, title: `잠언 ${n}장 (매달 ${n}일)`, text: String(n) })),
+    Array.from({ length: 31 }, (_, i) => i + 1).map((n) => h('a', { class: `pv-ch${n === ch ? ' on' : ''}`, href: `#/p/${n}/${mode}`, 'aria-current': n === ch ? 'page' : false, title: `잠언 ${n}장`, text: String(n) })),
   );
   if (!d) {
-    app.replaceChildren(h('div', { class: 'gm rd pv' }, h('a', { class: 'back', href: '#/' }, icon('back'), '게임 홈'), head, chips, h('div', { class: 'gm-card rd-wait' }, h('p', {}, h('strong', { text: `잠언 ${ch}장은 아직 준비 중이에요.` })), h('p', { class: 'meta', text: '매일 동기화 때 오늘 · 내일 장과 빠진 장을 몇 개씩 만들어요. 관리 화면의 "잠언 묵상"에서 지금 만들 수도 있어요.' }))));
+    app.replaceChildren(h('div', { class: 'gm rd pv' }, h('a', { class: 'back', href: '#/' }, icon('back'), '게임 홈'), head, chips, h('div', { class: 'gm-card rd-wait' }, h('p', {}, h('strong', { text: `잠언 ${ch}장은 아직 준비 중이에요.` })), h('p', { class: 'meta', text: '매일 동기화 때 빠진 장을 몇 개씩 만들어요. 관리 화면의 "잠언 묵상"에서 이 장을 지금 만들 수도 있어요.' }))));
     return;
   }
   const tabs = h('nav', { class: 'rd-tabs', 'aria-label': '잠언 묵상 보기 방식' }, PROV_MODES.map(([k, label]) => h('a', { class: 'rd-tab', href: `#/p/${ch}/${k}`, 'aria-current': k === mode ? 'page' : false, text: label })));

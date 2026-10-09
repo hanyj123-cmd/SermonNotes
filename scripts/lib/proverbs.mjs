@@ -1,9 +1,9 @@
-// 잠언 묵상 / 성경공부: 잠언 1~31장을 한 번씩 정리해 두고, 날짜의 "일"(1~31)에 맞는 장을 매달 되풀이해 씁니다.
+// 잠언 묵상 / 성경공부: 잠언 1~31장을 한 번씩 정리해 둡니다. 한 달에 한 장씩 화면에서 골라 깊이 묵상합니다.
 //   시트 Proverbs 탭 한 줄 = 한 장. 말씀(핵심 3구절) · QT 묵상 · 성경공부 · 소그룹(부원용+인도자용) · 퀴즈를 AI 가 만들고,
 //   성경 본문(4역본)은 설교와 같은 방식(bible-web.mjs)으로 가져옵니다.
 import { fetchBibleBlock } from './bible-web.mjs';
 import { parseScripture } from './title.mjs';
-import { fitCommentary, DAILY_CELL_LIMIT, torontoDate } from './daily.mjs';
+import { fitCommentary, DAILY_CELL_LIMIT } from './daily.mjs';
 
 export const PROVERBS_TAB = 'Proverbs';
 export const PROVERBS_HEADERS = ['chapter', 'status', 'bible_json', 'word_json', 'qt_json', 'study_json', 'commentary_json', 'group_json', 'quiz_json', 'updated_at', 'note'];
@@ -12,8 +12,6 @@ const MODE_COL = { word: 'word_json', qt: 'qt_json', study: 'study_json', group:
 export const PROVERB_MODES_ALL = ['word', 'qt', 'study', 'group', 'quiz'];
 export const PROVERB_CHAPTERS = 31;
 
-/** 날짜(YYYY-MM-DD) → 그날의 잠언 장 (일 = 장) */
-export const proverbChapterOf = (date) => Math.min(PROVERB_CHAPTERS, Math.max(1, Number(String(date).slice(8, 10)) || 1));
 
 const parseJson = (s) => {
   try {
@@ -97,7 +95,7 @@ export function proverbExport(row) {
 
 /**
  * 이번 실행에서 만들 장들.
- * @param want  'missing' | '3,7' | '' (자동: 오늘 · 내일 장 + 빠진 장 몇 개)
+ * @param want  'missing' | '3,7' | '' (자동: 1장부터 빠진 장 몇 개)
  */
 export function proverbChaptersToBuild(rows, { want = '', force = false, perRun = 3, now = new Date() } = {}) {
   const done = new Map(rows.map((r) => [Number(r.chapter), r]));
@@ -107,9 +105,6 @@ export function proverbChaptersToBuild(rows, { want = '', force = false, perRun 
     const list = [...new Set(picked.split(/[\s,]+/).map(Number).filter((n) => n >= 1 && n <= PROVERB_CHAPTERS))];
     return (force ? list : list.filter((ch) => !isDone(ch))).slice(0, 8);
   }
-  const today = proverbChapterOf(torontoDate(0, now));
-  const tomorrow = proverbChapterOf(torontoDate(1, now));
-  const order = [today, tomorrow, ...Array.from({ length: PROVERB_CHAPTERS }, (_, i) => i + 1)];
-  const list = [...new Set(order)].filter((ch) => !isDone(ch));
+  const list = Array.from({ length: PROVERB_CHAPTERS }, (_, i) => i + 1).filter((ch) => !isDone(ch));
   return list.slice(0, picked === 'missing' ? 6 : perRun);
 }

@@ -505,7 +505,7 @@ function renderProverbsSection(password, onPasswordRejected) {
     'section',
     { class: 'point admin-sync admin-prov' },
     h('h2', { text: '잠언 묵상' }),
-    h('p', { class: 'meta', text: '잠언 1~31장(날짜의 "일" = 장)을 한 번씩 만들어 두고 매달 되풀이합니다. 매일 동기화 때 오늘 · 내일 장과 빠진 장 3개를 만들고, 아래 버튼으로 지금 만들거나 장별로 다시 만들 수 있습니다.' }),
+    h('p', { class: 'meta', text: '잠언 1~31장을 한 번씩 만들어 둡니다(화면에서 한 달에 한 장씩 골라 묵상). 매일 동기화 때 빠진 장을 3개씩 만들고, 아래 버튼으로 지금 만들거나 장별로 다시 만들 수 있습니다.' }),
     grid,
     h('div', { class: 'admin-row' }, missing),
     h('div', { class: 'admin-row' }, chSel, partSel, redo),

@@ -19,7 +19,7 @@ import { parseCategories, toExport, exportJson, exportDaily } from './sync.mjs';
 import { parseReadingTitle, buildReadingIndex, readingIndexIsStale } from './lib/reading-index.mjs';
 import { fitCommentary, DAILY_CELL_LIMIT } from './lib/daily.mjs';
 import { scheduledCategories } from './gate.mjs';
-import { buildProverbChapter, proverbExport, proverbChaptersToBuild, proverbChapterOf } from './lib/proverbs.mjs';
+import { buildProverbChapter, proverbExport, proverbChaptersToBuild } from './lib/proverbs.mjs';
 import { normalizeProverbGroup, normalizeProverbWord } from './lib/gemini.mjs';
 import { systemPromptForProverb } from './lib/prompt.mjs';
 import { parseYnResponse, readingRefs, passagesText, dailyId, fetchDailyReading, YN_BIBLE_API, torontoDate, scoreReadingTitle, buildDailyDay, dailyExport, findReadingVideos } from './lib/daily.mjs';
@@ -437,12 +437,10 @@ await t('오늘의 말씀 성경공부: 절별 주석은 commentary_json 열에 
   const big = [{ passage: 'x', sections: Array.from({ length: 12 }, () => ({ verses: '1', heading: 'h', paragraphs: ['가'.repeat(2900), '나'.repeat(2900)], cross_refs: ['r'], commentators: [{ name: 'n', view: '다'.repeat(600) }] })) }];
   assert.ok(JSON.stringify(fitCommentary(big)).length <= DAILY_CELL_LIMIT);
 });
-await t('잠언 묵상: 날짜의 "일" = 장 · 만들 장 고르기 (오늘 · 내일 먼저, 빠진 장, 직접 지정)', () => {
-  assert.equal(proverbChapterOf('2026-10-09'), 9);
-  assert.equal(proverbChapterOf('2026-10-31'), 31);
+await t('잠언 묵상: 만들 장 고르기 (1장부터 빠진 장, 직접 지정)', () => {
   const now = new Date('2026-10-09T15:00:00Z');
-  assert.deepEqual(proverbChaptersToBuild([], { now }), [9, 10, 1]);
-  assert.deepEqual(proverbChaptersToBuild([{ chapter: '9', status: 'done' }], { now }), [10, 1, 2]);
+  assert.deepEqual(proverbChaptersToBuild([], { now }), [1, 2, 3]);
+  assert.deepEqual(proverbChaptersToBuild([{ chapter: '1', status: 'done' }, { chapter: '3', status: 'error' }], { now }), [2, 3, 4]);
   assert.equal(proverbChaptersToBuild([], { want: 'missing', now }).length, 6);
   assert.deepEqual(proverbChaptersToBuild([{ chapter: '3', status: 'done' }], { want: '3,7,99', now }), [7]);
   assert.deepEqual(proverbChaptersToBuild([{ chapter: '3', status: 'done' }], { want: '3,7', force: true, now }), [3, 7]);

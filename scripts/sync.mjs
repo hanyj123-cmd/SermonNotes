@@ -257,7 +257,7 @@ export async function exportProverbs(rows, { dataDir = DATA_DIR, quiet = false }
   return index.length;
 }
 
-/** 잠언 장 만들기: 자동은 오늘 · 내일 장 + 빠진 장 몇 개, PROVERBS=3,7|missing 로 직접 지정. DAILY_FORCE · DAILY_MODES 로 다시 만들기 */
+/** 잠언 장 만들기: 자동은 1장부터 빠진 장 3개씩, PROVERBS=3,7|missing 로 직접 지정. DAILY_FORCE · DAILY_MODES 로 다시 만들기 */
 async function syncProverbs(sheets, spreadsheetId, ai, { want = process.env.PROVERBS || '', force = false, forceModes = [] } = {}) {
   await ensureTab(sheets, spreadsheetId, PROVERBS_TAB, PROVERBS_HEADERS);
   const rows = (await readTabRows(sheets, spreadsheetId, PROVERBS_TAB, PROVERBS_HEADERS)).filter((r) => Number(r.chapter) >= 1);
@@ -495,7 +495,7 @@ async function main() {
     console.error(`❌ 오늘의 말씀 동기화 실패: ${e.message || e}`);
   }
 
-  // 잠언 묵상 (오늘 · 내일 장 + 빠진 장 몇 개, 또는 관리 화면에서 고른 장)
+  // 잠언 묵상 (빠진 장 3개씩, 또는 관리 화면에서 고른 장)
   try {
     const onlyProverbs = String(process.env.ONLY_CATEGORIES || '').toLowerCase().split(/[\s,]+/).includes('proverbs');
     await syncProverbs(sheets, spreadsheetId, ai, {

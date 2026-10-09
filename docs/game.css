@@ -594,3 +594,17 @@
   .pv-key { padding: 16px 16px 14px 54px; }
   .pv-key::before { left: 14px; }
 }
+/* 잠언: 장 고르기 */
+.pv-continue { margin: 6px 0 16px; }
+.pv-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.pv-pick { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--gm-line); border-radius: 14px; background: var(--gm-paper); color: var(--gm-ink); text-decoration: none; transition: border-color 0.12s, transform 0.12s; }
+.pv-pick:hover { border-color: var(--gm-gold); transform: translateY(-1px); }
+.pv-pick:focus-visible { outline: 2px solid var(--gm-gold); outline-offset: 2px; }
+.pv-pick-no { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--gm-night); color: var(--gm-gold-light); font-family: var(--gm-title); font-weight: 700; }
+.pv-pick-body { display: flex; flex-direction: column; min-width: 0; }
+.pv-pick-body b { font-family: var(--gm-title); }
+.pv-pick-theme { font-size: 0.84rem; color: var(--gm-soft); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pv-pick.wait { opacity: 0.7; }
+.pv-pick.wait .pv-pick-no { background: #e9e4d6; color: var(--gm-soft); }
+.pv-pick.last { border-color: var(--gm-gold); background: linear-gradient(160deg, #fffaf0, #f8eed3); }
+.pv-pick.last .pv-pick-no { background: var(--gm-foil); color: #3a2a06; }
