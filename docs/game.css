@@ -525,3 +525,22 @@
 }
 .rd-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: -6px 0 14px; }
 .rd-tools .btn .ic { color: var(--gm-gold-deep); }
+
+/* 본문 탭 (오늘 읽을 장이 2개 이상일 때) */
+.rd-ptabs { display: flex; gap: 6px; margin: 0 0 12px; overflow-x: auto; scrollbar-width: none; scroll-margin-top: 12px; }
+.rd-ptabs::-webkit-scrollbar { display: none; }
+.rd-ptab { flex: 1 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 16px; border: 1px solid var(--gm-line-2); border-radius: 14px; background: var(--gm-paper); color: var(--gm-soft); font: inherit; font-family: var(--gm-title); font-weight: 600; font-size: 1rem; cursor: pointer; white-space: nowrap; }
+.rd-ptab:hover { border-color: var(--gm-gold); color: var(--gm-ink); }
+.rd-ptab[aria-selected='true'] { background: var(--gm-night); border-color: var(--gm-night); color: var(--gm-ivory); box-shadow: 0 6px 16px -10px rgba(27, 35, 70, 0.8); }
+.rd-ptab-no { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-family: var(--sans, inherit); font-size: 0.75rem; font-weight: 700; background: #f3eedf; color: var(--gm-gold-deep); }
+.rd-ptab[aria-selected='true'] .rd-ptab-no { background: var(--gm-foil); color: #3a2a06; }
+.rd-ptab-ok { display: none; color: var(--gm-green); }
+.rd-ptab-ok .ic { width: 1em; height: 1em; }
+.rd-ptab.seen .rd-ptab-ok { display: inline-flex; }
+.rd-ptab[aria-selected='true'].seen .rd-ptab-ok { color: var(--gm-gold-light); }
+.rd-ptab:focus-visible { outline: 2px solid var(--gm-gold); outline-offset: 2px; }
+.rd-passage[hidden] { display: none; }
+.rd-text .rd-passage + .rd-passage { margin-top: 0; padding-top: 0; border-top: 0; }
+.rd-passage-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--gm-line); }
+.rd-passage-foot:empty { display: none; }
+.rd-next { margin-left: auto; background: var(--gm-night) !important; border-color: var(--gm-night) !important; color: var(--gm-ivory) !important; font-weight: 600; }

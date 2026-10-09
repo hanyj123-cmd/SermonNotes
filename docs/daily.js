@@ -296,6 +296,45 @@ function renderReadingTab(date, id, basePassages, data, st, notes) {
         h('button', { class: 'btn primary small', type: 'button', onclick: () => playReadingVideos(groups) }, icon('play'), groups.length > 1 ? '전체 이어 듣기' : '듣기'),
       )
     : null;
+  // 본문이 2개 이상이면 탭으로 하나씩 (스크롤이 너무 길지 않게). 탭은 역본을 바꿔도 그대로입니다.
+  const multi = basePassages.length > 1;
+  const labelOf = (p) => `${p.book} ${p.chapter}장`;
+  let cur = 0;
+  const seen = new Set(); // 끝까지 내려 본 본문
+  let onAllSeen = () => {};
+  const ptabs = multi ? h('div', { class: 'rd-ptabs', role: 'tablist', 'aria-label': '오늘의 본문' }) : null;
+  const paintTabs = () => {
+    if (!ptabs) return;
+    ptabs.querySelectorAll('.rd-ptab').forEach((b, i) => {
+      b.setAttribute('aria-selected', String(i === cur));
+      b.classList.toggle('seen', seen.has(i));
+    });
+    text.querySelectorAll('.rd-passage').forEach((sec, i) => (sec.hidden = i !== cur));
+  };
+  const select = (i, scroll) => {
+    cur = Math.max(0, Math.min(basePassages.length - 1, i));
+    paintTabs();
+    if (scroll) (ptabs || text).scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  if (ptabs)
+    basePassages.forEach((p, i) => {
+      const b = h('button', { class: 'rd-ptab', type: 'button', role: 'tab' }, h('span', { class: 'rd-ptab-no', text: String(i + 1) }), h('span', { text: labelOf(p) }), h('span', { class: 'rd-ptab-ok', 'aria-hidden': 'true' }, icon('check')));
+      b.addEventListener('click', () => select(i, false));
+      ptabs.append(b);
+    });
+  const io =
+    'IntersectionObserver' in window
+      ? new IntersectionObserver((ents) => {
+          ents.forEach((e) => {
+            if (!e.isIntersecting) return;
+            const i = Number(e.target.dataset.i);
+            if (i !== cur) return;
+            seen.add(i);
+            paintTabs();
+            if (seen.size >= basePassages.length) onAllSeen();
+          });
+        })
+      : null;
   const draw = async () => {
     verBar.querySelectorAll('.gm-chip').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.v === version)));
     let passages = basePassages;
@@ -309,7 +348,7 @@ function renderReadingTab(date, id, basePassages, data, st, notes) {
       }
     }
     text.replaceChildren(
-      ...passages.map((p) => {
+      ...passages.map((p, pi) => {
         const v = videos.get(`${p.book}|${p.chapter}`);
         const gi = v ? groups.findIndex((g) => g.video_id === v.video_id) : -1;
         const play = v
@@ -321,9 +360,15 @@ function renderReadingTab(date, id, basePassages, data, st, notes) {
           if (m) verses.push(h('h4', { class: 'rd-subhead', text: m[1] }));
           verses.push(h('p', { class: 'rd-v' }, h('sup', { text: String(x.n) }), m ? m[2] : x.text));
         });
-        return h('section', { class: 'rd-passage' }, h('div', { class: 'rd-passage-head' }, h('h2', {}, h('span', { text: p.book }), ` ${p.chapter}장`), play), verses);
+        const base = basePassages[pi];
+        const next = multi && pi < passages.length - 1 ? h('button', { class: 'btn rd-next', type: 'button', onclick: () => select(pi + 1, true) }, `다음 본문 · ${labelOf(basePassages[pi + 1])}`, h('span', { 'aria-hidden': 'true', text: ' ›' })) : null;
+        const first = multi && pi === passages.length - 1 ? h('button', { class: 'btn small rd-first', type: 'button', onclick: () => select(0, true) }, '‹ 첫 본문으로') : null;
+        const end = h('div', { class: 'rd-sentinel', 'aria-hidden': 'true', 'data-i': String(pi) });
+        if (io) setTimeout(() => io.observe(end), 300);
+        return h('section', { class: 'rd-passage', role: multi ? 'tabpanel' : null, 'aria-label': base ? labelOf(base) : null }, h('div', { class: 'rd-passage-head' }, h('h2', {}, h('span', { text: p.book }), ` ${p.chapter}${version === 'NIV' ? '' : '장'}`), play), verses, h('div', { class: 'rd-passage-foot' }, first, next), end);
       }),
     );
+    paintTabs();
   };
   READ_VERSIONS.forEach(([vid, label]) => {
     const b = h('button', { class: 'gm-chip', type: 'button', role: 'tab', 'data-v': vid }, label);
@@ -348,22 +393,19 @@ function renderReadingTab(date, id, basePassages, data, st, notes) {
     btn.disabled = true;
     out.textContent = '구글 로그인을 하면 읽은 날이 기록되고 일독표가 자동으로 체크돼요.';
   } else if (!done) {
-    const sentinel = h('div', { class: 'rd-sentinel', 'aria-hidden': 'true' });
-    wrap.append(sentinel);
     const enable = () => (btn.disabled = false);
-    if ('IntersectionObserver' in window) {
-      const io = new IntersectionObserver((ents) => {
-        if (ents.some((e) => e.isIntersecting)) {
-          enable();
-          io.disconnect();
-        }
-      });
-      setTimeout(() => io.observe(sentinel), 300);
-    } else enable();
+    if (io)
+      onAllSeen = () => {
+        enable(); // 모든 본문 탭을 끝까지 읽으면 켜집니다
+        if (/^본문 탭/.test(out.textContent)) out.textContent = '';
+      };
+    else enable();
+    if (multi) out.textContent = '본문 탭을 모두 끝까지 읽으면 "다 읽었어요"가 켜져요.';
     setTimeout(enable, 60000); // 아주 짧은 분량 등을 위해 1분 뒤에는 켜 둡니다
     btn.addEventListener('click', async () => {
       btn.disabled = true;
       out.textContent = '기록하는 중…';
+      if (io) io.disconnect();
       const r = await gameCall('game_read', { date, chapters: chapterKeysOf(basePassages) });
       if (!r.ok) {
         out.textContent = r.error || '기록하지 못했어요.';
@@ -376,7 +418,7 @@ function renderReadingTab(date, id, basePassages, data, st, notes) {
       if (typeof confetti === 'function') confetti(wrap, 18);
     });
   }
-  wrap.prepend(...[listen, verBar, text].filter(Boolean));
+  wrap.prepend(...[listen, verBar, ptabs, text].filter(Boolean));
   wrap.append(h('div', { class: 'rd-done-box' }, btn, out));
   return wrap;
 }

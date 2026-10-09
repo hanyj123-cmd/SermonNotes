@@ -301,8 +301,8 @@ function mountPlayer(id, title) {
       if (floatEl !== el || el._vid !== id || !holder.isConnected) return;
       el._player = new YT.Player(holder, {
         videoId: id,
-        host: 'https://www.youtube.com',
-        playerVars: { autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1 },
+        host: YT_EMBED_HOST, // youtube-nocookie.com (허브와 같은 방식, 광고 거의 없음)
+        playerVars: { autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1, origin: location.origin },
         events: {
           onReady: (e) => {
             const vol = el.querySelector('.fp-vol');

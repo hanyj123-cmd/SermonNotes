@@ -205,9 +205,10 @@ function displayTitle({ category, title, aiTitle = '', scripture = '' }) {
 }
 
 const ytId = (v) => (/^[A-Za-z0-9_-]{11}$/.test(String(v || '')) ? String(v) : '');
-// youtube.com 주소를 씁니다 (youtube-nocookie 가 아님): 그래야 이 브라우저에서 로그인한 유튜브 계정(프리미엄 광고 제거)이 퍼가기 재생에도 적용될 수 있습니다.
-// 브라우저가 제3자 쿠키를 막은 환경(사파리, 크롬 시크릿 등)에서는 광고가 보일 수 있어서, 항상 "YouTube에서 열기" 링크를 함께 둡니다.
-const ytEmbed = (id, { autoplay = true } = {}) => `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1&playsinline=1${autoplay ? '&autoplay=1' : ''}`;
+// 앱 안 재생은 찬양방송팀 허브와 같은 방식으로 youtube-nocookie.com(개인정보 보호 모드) 플레이어를 씁니다.
+// 쿠키·맞춤 광고 추적을 하지 않는 퍼가기 플레이어라, youtube.com 플레이어보다 광고가 붙는 일이 훨씬 적습니다.
+const YT_EMBED_HOST = 'https://www.youtube-nocookie.com';
+const ytEmbed = (id, { autoplay = true } = {}) => `${YT_EMBED_HOST}/embed/${id}?rel=0&modestbranding=1&playsinline=1${autoplay ? '&autoplay=1' : ''}&origin=${encodeURIComponent(location.origin)}`;
 const ytWatch = (id) => `https://www.youtube.com/watch?v=${id}`;
 const ytSearch = (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
 
