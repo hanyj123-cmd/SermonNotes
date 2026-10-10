@@ -512,3 +512,127 @@ function renderProverbsSection(password, onPasswordRejected) {
     info,
   );
 }
+
+/* ---------- 새벽기도 영상 (관리) ---------- */
+// 재생목록 주소 바꾸기 · 수동 업데이트 실행 · 날짜별로 영상 직접 연결
+function renderDawnSection(password, onPasswordRejected) {
+  const torontoToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+  const info = h('p', { class: 'meta', role: 'status' });
+  const post = async (payload, okText) => {
+    info.textContent = '처리하는 중…';
+    try {
+      const r = await adminPost({ password, ...payload });
+      if (onPasswordRejected(r)) return null;
+      if (!r.ok) throw new Error(/알 수 없는 작업/.test(r.error || '') ? 'Apps Script가 옛 버전입니다. 새 Code.gs로 다시 배포해 주세요.' : r.error || '처리하지 못했습니다.');
+      if (okText) info.textContent = typeof okText === 'function' ? okText(r) : okText;
+      return r;
+    } catch (e) {
+      info.textContent = `오류: ${e.message || e}`;
+      return null;
+    }
+  };
+
+  // 1) 재생목록
+  const plInput = h('input', { class: 'search', type: 'url', placeholder: 'https://youtube.com/playlist?list=PL…', 'aria-label': '새벽기도 재생목록 주소' });
+  let plDefault = '';
+  const plSave = h('button', { class: 'btn primary', type: 'button' }, '재생목록 저장');
+  const plReset = h('button', { class: 'btn', type: 'button' }, '기본 재생목록으로');
+  plSave.addEventListener('click', () => post({ action: 'settings_set', dawn_playlist: plInput.value.trim() }, '재생목록을 저장했습니다. 다음 실행부터 이 재생목록에서 새벽기도 영상을 찾습니다.'));
+  plReset.addEventListener('click', async () => {
+    plInput.value = plDefault;
+    await post({ action: 'settings_set', dawn_playlist: '' }, '기본 재생목록으로 되돌렸습니다.');
+  });
+
+  // 2) 수동 업데이트 실행
+  const runBtn = h('button', { class: 'btn primary', type: 'button' }, '수동 업데이트 실행');
+  runBtn.addEventListener('click', async () => {
+    runBtn.disabled = true;
+    await post({ action: 'sync_run', dawn: true }, (r) => (r.workflow_old ? '실행을 요청했지만 GitHub의 sync.yml 이 옛 버전이라 전체 동기화로 실행됩니다. 새 sync.yml 을 올려 주세요.' : '실행을 요청했습니다. 재생목록에서 최근 7일의 새벽기도 영상을 찾아 연결합니다 (1~2분, 반영은 그 뒤 1~2분).'));
+    runBtn.disabled = false;
+    setTimeout(loadList, 90000);
+  });
+
+  // 3) 날짜별 직접 연결
+  const dateIn = h('input', { class: 'search ad-dawn-date', type: 'date', 'aria-label': '날짜' });
+  dateIn.value = torontoToday();
+  const urlIn = h('input', { class: 'search', type: 'url', placeholder: '유튜브 영상 주소 (예: https://youtu.be/…)', 'aria-label': '새벽기도 영상 주소' });
+  const setBtn = h('button', { class: 'btn primary', type: 'button' }, '이 날짜에 연결');
+  const clearBtn = h('button', { class: 'btn danger', type: 'button' }, '연결 해제');
+  setBtn.addEventListener('click', async () => {
+    if (!dateIn.value) return (info.textContent = '날짜를 골라 주세요.');
+    if (!urlIn.value.trim()) return (info.textContent = '유튜브 영상 주소를 넣어 주세요.');
+    const r = await post({ action: 'daily_dawn_set', date: dateIn.value, url: urlIn.value.trim() }, (x) => `${x.date} 에 연결했습니다.${x.dispatched ? ' 사이트에는 1~2분 뒤 반영됩니다.' : ' (사이트 반영은 다음 동기화 때)'} 자동 실행은 이 연결을 바꾸지 않습니다.`);
+    if (r) {
+      urlIn.value = '';
+      loadList();
+    }
+  });
+  clearBtn.addEventListener('click', async () => {
+    if (!dateIn.value) return (info.textContent = '날짜를 골라 주세요.');
+    if (!confirm(`${dateIn.value} 의 새벽기도 영상 연결을 지울까요? (다음 자동 실행이 재생목록에서 다시 찾습니다)`)) return;
+    const r = await post({ action: 'daily_dawn_set', date: dateIn.value, url: '' }, (x) => `${x.date} 연결을 지웠습니다.`);
+    if (r) loadList();
+  });
+
+  // 최근 연결 목록
+  const list = h('ul', { class: 'admin-daily ad-dawn-list' }, h('li', { class: 'meta', text: '불러오는 중…' }));
+  async function loadList() {
+    try {
+      const r = await adminPost({ action: 'daily_status', password });
+      if (onPasswordRejected(r) || !r.ok) return;
+      const days = (r.days || []).slice(0, 10);
+      if (!days.length) return list.replaceChildren(h('li', { class: 'meta', text: '아직 날짜가 없습니다.' }));
+      list.replaceChildren(
+        ...days.map((d) =>
+          h(
+            'li',
+            { class: `ad-row ${d.dawn ? 'ad-ok' : ''}` },
+            h('span', { class: 'ad-date', text: d.date.slice(5).replace('-', '/') }),
+            h('span', { class: 'ad-refs' }, d.dawn ? h('a', { href: `https://youtu.be/${d.dawn.video_id}`, target: '_blank', rel: 'noopener', text: d.dawn.title || d.dawn.video_id }) : h('span', { class: 'meta', text: '아직 연결된 영상이 없습니다' })),
+            h('span', { class: `ad-chip ${d.dawn ? 'ad-chip-ok' : ''}`, text: d.dawn ? (d.dawn.manual ? '직접 연결' : '자동 연결') : '없음' }),
+            h(
+              'button',
+              {
+                class: 'btn small',
+                type: 'button',
+                onclick: () => {
+                  dateIn.value = d.date;
+                  urlIn.value = d.dawn ? `https://youtu.be/${d.dawn.video_id}` : '';
+                  urlIn.focus();
+                },
+              },
+              '고치기',
+            ),
+          ),
+        ),
+      );
+    } catch {
+      list.replaceChildren(h('li', { class: 'meta', text: '목록을 불러오지 못했습니다.' }));
+    }
+  }
+
+  adminPost({ action: 'settings_get', password })
+    .then((r) => {
+      if (onPasswordRejected(r) || !r.ok) return;
+      plDefault = r.settings.dawn_playlist_default || '';
+      plInput.value = r.settings.dawn_playlist || plDefault;
+    })
+    .catch(() => {});
+  loadList();
+
+  return h(
+    'section',
+    { class: 'point admin-sync admin-dawn' },
+    h('h2', { text: '새벽기도 영상' }),
+    h('p', { class: 'meta', text: '오늘의 말씀 화면의 "새벽기도 보기" 버튼에 연결되는 영상입니다. 자동: 매일 오전 7:20(토론토)에 아래 재생목록에서 그 날 올라온 영상을 찾아 연결하고, 못 찾으면 8:00에 한 번 더 찾습니다. 영상 제목의 날짜(예: [2026.10.09])가 있으면 그 날짜, 없으면 올라온 날짜로 맞춥니다.' }),
+    h('h3', { text: '재생목록' }),
+    h('div', { class: 'admin-fields' }, plInput),
+    h('div', { class: 'admin-row' }, plSave, plReset, runBtn),
+    h('h3', { text: '날짜별 직접 연결' }),
+    h('p', { class: 'meta', text: '자동 연결이 틀렸거나 비었을 때 씁니다. 직접 연결한 날짜는 자동 실행이 바꾸지 않습니다. 연결을 해제하면 다음 자동 실행이 다시 찾습니다.' }),
+    h('div', { class: 'admin-row' }, dateIn, urlIn, setBtn, clearBtn),
+    info,
+    h('h3', { text: '최근 연결' }),
+    list,
+  );
+}

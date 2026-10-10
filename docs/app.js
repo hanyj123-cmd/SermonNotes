@@ -774,7 +774,7 @@ function renderAdminPanel(password) {
               { class: `ad-row ad-${cls}` },
               h('span', { class: 'ad-date' }, dayLabel(d.date), d.date === today ? h('em', { text: '오늘' }) : null),
               h('span', { class: 'ad-refs', text: d.refs || '—' }),
-              h('span', { class: 'ad-parts' }, part(d.qt, 'QT'), part(d.study, '공부'), part(d.group, '소그룹'), part(d.quiz, '퀴즈'), part(d.videos > 0, `영상 ${d.videos}`)),
+              h('span', { class: 'ad-parts' }, part(d.qt, 'QT'), part(d.study, '공부'), part(d.group, '소그룹'), part(d.quiz, '퀴즈'), part(d.videos > 0, `영상 ${d.videos}`), part(!!d.dawn, '새벽기도')),
               h('span', { class: `ad-chip ad-chip-${cls}`, text: label }),
               rowRedo(d, running),
               d.status === 'running' && !running
@@ -859,6 +859,7 @@ function renderAdminPanel(password) {
       h('div', { class: 'admin-row ad-head' }, h('h3', { text: '날짜별 진행 상황' }), dailyRefresh),
       dailyList,
     ),
+    renderDawnSection(password, passwordRejected),
     renderProverbsSection(password, passwordRejected),
     renderVideoManager(password, passwordRejected, requestSync),
     renderModelSection(password, passwordRejected),

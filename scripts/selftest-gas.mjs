@@ -703,6 +703,35 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
   check('오늘의 말씀 진행: 비밀번호 필요', !g.post({ action: 'daily_status', password: 'x' }).ok);
 }
 
+// ---------- 관리: 새벽기도 영상 ----------
+{
+  const g = makeEnv({ ADMIN_PASSWORD: 'pw', GITHUB_TOKEN: 't', GITHUB_REPO: 'me/Repo' });
+  g.setGh((url, opts) => (opts.method === 'get' ? { code: 200, body: { workflow_runs: [] } } : { code: 204, body: {} }));
+  const sent = () => JSON.parse(g.ghCalls.filter((c) => c.opts.method === 'post').pop().opts.payload).inputs;
+  let r = g.post({ action: 'settings_get', password: 'pw' });
+  check('새벽기도 재생목록: 처음엔 기본 재생목록', r.ok && /PLexqr1dnrjPzF_IXx_pR1YRKUx13rX7CT/.test(r.settings.dawn_playlist), JSON.stringify(r));
+  check('새벽기도 재생목록: 잘못된 주소는 거절', !g.post({ action: 'settings_set', password: 'pw', dawn_playlist: 'https://example.com' }).ok);
+  g.post({ action: 'settings_set', password: 'pw', dawn_playlist: 'https://www.youtube.com/playlist?list=PLnewlist12345' });
+  check('새벽기도 재생목록: 관리 화면에서 바꿀 수 있음', /PLnewlist12345/.test(g.post({ action: 'settings_get', password: 'pw' }).settings.dawn_playlist));
+  r = g.post({ action: 'sync_run', password: 'pw', dawn: true });
+  check('새벽기도 수동 업데이트 실행: dawn_video 만 · 다시 확인', r.ok && sent().categories === 'dawn_video' && sent().daily_force === 'true', JSON.stringify(sent()));
+
+  const daily = g.ss.insertSheet('Daily');
+  daily.rows.push(['date', 'refs', 'status', 'passages_json', 'qt_json', 'study_json', 'group_json', 'quiz_json', 'videos_json', 'updated_at', 'note']);
+  daily.rows.push(['2026-10-08', '열왕기상 11장', 'done', '[]', '', '', '', '', '', '', '']);
+  r = g.post({ action: 'daily_dawn_set', password: 'pw', date: '2026-10-08', url: 'https://youtu.be/WpOZRTv1hvg' });
+  const head = daily.rows[0];
+  const dawnOf = (row) => JSON.parse(row[head.indexOf('dawn_json')] || 'null');
+  check('새벽기도 직접 연결: 옛 탭에 열을 만들고 그 날짜 줄에 저장 · 사이트 반영 요청', r.ok && head.indexOf('commentary_json') === 11 && head.indexOf('dawn_json') === 12 && dawnOf(daily.rows[1]).video_id === 'WpOZRTv1hvg' && dawnOf(daily.rows[1]).manual === true && sent().export_only === 'true', JSON.stringify([r, head]));
+  r = g.post({ action: 'daily_dawn_set', password: 'pw', date: '2026-10-12', url: 'dAtaD-X_yFE' });
+  check('새벽기도 직접 연결: 줄이 없는 날짜는 새 줄', r.ok && daily.rows.length === 3 && daily.rows[2][0] === '2026-10-12' && dawnOf(daily.rows[2]).video_id === 'dAtaD-X_yFE');
+  r = g.post({ action: 'daily_dawn_set', password: 'pw', date: '2026-10-08', url: '' });
+  check('새벽기도 연결 해제', r.ok && r.cleared && daily.rows[1][head.indexOf('dawn_json')] === '');
+  check('새벽기도 직접 연결: 잘못된 주소 · 날짜는 거절', !g.post({ action: 'daily_dawn_set', password: 'pw', date: '2026-10-08', url: 'https://example.com/x' }).ok && !g.post({ action: 'daily_dawn_set', password: 'pw', date: '10/08', url: 'dAtaD-X_yFE' }).ok);
+  const st = g.post({ action: 'daily_status', password: 'pw' });
+  check('진행 상황에 새벽기도 연결 표시', st.ok && st.days.find((d) => d.date === '2026-10-12').dawn.video_id === 'dAtaD-X_yFE' && st.days.find((d) => d.date === '2026-10-08').dawn === null, JSON.stringify(st.days));
+}
+
 // ---------- 잠언 묵상: 관리 실행 · 진행 상황 · 퀴즈 채점 ----------
 {
   const g = makeEnv({ ADMIN_PASSWORD: 'pw', GITHUB_TOKEN: 't', GITHUB_REPO: 'me/Repo', GOOGLE_CLIENT_ID: CID, ALLOWED_EMAILS: 'a@x.com' });
