@@ -94,6 +94,22 @@ function icon(name, { label = '' } = {}) {
   return svg;
 }
 
+/* ---------- 빈칸 문제: 정답 글자 수 표시 (띄어쓰기·문장부호는 세지 않음 — 채점 규칙과 같게) ---------- */
+function blankLength(answer) {
+  return Array.from(String(answer || '').normalize('NFC').replace(/[\s.,!?·~'"“”‘’()[\]{}<>「」『』:;\-_/]/g, '')).length;
+}
+function blankHint(answer) {
+  const n = blankLength(answer);
+  return n ? `(${n}글자)` : '';
+}
+/** 문제 문장의 빈칸(____) 바로 뒤에 (N글자)를 붙입니다. 빈칸 표시가 없으면 문장 끝에 붙입니다. */
+function blankQuestionText(it) {
+  const q = String((it && it.question) || '');
+  const hint = blankHint(it && it.answer);
+  if (!hint) return q;
+  return /_{2,}/.test(q) ? q.replace(/_{2,}/, (m) => `${m}${hint}`) : `${q} ${hint}`;
+}
+
 /* ---------- 간단한 마크다운 (굵게 · 인용 · 목록) ---------- */
 function inlineMd(text) {
   const out = [];

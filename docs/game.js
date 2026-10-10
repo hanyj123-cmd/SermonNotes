@@ -918,7 +918,7 @@ async function renderQuest(id) {
         const fi = items.slice(0, i).filter((x) => x.kind === 'fb').length;
         const parts = String(it.q.question).split(/_{2,}/);
         const input = h('input', { class: 'gm-blank-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', enterkeyhint: 'done', 'aria-label': '빈칸에 들어갈 말' });
-        const sentence = h('h2', { class: 'gm-qtext' }, parts.length > 1 ? [inlineMd(parts[0]), h('span', { class: 'gm-blank', text: '?' }), inlineMd(parts.slice(1).join('____'))] : inlineMd(it.q.question));
+        const sentence = h('h2', { class: 'gm-qtext' }, parts.length > 1 ? [inlineMd(parts[0]), h('span', { class: 'gm-blank', text: '?' }), h('span', { class: 'gm-blank-len', text: blankHint(it.q.answer) }), inlineMd(parts.slice(1).join('____'))] : inlineMd(blankQuestionText({ question: it.q.question, answer: it.q.answer })));
         const check = h('button', { class: 'btn primary', type: 'button' }, '확인');
         const submit = () => {
           const v = input.value.trim();
@@ -945,7 +945,7 @@ async function renderQuest(id) {
             submit();
           }
         });
-        card.append(sentence, h('div', { class: 'gm-blank-row' }, input, check), h('p', { class: 'meta', text: '핵심 단어 하나를 적어 주세요. 띄어쓰기는 상관없어요.' }));
+        card.append(sentence, h('div', { class: 'gm-blank-row' }, input, check), h('p', { class: 'meta', text: `핵심 단어 하나를 적어 주세요${blankHint(it.q.answer) ? ` ${blankHint(it.q.answer)}` : ''}. 띄어쓰기는 상관없어요.` }));
         setTimeout(() => input.focus({ preventScroll: true }), 80);
       }
       card.append(feedback);

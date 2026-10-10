@@ -129,7 +129,7 @@ function renderQuiz(quiz) {
     const ans = h('div', { class: 'reveal-body' }, h('p', {}, h('strong', { text: `정답  ${it.answer}` })), it.explanation ? h('p', { class: 'md' }, inlineMd(it.explanation)) : null);
     const { btn, box } = revealBox('답보기', ans);
     all.push({ btn, box });
-    return h('li', { class: 'qz-item', value: no }, h('div', { class: 'qz-q' }, inlineMd(it.question)), h('div', { class: 'qz-act' }, btn), box);
+    return h('li', { class: 'qz-item', value: no }, h('div', { class: 'qz-q' }, inlineMd(blankQuestionText(it))), h('div', { class: 'qz-act' }, btn), box);
   });
   const sa = groupBlock('주관식 (채점하지 않아요)', '내 말로 답을 정리해 본 뒤 [답보기]로 참고 답안을 확인하세요.', quiz.short_answer || [], (it, no) => {
     const ans = h('div', { class: 'reveal-body' }, h('p', {}, h('strong', { text: '참고 답안' })), h('p', { class: 'md' }, inlineMd(it.answer)), it.explanation ? h('p', { class: 'md' }, inlineMd(it.explanation)) : null);

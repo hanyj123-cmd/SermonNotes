@@ -309,6 +309,7 @@
 .gm-blank { display: inline-block; min-width: 3.5em; padding: 0 10px; margin: 0 4px; border-bottom: 2px solid var(--gm-gold); color: var(--gm-gold-deep); text-align: center; }
 .gm-blank.right { color: var(--gm-green); border-color: #5d9a62; }
 .gm-blank.wrong { color: var(--gm-red); border-color: #c4566a; }
+.gm-blank-len { font-size: .72em; font-weight: 600; color: var(--gm-gold-deep); white-space: nowrap; margin-right: 4px; }
 .gm-blank-row { display: flex; gap: 8px; }
 .gm-blank-input { flex: 1; font: inherit; font-size: 1.12rem; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--gm-line-2); background: #fff; min-width: 0; }
 .gm-blank-input:focus { border-color: var(--gm-gold); outline: none; box-shadow: 0 0 0 4px rgba(201, 161, 74, 0.18); }
