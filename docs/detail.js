@@ -164,6 +164,27 @@ function renderQuizCta(d) {
   );
 }
 
+/**
+ * 퀴즈 문제·정답 목록은 "말씀 퀘스트"를 한 번 풀어 본 뒤에만 보여 줍니다 (미리 보고 시작하는 것 방지).
+ * 퀘스트로 낼 수 있는 문제(객관식·빈칸)가 없으면 잠그지 않습니다.
+ */
+function renderQuizGate(id, quiz) {
+  const playable = ((quiz && quiz.multiple_choice) || []).length + ((quiz && quiz.fill_blank) || []).length;
+  if (!playable || typeof questUnlocked !== 'function' || questUnlocked(id)) return renderQuiz(quiz || {});
+  const total = playable + ((quiz.short_answer || []).length);
+  return block(
+    'quiz',
+    '퀴즈',
+    h(
+      'div',
+      { class: 'qz-lock' },
+      h('span', { class: 'qz-lock-ico', 'aria-hidden': 'true' }, typeof icon === 'function' ? icon('lock') : null),
+      h('div', { class: 'qz-lock-text' }, h('h2', { text: `퀴즈 ${total}문제` }), h('p', { text: '말씀 퀘스트를 한 번 풀면 문제와 해설이 열려요. 미리 보지 말고 먼저 도전해 보세요!' })),
+      h('a', { class: 'btn primary', href: `#/q/${encodeURIComponent(id)}` }, '퀘스트로 열기'),
+    ),
+  );
+}
+
 // 오늘의 말씀 성경공부: 책과 본문의 배경
 function renderStudyBackground(list) {
   if (!list || !list.length) return null;
@@ -233,7 +254,7 @@ function renderStudyMode(d) {
     renderPerspectives(st.perspectives),
     st.summary ? block('summary', 'Summary', h('h2', { text: 'Summary' }), h('div', { class: 'summary-box md' }, splitParas(st.summary).map((t) => h('p', {}, inlineMd(t))))) : null,
     renderQuizCta(d),
-    renderQuiz(st.quiz || {}),
+    renderQuizGate(d.id, st.quiz || {}),
     renderPrayer('마치는 기도', st.closing_prayer, 'close'),
   ];
 }

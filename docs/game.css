@@ -609,3 +609,74 @@
 .pv-pick.wait .pv-pick-no { background: #e9e4d6; color: var(--gm-soft); }
 .pv-pick.last { border-color: var(--gm-gold); background: linear-gradient(160deg, #fffaf0, #f8eed3); }
 .pv-pick.last .pv-pick-no { background: var(--gm-foil); color: #3a2a06; }
+
+/* ---------- 말씀 퀘스트: 타이머 · 점수 · 등급 카드 · 가족 순위 ---------- */
+.gm-rules { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 0; font-size: 0.92rem; line-height: 1.6; }
+.gm-rules .ic { flex: none; margin-top: 3px; color: var(--gm-gold-light); }
+.gm-rules b { color: var(--gm-gold-light); }
+.gm-score { font-family: var(--gm-title); font-weight: 700; font-size: 1.15rem; color: var(--gm-gold-deep); font-variant-numeric: tabular-nums; min-width: 4.5em; text-align: center; }
+.gm-timer { display: grid; gap: 4px; margin: 0 0 12px; }
+.gm-timer-track { display: block; height: 7px; border-radius: 999px; background: #ebe4d3; overflow: hidden; }
+.gm-timer-fill { display: block; height: 100%; width: 100%; border-radius: 999px; background: var(--gm-foil); transform-origin: left center; animation-name: gmTimer; animation-timing-function: linear; animation-fill-mode: forwards; }
+.gm-timer-txt { font-size: 0.78rem; color: var(--gm-soft); }
+.gm-timer.out .gm-timer-fill { animation: none; width: 0; }
+.gm-timer.out .gm-timer-txt { color: #8a8470; }
+.gm-timer.done .gm-timer-txt { visibility: hidden; }
+@keyframes gmTimer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.gm-pts.sc { background: #fff3d1; color: var(--gm-gold-deep); border-color: var(--gm-gold-light); }
+.gm-ptsdetail { margin: 2px 0 6px; font-size: 0.84rem; color: var(--gm-soft); }
+
+.gm-scorecard { display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: center; margin-top: 14px; position: relative; overflow: hidden; }
+.gm-grade { width: 104px; height: 104px; border-radius: 50%; display: grid; place-content: center; justify-items: center; background: var(--gm-night); color: var(--gm-gold-light); box-shadow: 0 0 0 4px var(--gm-paper), 0 0 0 6px var(--gm-gold); }
+.gm-grade b { font-family: var(--gm-title); font-size: 3rem; line-height: 1; }
+.gm-grade span { font-size: 0.72rem; opacity: 0.8; }
+.g-S .gm-grade { background: var(--gm-foil); color: #3a2a06; box-shadow: 0 0 0 4px var(--gm-paper), 0 0 0 6px var(--gm-gold), 0 0 28px 4px rgba(236, 212, 146, 0.8); }
+.g-A .gm-grade { background: var(--gm-night-2); }
+.g-B .gm-grade { background: #4a5c58; color: #e8f1ea; }
+.g-C .gm-grade { background: #6b6a74; color: #f1efe8; box-shadow: 0 0 0 4px var(--gm-paper), 0 0 0 6px #cfc7b2; }
+.gm-sc-line { margin: 0; display: flex; align-items: baseline; gap: 4px; }
+.gm-sc-num { font-family: var(--gm-title); font-size: 2.6rem; line-height: 1.1; color: var(--gm-night); font-variant-numeric: tabular-nums; }
+.gm-sc-line span { font-weight: 600; color: var(--gm-soft); }
+.gm-sc-break { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 3px; font-size: 0.9rem; }
+.gm-sc-break li { display: flex; justify-content: space-between; gap: 12px; max-width: 320px; }
+.gm-sc-break b { font-variant-numeric: tabular-nums; color: var(--gm-gold-deep); }
+.gm-sc-note { margin: 8px 0 0; font-size: 0.84rem; color: var(--gm-soft); }
+.gm-sc-board { grid-column: 1 / -1; }
+
+.gm-qboard { margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: rgba(255, 253, 248, 0.96); border: 1px solid var(--gm-line-2); color: var(--gm-ink); display: grid; gap: 8px; }
+.gm-intro .gm-qboard { background: rgba(255, 255, 255, 0.08); border-color: rgba(236, 212, 146, 0.35); color: var(--gm-ivory); }
+.gm-intro .gm-qboard .meta { color: rgba(251, 248, 241, 0.7); }
+.gm-qboard-head { display: flex; align-items: center; gap: 8px; }
+.gm-qboard-head .ic { color: var(--gm-gold); }
+.gm-qboard-head .meta { margin-left: auto; }
+.gm-qboard-msg { margin: 0; font-size: 0.88rem; }
+.gm-qb { display: grid; gap: 6px; }
+.gm-qb-row { display: grid; grid-template-columns: 2em 40px 1fr auto; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 12px; }
+.gm-qb-row.me { background: #fff3d1; outline: 1px solid var(--gm-gold-light); color: var(--gm-ink); }
+.gm-qb-rank { font-family: var(--gm-title); font-weight: 700; text-align: center; }
+.gm-qb-art { width: 40px; height: 40px; border-radius: 50%; overflow: hidden; background: var(--gm-ivory); }
+.gm-qb-name { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-width: 0; }
+.gm-qb-name .meta { flex-basis: 100%; }
+.gm-qb-name .gm-me { flex: none; }
+.gm-qb-name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-qb-score { font-family: var(--gm-title); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.gm-board-tabs { display: flex; gap: 6px; margin: 4px 0 12px; }
+.gm-board-tab { border: 1px solid var(--gm-line-2); background: var(--gm-paper); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 0.9rem; cursor: pointer; color: var(--gm-ink); }
+.gm-board-tab[aria-selected='true'] { background: var(--gm-night); color: var(--gm-gold-light); border-color: var(--gm-night); }
+
+/* 퀴즈 목록 잠금 (말씀 퀘스트를 풀기 전) */
+.qz-lock { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center; padding: 18px 20px; border: 1px dashed var(--gold-line, #cdb97c); border-radius: 16px; background: linear-gradient(160deg, #fffaf0, #f8eed3); }
+.qz-lock-ico { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: #1b2346; color: #ecd492; }
+.qz-lock-ico .ic, .qz-lock-ico svg { width: 24px; height: 24px; }
+.qz-lock h2 { margin: 0 0 4px; font-size: 1.1rem; }
+.qz-lock p { margin: 0; font-size: 0.92rem; color: #5b5a68; line-height: 1.6; }
+@media (max-width: 560px) {
+  .gm-scorecard { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  .gm-sc-line { justify-content: center; }
+  .gm-sc-break li { margin: 0 auto; width: 100%; }
+  .qz-lock { grid-template-columns: auto 1fr; }
+  .qz-lock .btn { grid-column: 1 / -1; justify-self: stretch; text-align: center; }
+  .gm-qb-row { grid-template-columns: 1.6em 36px 1fr auto; gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) { .gm-timer-fill { animation: none; } }

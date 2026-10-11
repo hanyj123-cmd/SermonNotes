@@ -11,6 +11,58 @@ const GAME_RULES = {
   freezePrice: 120, // 안식 쿠폰: 하루 쉬어도 연속 기록 유지
   freezeMax: 2,
 };
+// 퀘스트 점수 (가족끼리 겨루는 점수): 정답 + 빠른 정답 + 연속 정답 + 만점.
+// 서버(Code.gs)가 같은 식으로 다시 계산해서 저장하니까, 화면에서 보이는 점수와 순위가 같습니다 (npm test 가 확인합니다).
+const QUEST_SCORE = {
+  base: 100, // 정답 하나
+  speedMax: 50, // 빠른 정답 보너스 (speedFast 안에 맞히면 최대, limit 에 가까울수록 0)
+  speedFast: 3000,
+  limitMc: 20000, // 객관식은 20초, 빈칸은 30초 안에 맞혀야 속도 보너스가 남아 있어요
+  limitBlank: 30000,
+  minMs: 1000, // 이보다 빨라도 1초로 쳐요
+  maxMs: 120000,
+  comboStep: 10, // 연속 정답 보너스: 2연속 +10, 3연속 +20 … (최대 comboCap 단계)
+  comboCap: 5,
+  perfect: 300, // 만점 보너스
+};
+/** 문제 하나의 점수 (틀리면 0). combo = 이 문제까지 이어진 연속 정답 수 */
+function questPoints(ok, ms, kind, combo) {
+  if (!ok) return { base: 0, speed: 0, combo: 0 };
+  const Q = QUEST_SCORE;
+  const t = Math.min(Q.maxMs, Math.max(Q.minMs, Math.round(Number(ms) || Q.maxMs)));
+  const limit = kind === 'fb' ? Q.limitBlank : Q.limitMc;
+  const speed = t <= Q.speedFast ? Q.speedMax : t >= limit ? 0 : Math.round((Q.speedMax * (limit - t)) / (limit - Q.speedFast));
+  return { base: Q.base, speed, combo: combo >= 2 ? Q.comboStep * Math.min(combo - 1, Q.comboCap) : 0 };
+}
+/** oks: 문제별 정답 여부, msList: 문제별 걸린 시간(ms), kinds: 'mc' | 'fb' */
+function questScore(oks, msList, kinds) {
+  let combo = 0;
+  const out = { base: 0, speed: 0, combo: 0, perfect: 0, total: 0, ms: 0, right: 0 };
+  oks.forEach((ok, i) => {
+    combo = ok ? combo + 1 : 0;
+    const p = questPoints(ok, msList[i], kinds[i], combo);
+    out.base += p.base;
+    out.speed += p.speed;
+    out.combo += p.combo;
+    out.right += ok ? 1 : 0;
+    out.ms += Math.min(QUEST_SCORE.maxMs, Math.max(QUEST_SCORE.minMs, Math.round(Number(msList[i]) || QUEST_SCORE.maxMs)));
+  });
+  if (oks.length && out.right === oks.length) out.perfect = QUEST_SCORE.perfect;
+  out.total = out.base + out.speed + out.combo + out.perfect;
+  return out;
+}
+/** 점수 등급: 이론상 최고점 대비 */
+function questMaxScore(n) {
+  const Q = QUEST_SCORE;
+  let combo = 0;
+  for (let i = 2; i <= n; i++) combo += Q.comboStep * Math.min(i - 1, Q.comboCap);
+  return n * (Q.base + Q.speedMax) + combo + (n ? Q.perfect : 0);
+}
+function questGrade(total, n) {
+  const r = n ? total / questMaxScore(n) : 0;
+  return r >= 0.8 ? 'S' : r >= 0.65 ? 'A' : r >= 0.45 ? 'B' : 'C';
+}
+
 // 연속 일수 → 달란트 배수
 const STREAK_BONUS = [
   [30, 2],
@@ -188,6 +240,7 @@ const BADGES = [
 function gameServerConf() {
   return {
     rules: GAME_RULES,
+    score: QUEST_SCORE,
     streak: STREAK_BONUS,
     journeys: Object.fromEntries(JOURNEY_KEYS.map((k) => [k, { steps: JOURNEYS[k].steps, xpPerStep: JOURNEYS[k].xpPerStep, title: JOURNEYS[k].title, rewards: JOURNEYS[k].rewards }])),
     armor: Array.from({ length: 18 }, (_, i) => armorItemAt(i + 1)),

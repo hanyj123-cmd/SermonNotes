@@ -96,7 +96,7 @@ function buildHandoutDoc(d, mode, opts) {
     h(
       'header',
       { class: 'ho-head' },
-      h('div', { class: 'ho-kicker' }, h('span', { class: 'ho-brand' }, h('img', { class: 'ho-logo', src: 'icons/mark.svg?v=9.33', alt: '' }), h('strong', { text: '말씀결' }), h('span', { text: `  ·  ${modeLabel(mode)}` })), h('span', { text: `${eventName(d.category)}${date ? `  ·  ${date}` : ''}` })),
+      h('div', { class: 'ho-kicker' }, h('span', { class: 'ho-brand' }, h('img', { class: 'ho-logo', src: 'icons/mark.svg?v=9.34', alt: '' }), h('strong', { text: '말씀결' }), h('span', { text: `  ·  ${modeLabel(mode)}` })), h('span', { text: `${eventName(d.category)}${date ? `  ·  ${date}` : ''}` })),
       h('h1', { class: 'ho-title', text: d.title }),
       scripture || preacher ? h('p', { class: 'ho-scripture' }, scripture ? `본문  ${scripture}` : '', scripture && preacher ? '   |   ' : '', preacher) : null,
       d.result.summary_short || d.result.theme ? h('p', { class: 'ho-summary', text: d.result.summary_short || d.result.theme }) : null,
@@ -127,6 +127,13 @@ function buildHandoutDoc(d, mode, opts) {
   }
 
   const answerPages = []; // 정답·모범 답안 (옵션을 켠 경우 맨 뒤에 모음)
+
+  // 말씀 퀘스트를 풀기 전에는 퀴즈 문제를 유인물에도 싣지 않습니다 (미리 보기 방지)
+  const quizLockedFor = (quiz) => {
+    const playable = ((quiz && quiz.multiple_choice) || []).length + ((quiz && quiz.fill_blank) || []).length;
+    return !!playable && typeof questUnlocked === 'function' && !questUnlocked(d.quizId || d.id);
+  };
+  const quizLockSec = () => sec('퀴즈', h('p', { class: 'ho-note', text: '퀴즈는 앱에서 "말씀 퀘스트"를 한 번 풀면 문제지로 나와요. 퀘스트를 먼저 풀고 다시 열어 주세요.' }));
 
   // 퀴즈 문제지 (잠언 묵상 등): 객관식 · 빈칸 · 주관식, 정답은 옵션을 켜면 맨 뒤에
   const quizSection = (quiz) => {
@@ -169,8 +176,9 @@ function buildHandoutDoc(d, mode, opts) {
     if (opts.lines) secs.push(sec('묵상 노트', lines(8)));
   } else if (mode === 'quiz') {
     const { qItems, ansItems, n } = quizSection(d.quiz || {});
-    if (qItems.length) secs.push(sec(`퀴즈 ${n}문제`, qItems));
-    if (opts.answers && ansItems.length) answerPages.push(secPlain('정답 및 해설', h('ol', { class: 'ho-answers' }, ansItems)));
+    if (quizLockedFor(d.quiz)) secs.push(quizLockSec());
+    else if (qItems.length) secs.push(sec(`퀴즈 ${n}문제`, qItems));
+    if (!quizLockedFor(d.quiz) && opts.answers && ansItems.length) answerPages.push(secPlain('정답 및 해설', h('ol', { class: 'ho-answers' }, ansItems)));
   } else if (d.proverb && (mode === 'group' || mode === 'leader')) {
     // 잠언 소그룹: 부원용(질문지) / 인도자용 해설서
     const g = d.group || {};
@@ -279,9 +287,11 @@ function buildHandoutDoc(d, mode, opts) {
       h('div', { class: 'ho-qz' }, h('div', { class: 'ho-qz-q' }, h('strong', { text: `${no}. ` }), inlineMd(it.question)), opts.lines ? lines(3) : null),
       h('li', {}, h('strong', { text: `${no}. ` }), it.answer, it.explanation ? h('div', { class: 'ho-note', text: it.explanation }) : null),
     ]);
-    if (qItems.length) secs.push(sec(`퀴즈 ${n}문제`, qItems));
+    const quizLocked = quizLockedFor(quiz);
+    if (quizLocked) secs.push(quizLockSec());
+    else if (qItems.length) secs.push(sec(`퀴즈 ${n}문제`, qItems));
     secs.push(prayer('마치는 기도', st.closing_prayer));
-    if (opts.answers && ansItems.length) answerPages.push(secPlain('정답 및 해설', h('ol', { class: 'ho-answers' }, ansItems)));
+    if (!quizLocked && opts.answers && ansItems.length) answerPages.push(secPlain('정답 및 해설', h('ol', { class: 'ho-answers' }, ansItems)));
   } else if (mode === 'group') {
     const g = d.group || {};
     const q = g.questions || {};
@@ -318,7 +328,7 @@ function buildHandoutDoc(d, mode, opts) {
 
   // 각주 · 부록
   const creditName = (window.APP_CONFIG && window.APP_CONFIG.CREDIT) || '';
-  secs.push(h('div', { class: 'ho-made' }, h('img', { class: 'ho-logo-lg', src: 'icons/mark.svg?v=9.33', alt: '' }), h('div', {}, h('strong', { text: '말씀결' }), h('span', { text: '  말씀의 결을 따라 읽고 묵상하는 노트' }), creditName ? h('div', { class: 'ho-made-by', text: creditName }) : null)));
+  secs.push(h('div', { class: 'ho-made' }, h('img', { class: 'ho-logo-lg', src: 'icons/mark.svg?v=9.34', alt: '' }), h('div', {}, h('strong', { text: '말씀결' }), h('span', { text: '  말씀의 결을 따라 읽고 묵상하는 노트' }), creditName ? h('div', { class: 'ho-made-by', text: creditName }) : null)));
   secs.push(h('footer', { class: 'ho-foot' }, h('p', { text: `참고: ${footnoteText(d.category)}` }), d.result.caveats ? h('p', { text: `유의: ${d.result.caveats}` }) : null));
   answerPages.forEach((a) => {
     a.classList.add('ho-appendix');
@@ -416,14 +426,14 @@ function loadScriptOnce(src, isReady, errorText) {
 }
 function loadPaged() {
   window.PagedConfig = { auto: false }; // 자동으로 쪽 나누기를 시작하지 않게 (직접 시작합니다)
-  return loadScriptOnce('vendor/paged.polyfill.min.js?v=9.33', () => window.Paged && window.Paged.Previewer, '쪽 나누기 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+  return loadScriptOnce('vendor/paged.polyfill.min.js?v=9.34', () => window.Paged && window.Paged.Previewer, '쪽 나누기 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
 }
-const loadHtml2Canvas = () => loadScriptOnce('vendor/html2canvas.min.js?v=9.33', () => typeof window.html2canvas === 'function', 'PDF 파일 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+const loadHtml2Canvas = () => loadScriptOnce('vendor/html2canvas.min.js?v=9.34', () => typeof window.html2canvas === 'function', 'PDF 파일 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
 
 let handoutCss = null;
 async function loadHandoutCss() {
   if (handoutCss) return handoutCss;
-  const res = await fetch('handout.css?v=9.33');
+  const res = await fetch('handout.css?v=9.34');
   if (!res.ok) throw new Error(`핸드아웃 서식을 불러오지 못했습니다 (${res.status})`);
   handoutCss = await res.text();
   return handoutCss;

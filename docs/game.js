@@ -32,6 +32,32 @@ const isGameHash = () => {
   const k = location.hash.split('/')[1];
   return !k || k === 'g';
 };
+// 말씀 퀘스트를 마친 퀴즈 (이 기기). 퀴즈 문제·정답 목록은 퀘스트를 한 번 풀어 본 뒤에만 보여 줍니다 (미리 보기 방지).
+const QUEST_DONE_KEY = 'sn-quest-done';
+function questDoneMap() {
+  try {
+    const o = JSON.parse(localStorage.getItem(QUEST_DONE_KEY) || '{}');
+    return o && typeof o === 'object' ? o : {};
+  } catch {
+    return {};
+  }
+}
+function markQuestDone(id, s, t) {
+  try {
+    const all = questDoneMap();
+    all[id] = { s, t, at: Date.now() };
+    const keys = Object.keys(all);
+    if (keys.length > 300) keys.slice(0, keys.length - 300).forEach((k) => delete all[k]);
+    localStorage.setItem(QUEST_DONE_KEY, JSON.stringify(all));
+  } catch {
+    /* 저장하지 못해도 이번 화면에서는 열려 있습니다 */
+  }
+}
+/** 이 퀴즈의 말씀 퀘스트를 풀어 봤나요? (이 기기의 기록 또는 서버에 저장된 내 기록) */
+function questUnlocked(id) {
+  if (questDoneMap()[id]) return true;
+  return !!(gameState && ((gameState.quizzes && gameState.quizzes[id]) || (gameState.records && gameState.records[id])));
+}
 const gameCanSave = () => typeof NOTES_ENABLED !== 'undefined' && NOTES_ENABLED && auth.user;
 
 async function gameCall(action, payload = {}) {
@@ -87,6 +113,21 @@ function confetti(host, n = 26) {
   }
   host.append(box);
   setTimeout(() => box.remove(), 2600);
+}
+/** from → to 로 숫자가 올라가며 바뀝니다 (fmt 로 모양을 정함) */
+function countTo(el, from, to, fmt = (n) => String(n), ms = 600) {
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce || from === to) {
+    el.textContent = fmt(to);
+    return;
+  }
+  const t0 = performance.now();
+  const step = (t) => {
+    const k = Math.min(1, (t - t0) / ms);
+    el.textContent = fmt(Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3))));
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 function countUp(el, to, ms = 900) {
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -730,9 +771,12 @@ function openCloset(itemId) {
 }
 
 /* ---------- 순위 ---------- */
-function boardList(players, compact = false) {
+function boardList(players, compact = false, metric = 'weekXp') {
   if (!players.length) return h('p', { class: 'meta', text: '아직 기록이 없어요.' });
-  const top = Math.max(1, ...players.map((p) => p.weekXp));
+  const val = (p) => Number(p[metric]) || 0;
+  players = [...players].sort((a, b) => val(b) - val(a) || b.weekXp - a.weekXp || b.xp - a.xp);
+  const top = Math.max(1, ...players.map(val));
+  const unit = metric === 'weekScore' ? '점' : ' XP';
   return h(
     'ol',
     { class: `gm-board${compact ? ' compact' : ''}` },
@@ -742,16 +786,36 @@ function boardList(players, compact = false) {
         { class: `gm-player${p.me ? ' me' : ''}` },
         h('span', { class: `gm-rank r${i + 1}`, text: String(i + 1) }),
         h('span', { class: 'gm-player-art' }, avatarNode(p.look, { size: compact ? 48 : 64, frame: false })),
-        h('span', { class: 'gm-player-info' }, h('b', {}, p.name, p.me ? h('span', { class: 'gm-me', text: '나' }) : null, i === 0 && p.weekXp > 0 ? h('span', { class: 'gm-mvp', text: 'MVP' }) : null), h('span', { class: 'meta', text: `Lv.${p.level} ${p.title} · 연속 ${p.streak}일${p.stampedToday ? ' · 오늘 도장 ✓' : ''}` }), progressBar(p.weekXp, top, 'gm-bar-week')),
-        h('span', { class: 'gm-player-xp', text: `${p.weekXp} XP` }),
+        h('span', { class: 'gm-player-info' }, h('b', {}, p.name, p.me ? h('span', { class: 'gm-me', text: '나' }) : null, i === 0 && val(p) > 0 ? h('span', { class: 'gm-mvp', text: 'MVP' }) : null), h('span', { class: 'meta', text: `Lv.${p.level} ${p.title} · 연속 ${p.streak}일${p.stampedToday ? ' · 오늘 도장 ✓' : ''}` }), progressBar(val(p), top, 'gm-bar-week')),
+        h('span', { class: 'gm-player-xp', text: `${val(p).toLocaleString('ko-KR')}${unit}` }),
       ),
     ),
   );
 }
 function renderRank(st) {
-  const box = h('section', { class: 'gm-card' }, h('div', { class: 'gm-card-head' }, h('h2', {}, icon('trophy'), '이번 주 가족 순위'), h('span', { class: 'meta', text: '매주 월요일에 새로 시작해요' })), h('p', { class: 'meta', text: '불러오는 중…' }));
+  const box = h('section', { class: 'gm-card' }, h('div', { class: 'gm-card-head' }, h('h2', {}, icon('trophy'), '이번 주 가족 순위'), h('span', { class: 'meta', text: '매주 월요일에 새로 시작해요' })));
+  // 겨루는 방식: 경험치(XP) 순위 · 퀘스트 점수 순위 (이번 주 처음 푼 퀘스트 점수의 합)
+  let metric = 'weekXp';
+  let players = null;
+  const tabs = h('div', { class: 'gm-board-tabs', role: 'tablist' });
+  const holder = h('div', {}, h('p', { class: 'meta', text: '불러오는 중…' }));
+  const draw = () => {
+    tabs.replaceChildren(...[['weekXp', '경험치 순위'], ['weekScore', '퀘스트 점수 순위']].map(([k, label]) => {
+      const b = h('button', { class: 'gm-board-tab', type: 'button', role: 'tab', 'aria-selected': String(metric === k), text: label });
+      b.addEventListener('click', () => {
+        metric = k;
+        draw();
+      });
+      return b;
+    }));
+    if (players) holder.replaceChildren(boardList(players, false, metric), metric === 'weekScore' ? h('p', { class: 'meta', text: '이번 주에 처음 푼 퀘스트의 점수를 모두 더해요. 빨리 · 연속으로 맞힐수록 높아져요.' }) : null);
+  };
+  box.append(tabs, holder);
+  draw();
   gameCall('game_board').then((r) => {
-    box.lastChild.replaceWith(r.ok ? boardList(r.players) : h('p', { class: 'meta', text: r.error || '불러오지 못했습니다.' }));
+    if (!r.ok) return holder.replaceChildren(h('p', { class: 'meta', text: r.error || '불러오지 못했습니다.' }));
+    players = r.players;
+    draw();
   });
   // 내 이름 · 칭호
   const nick = h('input', { class: 'search', type: 'text', maxlength: '12', 'aria-label': '게임 이름' });
@@ -829,15 +893,27 @@ async function renderQuest(id) {
       h('p', { class: 'gm-kicker', text: d.proverb ? '잠언 묵상' : d.daily ? `오늘의 말씀 · ${dateLabel(d.date)}` : `${catLabel(d.category)} · ${formatDate(d.date)}` }),
       h('h1', { text: d.title }),
       h('p', { class: 'meta', text: `객관식 ${nMc}문제 · 빈칸 ${nFb}문제 (빈칸은 직접 입력, 띄어쓰기는 상관없어요)` }),
+      h('p', { class: 'gm-rules' }, icon('flame'), ' 빨리 맞힐수록, 연속으로 맞힐수록 점수가 올라가요. 가족 순위에는 ', h('b', { text: '처음 푼 한 번' }), '의 점수가 올라가니 신중하게 도전하세요!'),
+      h('div', { class: 'gm-qboard-slot' }),
       practice ? h('p', { class: 'gm-practice', text: why }) : h('p', { class: 'gm-stake' }, icon('star'), `모두 맞히면 최대 ${maxXp} XP · 달란트 ×${st.mult} (연속 ${st.streak}일)`),
       h('div', { class: 'gm-row' }, h('button', { class: 'btn primary gm-big', type: 'button', onclick: () => play() }, '퀘스트 시작'), h('a', { class: 'btn', href: questHome(d) }, d.daily ? '먼저 말씀 읽기' : '먼저 공부하기')),
     ),
   );
   app.replaceChildren(h('div', { class: 'gm gm-questwrap' }, back, intro));
+  fillQuestBoard(intro.querySelector('.gm-qboard-slot'), d.id, { before: true });
 
   function play() {
     const answers = { mc: new Array(nMc).fill(null), fb: new Array(nFb).fill('') };
     const correct = [];
+    const ms = []; // 문제마다 걸린 시간 (속도 보너스 · 순위용)
+    const kinds = items.map((it) => it.kind);
+    const liveScore = () => {
+      const k = correct.length;
+      const q = questScore(correct.slice(0, k).map(Boolean), ms.slice(0, k), kinds.slice(0, k));
+      return q.total - (k < items.length ? q.perfect : 0); // 만점 보너스는 끝까지 맞혔을 때만
+    };
+    const scoreEl = h('span', { class: 'gm-score', 'aria-live': 'polite', text: '0점' });
+    let shownScore = 0;
     let i = 0;
     let combo = 0;
     let bestCombo = 0;
@@ -850,7 +926,7 @@ async function renderQuest(id) {
       const sure = h('div', { class: 'gm-quit' }, h('span', { text: '그만두면 이번 기록은 저장되지 않아요.' }), h('button', { class: 'btn small danger', type: 'button', onclick: () => (location.hash = questHome(d)) }, '그만두기'), h('button', { class: 'btn small', type: 'button', onclick: () => sure.remove() }, '계속 풀기'));
       stage.prepend(sure);
     });
-    const shell = h('div', { class: 'gm gm-questwrap' }, h('div', { class: 'gm-qhead' }, quit, counter, comboEl), bar, stage);
+    const shell = h('div', { class: 'gm gm-questwrap' }, h('div', { class: 'gm-qhead' }, quit, counter, scoreEl, comboEl), bar, stage);
     app.replaceChildren(shell);
     let alive = true;
     questAbort = () => (alive = false);
@@ -867,7 +943,16 @@ async function renderQuest(id) {
       const it = items[i];
       counter.textContent = `${i + 1} / ${items.length}`;
       const lvl = it.kind === 'mc' ? it.q.level || '' : '';
-      const card = h('section', { class: 'gm-qcard' }, h('div', { class: 'gm-qtags' }, h('span', { class: 'gm-chip-soft', text: it.kind === 'mc' ? '객관식' : '빈칸 채우기' }), lvl ? h('span', { class: `gm-chip-soft lv-${lvl}`, text: lvl }) : null));
+      const limitMs = it.kind === 'fb' ? QUEST_SCORE.limitBlank : QUEST_SCORE.limitMc;
+      const timerFill = h('span', { class: 'gm-timer-fill', style: `animation-duration:${limitMs}ms` });
+      const timerTxt = h('span', { class: 'gm-timer-txt', text: '⚡ 빠를수록 보너스' });
+      const timer = h('div', { class: 'gm-timer', 'aria-hidden': 'true' }, h('span', { class: 'gm-timer-track' }, timerFill), timerTxt);
+      const t0 = performance.now();
+      const card = h('section', { class: 'gm-qcard' }, h('div', { class: 'gm-qtags' }, h('span', { class: 'gm-chip-soft', text: it.kind === 'mc' ? '객관식' : '빈칸 채우기' }), lvl ? h('span', { class: `gm-chip-soft lv-${lvl}`, text: lvl }) : null), timer);
+      timerFill.addEventListener('animationend', () => {
+        timer.classList.add('out');
+        timerTxt.textContent = '속도 보너스 끝 — 그래도 맞히면 점수!';
+      });
       const feedback = h('div', { class: 'gm-feedback', hidden: true });
       feedback.hidden = true;
       const next = h('button', { class: 'btn primary gm-big', type: 'button' }, i + 1 < items.length ? '다음 문제' : '결과 보기');
@@ -877,15 +962,24 @@ async function renderQuest(id) {
         else finish();
       });
       const judge = (ok, rightText, explanation) => {
+        ms[i] = Math.round(performance.now() - t0);
+        timerFill.style.animationPlayState = 'paused';
+        timer.classList.add('done');
         correct[i] = ok;
         combo = ok ? combo + 1 : 0;
         bestCombo = Math.max(bestCombo, combo);
+        const pts = questPoints(ok, ms[i], it.kind, combo);
+        const gained = pts.base + pts.speed + pts.combo;
+        const nowScore = liveScore();
+        countTo(scoreEl, shownScore, nowScore, (n) => `${n.toLocaleString('ko-KR')}점`);
+        shownScore = nowScore;
         bar.children[i].className = ok ? 'ok' : 'no';
         comboEl.replaceChildren(combo >= 2 ? h('span', { class: 'gm-combo-in' }, icon('flame'), `${combo}연속 정답!`) : '');
-        const pts = ok && !practice ? `+${it.kind === 'mc' ? GAME_RULES.xp.mc : GAME_RULES.xp.blank} XP` : '';
+        const xpTxt = ok && !practice ? `+${it.kind === 'mc' ? GAME_RULES.xp.mc : GAME_RULES.xp.blank} XP` : '';
         feedback.className = `gm-feedback ${ok ? 'ok' : 'no'}`;
         feedback.replaceChildren(
-          h('div', { class: 'gm-fb-head' }, h('strong', { text: ok ? ['정답이에요!', '맞았어요!', '훌륭해요!'][i % 3] : '아쉬워요' }), pts ? h('span', { class: 'gm-pts', text: pts }) : null),
+          h('div', { class: 'gm-fb-head' }, h('strong', { text: ok ? ['정답이에요!', '맞았어요!', '훌륭해요!'][i % 3] : '아쉬워요' }), ok ? h('span', { class: 'gm-pts sc', text: `+${gained}점` }) : null, xpTxt ? h('span', { class: 'gm-pts', text: xpTxt }) : null),
+          ok ? h('p', { class: 'gm-ptsdetail', text: `정답 +${pts.base}${pts.speed ? ` · ⚡ 속도 +${pts.speed}` : ''}${pts.combo ? ` · 🔥 ${combo}연속 +${pts.combo}` : ''} (${(ms[i] / 1000).toFixed(1)}초)` }) : h('p', { class: 'gm-ptsdetail', text: `${(ms[i] / 1000).toFixed(1)}초 · 연속 정답이 끊겼어요` }),
           ok ? null : h('p', {}, '정답: ', h('b', { text: rightText })),
           explanation ? h('p', { class: 'md' }, inlineMd(explanation)) : null,
           next,
@@ -960,18 +1054,62 @@ async function renderQuest(id) {
       let server = null;
       let events = [];
       let err = '';
+      markQuestDone(d.id, right, items.length); // 이 퀴즈의 문제·해설 목록이 열립니다
+      const localScore = questScore(correct.map(Boolean), ms, kinds);
       if (gameCanSave()) {
-        const r = await gameCall('game_quiz', { video_id: d.id, mc: answers.mc.map((x) => (x == null ? -1 : x)), fb: answers.fb });
+        const r = await gameCall('game_quiz', { video_id: d.id, mc: answers.mc.map((x) => (x == null ? -1 : x)), fb: answers.fb, ms: ms.map((x) => x || 0) });
         if (r.ok) {
           server = r.result;
           events = r.events || [];
         } else err = r.error || '저장하지 못했습니다.';
       }
       if (!alive) return;
-      renderResult({ d, items, correct, answers, right, total: items.length, server, events, err, bestCombo, shell });
+      renderResult({ d, items, correct, answers, right, total: items.length, server, events, err, bestCombo, shell, score: (server && server.score) || localScore });
     };
     showQ();
   }
+}
+
+/* ---------- 이 퀘스트의 가족 순위 ---------- */
+const fmtSec = (ms) => {
+  const t = Math.round(ms / 1000);
+  return t >= 60 ? `${Math.floor(t / 60)}분 ${t % 60}초` : `${t}초`;
+};
+const MEDALS = ['🥇', '🥈', '🥉'];
+function questBoardList(players) {
+  return h(
+    'ol',
+    { class: 'gm-qb' },
+    players.slice(0, 5).map((p, i) =>
+      h(
+        'li',
+        { class: `gm-qb-row${p.me ? ' me' : ''}` },
+        h('span', { class: 'gm-qb-rank', text: MEDALS[i] || String(i + 1) }),
+        h('span', { class: 'gm-qb-art' }, avatarNode(p.look, { size: 40, frame: false })),
+        h('span', { class: 'gm-qb-name' }, h('b', { text: p.name }), p.me ? h('span', { class: 'gm-me', text: '나' }) : null, h('span', { class: 'meta', text: `${p.s}/${p.t} · ${fmtSec(p.ms)}` })),
+        h('span', { class: 'gm-qb-score', text: `${p.sc.toLocaleString('ko-KR')}점` }),
+      ),
+    ),
+  );
+}
+/** slot 안에 이 퀘스트의 가족 순위를 채웁니다. before = 풀기 전(도전 의욕용), 아니면 결과 화면 */
+async function fillQuestBoard(slot, id, { before = false, myScore = null } = {}) {
+  if (!slot || !gameCanSave()) return;
+  const r = await gameCall('game_quest_board', { video_id: id });
+  if (!slot.isConnected) return;
+  if (!r.ok) return; // 옛 Apps Script 이거나 연결 실패면 조용히 건너뜁니다
+  const list = r.players || [];
+  if (!list.length) {
+    slot.replaceChildren(h('div', { class: 'gm-qboard' }, h('b', { text: before ? '아직 아무도 도전하지 않았어요' : '이 퀘스트의 첫 번째 기록이에요!' }), h('span', { class: 'meta', text: before ? '1등 자리를 먼저 차지해 보세요.' : '' })));
+    return;
+  }
+  const top = list[0];
+  const mineIdx = list.findIndex((p) => p.me);
+  let msg = '';
+  if (before) msg = mineIdx === 0 ? '지금은 내가 1등이에요! 아무도 못 넘게 지켜요.' : mineIdx > 0 ? `내 기록은 ${mineIdx + 1}위예요. 1등 ${top.name}님은 ${top.sc.toLocaleString('ko-KR')}점!` : `1등 ${top.name}님의 ${top.sc.toLocaleString('ko-KR')}점을 넘어 보세요!`;
+  else if (mineIdx === 0) msg = list.length > 1 ? `🎉 이 퀘스트 1등! 2위 ${list[1].name}님과 ${(top.sc - list[1].sc).toLocaleString('ko-KR')}점 차이예요.` : '🎉 이 퀘스트의 첫 번째 기록이에요!';
+  else if (mineIdx > 0) msg = `${mineIdx + 1}위예요. 1등 ${top.name}님까지 ${(top.sc - list[mineIdx].sc).toLocaleString('ko-KR')}점 남았어요.`;
+  slot.replaceChildren(h('div', { class: 'gm-qboard' }, h('div', { class: 'gm-qboard-head' }, icon('trophy'), h('b', { text: before ? '가족 기록' : '이 퀘스트 가족 순위' }), h('span', { class: 'meta', text: `${r.count}명 도전` })), msg ? h('p', { class: 'gm-qboard-msg', text: msg }) : null, questBoardList(list)));
 }
 
 function eventCard(ev) {
@@ -1004,7 +1142,7 @@ function eventCard(ev) {
   }
 }
 
-function renderResult({ d, items, correct, answers, right, total, server, events, err, bestCombo, shell }) {
+function renderResult({ d, items, correct, answers, right, total, server, events, err, bestCombo, shell, score }) {
   const pct = right / total;
   const grade = pct === 1 ? '만점! 말씀을 꼭 붙드셨네요' : pct >= 0.8 ? '훌륭해요!' : pct >= 0.5 ? '잘했어요! 오늘의 도장 조건 달성' : '조금 아쉬워요. 설교를 다시 보고 도전해 보세요';
   const ring = svgNode(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="150" height="150" aria-hidden="true"><circle cx="60" cy="60" r="50" fill="none" stroke="#efe9da" stroke-width="9"/><circle cx="60" cy="60" r="50" fill="none" stroke="${pct >= 0.5 ? '#c9a14a' : '#b9a98a'}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${(314 * pct).toFixed(1)} 314" transform="rotate(-90 60 60)" class="gm-ring"/></svg>`);
@@ -1024,6 +1162,29 @@ function renderResult({ d, items, correct, answers, right, total, server, events
         : h('p', { class: 'gm-practice', text: err ? `저장하지 못했어요: ${err}` : !gameCanSave() ? '연습 모드였어요. 로그인하면 점수와 도장이 저장돼요.' : server && server.already ? '이미 점수를 받은 퀘스트라 연습으로 기록했어요.' : server && server.capped ? '오늘 점수 퀘스트를 다 해서 연습으로 기록했어요. 이 설교는 내일 점수를 받을 수 있어요.' : '연습으로 기록했어요.' }),
     ),
   );
+  // 퀘스트 점수 카드: 등급 · 점수 · 보너스 내역 · 걸린 시간 · 가족 순위
+  const sc = score || questScore(correct.map(Boolean), [], items.map((x) => x.kind));
+  const grade2 = questGrade(sc.total, total);
+  const scoreEl = h('b', { class: 'gm-sc-num', text: '0' });
+  const rows = [['정답', sc.base, '✔'], ['빠른 정답', sc.speed, '⚡'], ['연속 정답', sc.combo, '🔥'], ['만점 보너스', sc.perfect, '★']].filter(([, v]) => v > 0);
+  const counted = server && server.record && server.firstRecord === false ? server.record : null;
+  const scoreCard = h(
+    'section',
+    { class: `gm-card gm-scorecard g-${grade2}` },
+    h('div', { class: 'gm-grade', 'aria-label': `등급 ${grade2}` }, h('b', { text: grade2 }), h('span', { text: '등급' })),
+    h(
+      'div',
+      { class: 'gm-sc-main' },
+      h('p', { class: 'gm-sc-line' }, scoreEl, h('span', { text: '점' })),
+      h('ul', { class: 'gm-sc-break' }, rows.map(([k, v, ic]) => h('li', {}, h('span', { text: `${ic} ${k}` }), h('b', { text: `+${v.toLocaleString('ko-KR')}` })))),
+      sc.ms ? h('p', { class: 'meta', text: `총 ${fmtSec(sc.ms)} · 평균 ${(sc.ms / total / 1000).toFixed(1)}초` }) : null,
+      counted ? h('p', { class: 'gm-sc-note', text: `가족 순위에는 처음 푼 기록(${counted.sc.toLocaleString('ko-KR')}점)이 올라가 있어요. 이번 점수는 연습이에요.` }) : null,
+      !gameCanSave() ? h('p', { class: 'gm-sc-note', text: '로그인하면 이 점수로 가족과 순위를 겨룰 수 있어요.' }) : null,
+    ),
+    h('div', { class: 'gm-qboard-slot gm-sc-board' }),
+  );
+  setTimeout(() => countTo(scoreEl, 0, sc.total, (n) => n.toLocaleString('ko-KR'), 1100), 250);
+  if (gameCanSave() && !err) fillQuestBoard(scoreCard.querySelector('.gm-sc-board'), d.id, { before: false });
   const evs = events.map(eventCard).filter(Boolean);
   const evBox = evs.length ? h('section', { class: 'gm-events' }, evs) : null;
   const wrong = items.map((it, k) => ({ it, k })).filter(({ k }) => !correct[k]);
@@ -1043,7 +1204,7 @@ function renderResult({ d, items, correct, answers, right, total, server, events
       )
     : null;
   const actions = h('div', { class: 'gm-row gm-result-actions' }, h('a', { class: 'btn primary gm-big', href: '#/' }, '게임 홈으로'), h('a', { class: 'btn', href: questHome(d) }, questHomeLabel(d)), h('a', { class: 'btn', href: `#/q/${encodeURIComponent(d.id)}`, onclick: (e) => (e.preventDefault(), renderQuest(d.id)) }, '다시 풀기'));
-  const page = h('div', { class: 'gm gm-questwrap' }, head, evBox, review, actions);
+  const page = h('div', { class: 'gm gm-questwrap' }, head, scoreCard, evBox, review, actions);
   shell.replaceWith(page);
   app.replaceChildren(page);
   window.scrollTo(0, 0);
@@ -1051,7 +1212,7 @@ function renderResult({ d, items, correct, answers, right, total, server, events
     countUp(xpEl, server.xp);
     countUp(talEl, server.talents);
   }
-  if (pct === 1 || events.some((e) => e.type === 'level' || e.type === 'journey')) confetti(head, 34);
+  if (pct === 1 || grade2 === 'S' || events.some((e) => e.type === 'level' || e.type === 'journey')) confetti(head, 34);
   else if (events.some((e) => e.type === 'stamp')) confetti(head, 16);
 }
 

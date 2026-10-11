@@ -1116,7 +1116,7 @@ function userVideoChange(user, body, status) {
    날짜는 토론토 기준입니다. 규칙·아이템 값은 아래 GAME_CONF(docs/game-data.js 에서 자동 생성)를 씁니다. */
 
 // <GAME_CONF> (scripts/game-conf.mjs 가 docs/game-data.js 에서 만듭니다 — 직접 고치지 마세요)
-const GAME_CONF = {"rules":{"xp":{"mc":4,"blank":6,"perfect":20,"stamp":20,"reflect":10,"read":15},"talent":{"mc":2,"blank":3,"perfect":15,"stamp":10,"reflect":5,"read":8,"week":50,"comeback":20},"passRate":0.5,"dailyScored":2,"freezePrice":120,"freezeMax":2},"streak":[[30,2],[14,1.7],[7,1.5],[3,1.2],[1,1]],"journeys":{"pilgrim":{"steps":11,"xpPerStep":160,"title":"천성에 이른 순례자","rewards":{"1":"staff","3":"scroll","4":"robe_linen","6":"lamp","11":"laurel"}},"armor":{"steps":18,"xpPerStep":100,"title":"믿음의 용사","rewards":{"18":"bg_stars"}},"tree":{"steps":13,"xpPerStep":140,"title":"열매 맺는 나무","rewards":{"4":"bg_garden","13":"halo_flower"}}},"armor":["belt_bronze","chest_bronze","feet_bronze","shield_bronze","helmet_bronze","sword_bronze","belt_silver","chest_silver","feet_silver","shield_silver","helmet_silver","sword_silver","belt_gold","chest_gold","feet_gold","shield_gold","helmet_gold","sword_gold"],"items":{"s1":["skin",0,"start"],"s2":["skin",0,"start"],"s3":["skin",0,"start"],"hair_short":["hair",0,"start"],"hair_bob":["hair",0,"start"],"hair_long":["hair",0,"start"],"hair_bun":["hair",0,"start"],"hair_curly":["hair",60,"shop"],"hair_spiky":["hair",60,"shop"],"black":["hairColor",0,"start"],"brown":["hairColor",0,"start"],"gray":["hairColor",40,"shop"],"auburn":["hairColor",40,"shop"],"blond":["hairColor",40,"shop"],"robe_brown":["robe",0,"start"],"robe_blue":["robe",80,"shop"],"robe_green":["robe",80,"shop"],"robe_red":["robe",120,"shop"],"robe_purple":["robe",200,"shop"],"robe_star":["robe",400,"shop"],"robe_linen":["robe",0,"journey"],"straw_hat":["head",100,"shop"],"scarf":["head",120,"shop"],"laurel":["head",0,"journey"],"halo_flower":["head",0,"journey"],"staff":["handR",0,"journey"],"scroll":["handR",0,"journey"],"lamp":["handL",0,"journey"],"pet_fish":["pet",150,"shop"],"pet_lamb":["pet",250,"shop"],"pet_dove":["pet",300,"shop"],"pet_donkey":["pet",350,"shop"],"bg_dawn":["bg",80,"shop"],"bg_galilee":["bg",120,"shop"],"bg_rainbow":["bg",200,"shop"],"bg_zion":["bg",300,"shop"],"bg_garden":["bg",0,"journey"],"bg_stars":["bg",0,"journey"],"belt_bronze":["belt",0,"journey"],"belt_silver":["belt",0,"journey"],"belt_gold":["belt",0,"journey"],"chest_bronze":["chest",0,"journey"],"chest_silver":["chest",0,"journey"],"chest_gold":["chest",0,"journey"],"feet_bronze":["feet",0,"journey"],"feet_silver":["feet",0,"journey"],"feet_gold":["feet",0,"journey"],"shield_bronze":["handL",0,"journey"],"shield_silver":["handL",0,"journey"],"shield_gold":["handL",0,"journey"],"helmet_bronze":["head",0,"journey"],"helmet_silver":["head",0,"journey"],"helmet_gold":["head",0,"journey"],"sword_bronze":["handR",0,"journey"],"sword_silver":["handR",0,"journey"],"sword_gold":["handR",0,"journey"]},"look":{"skin":"s1","hair":"hair_short","hairColor":"black","robe":"robe_brown","head":"","handR":"","handL":"","chest":"","belt":"","feet":"","pet":"","bg":""},"badges":[["first",20],["streak3",30],["streak7",60],["streak30",200],["perfect1",30],["perfect10",150],["quests10",50],["quests50",200],["reflect10",60],["read7",60],["read30",200],["nt",300],["bible",1000],["journey1",100],["journey3",300]],"levelTitles":[[30,"반석"],[20,"등대"],[15,"일꾼"],[10,"제자"],[5,"순례자"],[1,"새싹"]],"bible":[50,40,27,36,34,24,21,4,31,24,22,25,29,36,10,13,10,42,150,31,12,8,66,52,5,48,12,14,3,9,1,4,7,3,3,3,2,14,4,28,16,24,21,28,16,16,13,6,6,4,4,5,3,6,4,3,1,13,5,5,3,5,1,1,1,22]};
+const GAME_CONF = {"rules":{"xp":{"mc":4,"blank":6,"perfect":20,"stamp":20,"reflect":10,"read":15},"talent":{"mc":2,"blank":3,"perfect":15,"stamp":10,"reflect":5,"read":8,"week":50,"comeback":20},"passRate":0.5,"dailyScored":2,"freezePrice":120,"freezeMax":2},"score":{"base":100,"speedMax":50,"speedFast":3000,"limitMc":20000,"limitBlank":30000,"minMs":1000,"maxMs":120000,"comboStep":10,"comboCap":5,"perfect":300},"streak":[[30,2],[14,1.7],[7,1.5],[3,1.2],[1,1]],"journeys":{"pilgrim":{"steps":11,"xpPerStep":160,"title":"천성에 이른 순례자","rewards":{"1":"staff","3":"scroll","4":"robe_linen","6":"lamp","11":"laurel"}},"armor":{"steps":18,"xpPerStep":100,"title":"믿음의 용사","rewards":{"18":"bg_stars"}},"tree":{"steps":13,"xpPerStep":140,"title":"열매 맺는 나무","rewards":{"4":"bg_garden","13":"halo_flower"}}},"armor":["belt_bronze","chest_bronze","feet_bronze","shield_bronze","helmet_bronze","sword_bronze","belt_silver","chest_silver","feet_silver","shield_silver","helmet_silver","sword_silver","belt_gold","chest_gold","feet_gold","shield_gold","helmet_gold","sword_gold"],"items":{"s1":["skin",0,"start"],"s2":["skin",0,"start"],"s3":["skin",0,"start"],"hair_short":["hair",0,"start"],"hair_bob":["hair",0,"start"],"hair_long":["hair",0,"start"],"hair_bun":["hair",0,"start"],"hair_curly":["hair",60,"shop"],"hair_spiky":["hair",60,"shop"],"black":["hairColor",0,"start"],"brown":["hairColor",0,"start"],"gray":["hairColor",40,"shop"],"auburn":["hairColor",40,"shop"],"blond":["hairColor",40,"shop"],"robe_brown":["robe",0,"start"],"robe_blue":["robe",80,"shop"],"robe_green":["robe",80,"shop"],"robe_red":["robe",120,"shop"],"robe_purple":["robe",200,"shop"],"robe_star":["robe",400,"shop"],"robe_linen":["robe",0,"journey"],"straw_hat":["head",100,"shop"],"scarf":["head",120,"shop"],"laurel":["head",0,"journey"],"halo_flower":["head",0,"journey"],"staff":["handR",0,"journey"],"scroll":["handR",0,"journey"],"lamp":["handL",0,"journey"],"pet_fish":["pet",150,"shop"],"pet_lamb":["pet",250,"shop"],"pet_dove":["pet",300,"shop"],"pet_donkey":["pet",350,"shop"],"bg_dawn":["bg",80,"shop"],"bg_galilee":["bg",120,"shop"],"bg_rainbow":["bg",200,"shop"],"bg_zion":["bg",300,"shop"],"bg_garden":["bg",0,"journey"],"bg_stars":["bg",0,"journey"],"belt_bronze":["belt",0,"journey"],"belt_silver":["belt",0,"journey"],"belt_gold":["belt",0,"journey"],"chest_bronze":["chest",0,"journey"],"chest_silver":["chest",0,"journey"],"chest_gold":["chest",0,"journey"],"feet_bronze":["feet",0,"journey"],"feet_silver":["feet",0,"journey"],"feet_gold":["feet",0,"journey"],"shield_bronze":["handL",0,"journey"],"shield_silver":["handL",0,"journey"],"shield_gold":["handL",0,"journey"],"helmet_bronze":["head",0,"journey"],"helmet_silver":["head",0,"journey"],"helmet_gold":["head",0,"journey"],"sword_bronze":["handR",0,"journey"],"sword_silver":["handR",0,"journey"],"sword_gold":["handR",0,"journey"]},"look":{"skin":"s1","hair":"hair_short","hairColor":"black","robe":"robe_brown","head":"","handR":"","handL":"","chest":"","belt":"","feet":"","pet":"","bg":""},"badges":[["first",20],["streak3",30],["streak7",60],["streak30",200],["perfect1",30],["perfect10",150],["quests10",50],["quests50",200],["reflect10",60],["read7",60],["read30",200],["nt",300],["bible",1000],["journey1",100],["journey3",300]],"levelTitles":[[30,"반석"],[20,"등대"],[15,"일꾼"],[10,"제자"],[5,"순례자"],[1,"새싹"]],"bible":[50,40,27,36,34,24,21,4,31,24,22,25,29,36,10,13,10,42,150,31,12,8,66,52,5,48,12,14,3,9,1,4,7,3,3,3,2,14,4,28,16,24,21,28,16,16,13,6,6,4,4,5,3,6,4,3,1,13,5,5,3,5,1,1,1,22]};
 // </GAME_CONF>
 
 const GAME_SHEET = 'Game';
@@ -1137,6 +1137,7 @@ function handleGame(action, body) {
   }
   try {
     if (action === 'game_board') return gameBoard(user);
+    if (action === 'game_quest_board') return gameQuestBoard(user, body);
     const lock = LockService.getScriptLock();
     lock.waitLock(20000);
     try {
@@ -1199,6 +1200,7 @@ function gameNewState() {
     week: { key: '', xp: 0 },
     daily: { day: '', n: 0 },
     quizzes: {},
+    records: {},
     reflects: {},
     readDays: {},
     bible: [],
@@ -1645,6 +1647,73 @@ function gameStudyQuiz(videoId) {
   throw new Error('설교를 찾을 수 없습니다.');
 }
 
+const GAME_KEEP_RECORDS = 200;
+
+/* 퀘스트 점수: docs/game-data.js 의 questScore 와 같은 식입니다 (선택한 값은 GAME_CONF.score) */
+function gameClampMs(ms) {
+  const Q = GAME_CONF.score;
+  const t = Math.round(Number(ms));
+  return Math.min(Q.maxMs, Math.max(Q.minMs, isFinite(t) && t > 0 ? t : Q.maxMs));
+}
+function gameQuestPoints(ok, ms, kind, combo) {
+  if (!ok) return { base: 0, speed: 0, combo: 0 };
+  const Q = GAME_CONF.score;
+  const t = gameClampMs(ms);
+  const limit = kind === 'fb' ? Q.limitBlank : Q.limitMc;
+  const speed = t <= Q.speedFast ? Q.speedMax : t >= limit ? 0 : Math.round((Q.speedMax * (limit - t)) / (limit - Q.speedFast));
+  return { base: Q.base, speed: speed, combo: combo >= 2 ? Q.comboStep * Math.min(combo - 1, Q.comboCap) : 0 };
+}
+function gameQuestScore(oks, msList, kinds) {
+  let combo = 0;
+  const out = { base: 0, speed: 0, combo: 0, perfect: 0, total: 0, ms: 0, right: 0 };
+  oks.forEach(function (ok, i) {
+    combo = ok ? combo + 1 : 0;
+    const p = gameQuestPoints(ok, msList[i], kinds[i], combo);
+    out.base += p.base;
+    out.speed += p.speed;
+    out.combo += p.combo;
+    out.right += ok ? 1 : 0;
+    out.ms += gameClampMs(msList[i]);
+  });
+  if (oks.length && out.right === oks.length) out.perfect = GAME_CONF.score.perfect;
+  out.total = out.base + out.speed + out.combo + out.perfect;
+  return out;
+}
+/* 이번 주(월요일 시작)에 처음 푼 퀘스트들의 점수 합 */
+function gameWeekScore(st, wk) {
+  let sum = 0;
+  const rec = st.records || {};
+  Object.keys(rec).forEach(function (k) {
+    if (rec[k] && rec[k].at && gameWeekKey(rec[k].at) === wk) sum += Number(rec[k].sc) || 0;
+  });
+  return sum;
+}
+/* 이 퀘스트의 가족 순위 (처음 푼 기록 기준: 점수 높은 순, 같으면 빠른 순) */
+function gameQuestBoard(user, body) {
+  const id = checkVideoId(body.video_id);
+  const sh = getGameSheet();
+  const last = sh.getLastRow();
+  const list = [];
+  if (last >= 2) {
+    sh.getRange(2, 1, last - 1, 4).getValues().forEach(function (r) {
+      const st = Object.assign(gameNewState(), parseJsonObject(r[3]));
+      const rec = st.records && st.records[id];
+      if (!rec) return;
+      list.push({
+        me: String(r[0]) === user.sub,
+        name: st.nick || String(r[2] || '').split(' ')[0] || String(r[1] || '').split('@')[0] || '이름 없음',
+        look: Object.assign({}, GAME_CONF.look, st.look || {}),
+        sc: Number(rec.sc) || 0,
+        s: Number(rec.s) || 0,
+        t: Number(rec.t) || 0,
+        ms: Number(rec.ms) || 0,
+      });
+    });
+  }
+  list.sort(function (a, b) { return b.sc - a.sc || a.ms - b.ms; });
+  return { ok: true, id: id, count: list.length, players: list.slice(0, 10) };
+}
+
 function gameQuiz(st, body, today, events) {
   const videoId = checkVideoId(body.video_id);
   const quiz = gameStudyQuiz(videoId);
@@ -1667,6 +1736,11 @@ function gameQuiz(st, body, today, events) {
   const mcRight = mcOk.filter(Boolean).length;
   const fbRight = fbOk.filter(Boolean).length;
   const right = mcRight + fbRight;
+  // 퀘스트 점수 (가족 순위용): 정답 + 빠른 정답 + 연속 정답 + 만점. 걸린 시간(ms)은 화면에서 받아 범위만 맞춰 씁니다.
+  const oks = mcOk.concat(fbOk);
+  const kinds = quiz.mc.map(function () { return 'mc'; }).concat(quiz.fb.map(function () { return 'fb'; }));
+  const msIn = Array.isArray(body.ms) ? body.ms : [];
+  const score = gameQuestScore(oks, oks.map(function (_, i) { return msIn[i]; }), kinds);
   const perfect = right === total;
   const passed = right >= Math.ceil(total * GAME_CONF.rules.passRate);
   if (st.daily.day !== today) st.daily = { day: today, n: 0 };
@@ -1687,9 +1761,20 @@ function gameQuiz(st, body, today, events) {
     if (perfect) st.stats.perfect += 1;
     gameGain(st, xp, talents, today, events);
   }
+  // 가족 순위에 올라가는 기록은 "처음 푼 한 번"만 (다시 풀어도 점수가 바뀌지 않아서 신중하게, 공정하게)
+  if (!st.records) st.records = {};
+  const firstRecord = !st.records[videoId];
+  if (firstRecord) {
+    st.records[videoId] = { sc: score.total, s: right, t: total, ms: score.ms, at: today };
+    const keys = Object.keys(st.records);
+    if (keys.length > GAME_KEEP_RECORDS) keys.slice(0, keys.length - GAME_KEEP_RECORDS).forEach(function (k) { delete st.records[k]; });
+  }
   gameBadges(st, events);
   return {
     result: {
+      score: score,
+      record: st.records[videoId] || null,
+      firstRecord: firstRecord,
       scored: scored,
       already: already,
       capped: !already && !scored,
@@ -1815,6 +1900,8 @@ function gameView(st, today) {
     dailyLeft: Math.max(0, GAME_CONF.rules.dailyScored - daily),
     mult: gameMult(Math.max(1, streak)),
     quizzes: st.quizzes,
+    records: st.records || {},
+    weekScore: gameWeekScore(st, wk),
     reflects: st.reflects,
     readDays: st.readDays,
     bible: st.bible,
@@ -1848,6 +1935,7 @@ function gameBoard(user) {
           title: st.title || v.levelTitle,
           xp: st.xp,
           weekXp: st.week.key === wk ? st.week.xp : 0,
+          weekScore: gameWeekScore(st, wk),
           streak: v.streak,
           look: Object.assign({}, GAME_CONF.look, st.look || {}),
           stampedToday: v.stampedToday,

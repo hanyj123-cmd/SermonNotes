@@ -672,6 +672,44 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
   r = gp({ action: 'game_profile', title: '천성에 이른 순례자' });
   check('칭호: 받지 않은 칭호는 고를 수 없음', !r.ok);
   check('게임: 사람마다 기록이 따로', g.sheets.get('Game').rows.length === 3);
+
+  // 퀘스트 점수·가족 기록 (처음 푼 한 번만 순위에 올라감)
+  {
+    const cx = {};
+    vm.createContext(cx);
+    vm.runInContext(fs.readFileSync(path.join(root, 'docs/game-data.js'), 'utf8') + '\n;globalThis.__q = questScore;', cx);
+    const oks = [true, true, false, true, true];
+    const msL = [1500, 8000, 5000, 25000, 150000];
+    const kinds = ['mc', 'mc', 'mc', 'fb', 'fb'];
+    const cs = cx.__q(oks, msL, kinds);
+    const ss2 = vm.runInContext('gameQuestScore', g.ctx)(oks, msL, kinds);
+    check('퀘스트 점수: 화면(game-data.js)과 서버(Code.gs) 계산이 같음', JSON.stringify(cs) === JSON.stringify(JSON.parse(JSON.stringify(ss2))), JSON.stringify([cs, ss2]));
+    check('퀘스트 점수: 시간은 1~120초로 보정(150초 → 120초)', cs.ms === 1500 + 8000 + 5000 + 25000 + 120000, String(cs.ms));
+  }
+  today = '2026-10-15';
+  const fast = { ...all, ms: [1000, 1000, 1000, 1000, 1000] };
+  const slow = { ...all, ms: [60000, 60000, 60000, 60000, 60000] };
+  r = gp({ action: 'game_quiz', video_id: 'vidAAAAAAA2', ...fast }, B);
+  check('퀘스트 기록: 처음 푼 점수가 저장됨', r.ok && r.result.firstRecord === true && r.result.score.total > 0 && r.result.record && r.result.record.sc === r.result.score.total, JSON.stringify(r.result));
+  const firstSc = r.result.record.sc;
+  r = gp({ action: 'game_quiz', video_id: 'vidAAAAAAA2', ...slow }, B);
+  check('퀘스트 기록: 다시 풀면 연습 — 기록은 처음 것 그대로', r.result.firstRecord === false && r.result.record.sc === firstSc, JSON.stringify(r.result.record));
+  r = gp({ action: 'game_quest_board', video_id: 'vidAAAAAAA2' });
+  check('퀘스트 순위: 도전한 사람만, 점수 높은 순', r.ok && r.count >= 1 && r.players.every((p, i, a) => !i || a[i - 1].sc >= p.sc), JSON.stringify(r));
+  check('퀘스트 순위: 아무도 안 푼 퀘스트는 비어 있음', gp({ action: 'game_quest_board', video_id: 'vidAAAAAAA4' }, B).count >= 0 && gp({ action: 'game_quest_board', video_id: 'bible-20990101' }).count === 0);
+  check('퀘스트 순위: 로그인 필요', g.post({ action: 'game_quest_board', video_id: 'vidAAAAAAA2' }).code === 'auth');
+  r = gp({ action: 'game_board' });
+  check('가족 순위: 이번 주 퀘스트 점수(weekScore)', r.ok && r.players.every((p) => typeof p.weekScore === 'number') && r.players.some((p) => p.weekScore > 0), JSON.stringify(r.players.map((p) => [p.name, p.weekScore])));
+  // 예전 기록(records 없음)도 문제없이 열림
+  {
+    const sh = g.sheets.get('Game');
+    const row = sh.rows.find((x, i) => i > 0 && x[0] === '110000000000000000002') || sh.rows[2];
+    const st0 = JSON.parse(row[3]);
+    delete st0.records;
+    row[3] = JSON.stringify(st0);
+    const rr = gp({ action: 'game_get' }, B);
+    check('예전 기록(records 없음)도 열림', rr.ok && rr.state.records && typeof rr.state.weekScore === 'number', JSON.stringify(rr).slice(0, 200));
+  }
 }
 
 // ---------- 오늘의 말씀: 읽기 완료 · 일독표 · 퀴즈 ----------

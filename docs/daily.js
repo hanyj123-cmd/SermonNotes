@@ -286,7 +286,7 @@ async function renderDaily(dateArg, modeArg) {
   else if (mode === 'group') body.append(...(dLike.group ? renderGroupMode(dLike, notes) : [notReady('소그룹 나눔')]).filter(Boolean));
   else if (mode === 'quiz') {
     const quiz = data && data.quiz;
-    if (quiz && (quiz.multiple_choice || []).length) body.append(renderQuizCta({ id, study: { quiz } }), renderQuiz(quiz));
+    if (quiz && (quiz.multiple_choice || []).length) body.append(renderQuizCta({ id, study: { quiz } }), renderQuizGate(id, quiz));
     else body.append(notReady('퀴즈'));
   }
 

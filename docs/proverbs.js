@@ -153,7 +153,7 @@ async function renderProverbs(chArg, modeArg) {
   else if (mode === 'group') add(d.group ? renderProverbGroup(ch, d.group, notes) : notReady('소그룹 나눔'));
   else if (mode === 'quiz') {
     const quiz = d.quiz;
-    if (quiz && (quiz.multiple_choice || []).length) add([renderQuizCta({ id: provQuizId(ch), study: { quiz } }), renderQuiz(quiz)]);
+    if (quiz && (quiz.multiple_choice || []).length) add([renderQuizCta({ id: provQuizId(ch), study: { quiz } }), renderQuizGate(provQuizId(ch), quiz)]);
     else add(notReady('퀴즈'));
   }
   if (notes) {
@@ -344,6 +344,7 @@ async function proverbHandoutDetail(id) {
   const w = d.word || {};
   return {
     id,
+    quizId: provQuizId(ch), // 말씀 퀘스트 기록은 이 번호로 (월별)
     proverb: true,
     category: 'proverbs',
     date: '',
