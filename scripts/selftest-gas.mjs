@@ -710,6 +710,51 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
     const rr = gp({ action: 'game_get' }, B);
     check('예전 기록(records 없음)도 열림', rr.ok && rr.state.records && typeof rr.state.weekScore === 'number', JSON.stringify(rr).slice(0, 200));
   }
+  // 새 아이템: 레벨·업적 조건, 이번 주 특가(화면과 같은 계산), 수집 업적
+  {
+    const cx = {};
+    vm.createContext(cx);
+    vm.runInContext(fs.readFileSync(path.join(root, 'docs/game-data.js'), 'utf8') + '\n;globalThis.__d = weeklyDeals; globalThis.__p = dealPrice; globalThis.__w = weekKeyOf;', cx);
+    const gd = vm.runInContext('gameDeals', g.ctx);
+    const weeks = ['2026-10-05', '2026-10-12', '2026-10-19', '2027-01-04', '2026-12-28'];
+    check('이번 주 특가: 화면과 서버가 같은 아이템·할인율', weeks.every((w) => JSON.stringify(cx.__d(w)) === JSON.stringify(JSON.parse(JSON.stringify(gd(w))))), JSON.stringify(weeks.map((w) => [cx.__d(w), gd(w)])));
+    check('이번 주 특가: 3개 · 주마다 바뀜', Object.keys(cx.__d('2026-10-05')).length === 3 && JSON.stringify(cx.__d('2026-10-05')) !== JSON.stringify(cx.__d('2026-10-12')));
+    check('이번 주 특가: 할인 값 계산 같음', [80, 150, 1500, 1200].every((p) => cx.__p(p, 30) === vm.runInContext('gameDealPrice', g.ctx)(p, 30)));
+    check('주 시작일(월요일) 계산이 같음', ['2026-10-10', '2026-10-11', '2026-10-12', '2027-01-01'].every((d) => cx.__w(d) === vm.runInContext('gameWeekKey', g.ctx)(d)));
+    // 부자 만들기 (B)
+    const sh = g.sheets.get('Game');
+    const row = sh.rows.find((x, k) => k > 0 && x[0] === '110000000000000000002');
+    const st0 = JSON.parse(row[3]);
+    st0.talents = 20000;
+    st0.xp = 0;
+    row[3] = JSON.stringify(st0);
+    today = '2026-10-15';
+    const wk = vm.runInContext('gameWeekKey', g.ctx)(today);
+    const deals = cx.__d(wk);
+    let r2 = gp({ action: 'game_buy', item: 'crown_ruby' }, B);
+    check('보물 아이템: 레벨이 모자라면 못 삼(루비 왕관 Lv.10)', !r2.ok && /레벨 10부터/.test(r2.error), JSON.stringify(r2));
+    r2 = gp({ action: 'game_buy', item: 'crown_diamond' }, B);
+    check('전설 아이템: 업적이 없으면 못 삼(다이아몬드 왕관)', !r2.ok && /업적/.test(r2.error));
+    const st1 = JSON.parse(row[3]);
+    st1.xp = 12000; // Lv.15
+    row[3] = JSON.stringify(st1);
+    const before = gp({ action: 'game_get' }, B).state.talents;
+    r2 = gp({ action: 'game_buy', item: 'crown_ruby' }, B);
+    const expect = cx.__p(700, deals.crown_ruby || 0);
+    check('보물 아이템: 레벨이 되면 삼(특가면 할인값, 첫 보물 업적 +80)', r2.ok && r2.state.inv.includes('crown_ruby') && before - r2.state.talents === expect - 80, JSON.stringify([before, r2.state && r2.state.talents, expect]));
+    check('보물 아이템: 첫 보물 업적', r2.ok && r2.state.badges.includes('treasure1'));
+    const dealId = Object.keys(deals).find((id) => id !== 'crown_ruby');
+    const b2 = gp({ action: 'game_get' }, B).state.talents;
+    r2 = gp({ action: 'game_buy', item: dealId }, B);
+    check('이번 주 특가 아이템은 할인된 값으로 삼', r2.ok && b2 - r2.state.talents === cx.__p(vm.runInContext('GAME_CONF', g.ctx).items[dealId][1], deals[dealId]), JSON.stringify([dealId, b2, r2.state && r2.state.talents]));
+    ['hair_pony', 'hair_twin', 'pet_kitten', 'kitty_band', 'neck_pearl', 'ribbon', 'bouquet', 'robe_kitty', 'bg_kitty', 'shoe_ribbon'].forEach((id) => gp({ action: 'game_buy', item: id }, B));
+    const s2 = gp({ action: 'game_get' }, B).state;
+    check('수집 업적: 아이템 10개 → 꾸미기 시작', s2.badges.includes('collect10') && s2.collect >= 10, JSON.stringify([s2.collect, s2.badges]));
+    check('새 아이템 입기(고양이 귀 · 아기 고양이)', gp({ action: 'game_equip', look: { head: 'kitty_band', pet: 'pet_kitten', hair: 'hair_twin' } }, B).ok);
+    const bd = gp({ action: 'game_board' }, B);
+    check('가족 순위: 수집 수(collect)', bd.players.some((p) => p.me && p.collect === s2.collect));
+    check('화면 상태에 이번 주 특가가 실려 옴', JSON.stringify(s2.deals) === JSON.stringify(deals));
+  }
 }
 
 // ---------- 오늘의 말씀: 읽기 완료 · 일독표 · 퀴즈 ----------

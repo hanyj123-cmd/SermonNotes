@@ -680,3 +680,30 @@
   .gm-qb-row { grid-template-columns: 1.6em 36px 1fr auto; gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) { .gm-timer-fill { animation: none; } }
+
+/* ---------- 보물 아이템 · 이번 주 특가 · 수집 ---------- */
+.gm-rarity.gm-r-epic { background: linear-gradient(135deg, #7a2257, #c0396f); color: #fff3f7; }
+.gm-shop-card.gm-r-epic { border-color: #e7b6c9; background: linear-gradient(170deg, #fffafc, #fff); }
+.gm-shop-card.gm-r-legend { border-color: var(--gm-gold); background: linear-gradient(170deg, #fffaf0, #fff6dd); box-shadow: 0 0 0 1px rgba(201, 161, 74, 0.25), 0 18px 34px -20px rgba(143, 107, 34, 0.7); }
+.gm-shop-card.gm-r-legend .gm-shop-thumb, .gm-shop-card.gm-r-epic .gm-shop-thumb { position: relative; overflow: hidden; }
+.gm-shop-card.gm-r-legend .gm-shop-thumb::after { content: ''; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.65) 50%, transparent 65%); transform: translateX(-100%); animation: gmShine 3.2s ease-in-out infinite; pointer-events: none; }
+@keyframes gmShine { 0%, 55% { transform: translateX(-100%); } 85%, 100% { transform: translateX(100%); } }
+.gm-item.gm-r-epic[aria-pressed='true'], .gm-item.gm-r-legend[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--gm-gold); }
+.gm-shop-card { position: relative; }
+.gm-shop-card.deal { border-color: #e0574e; }
+.gm-deal-tag { position: absolute; top: 10px; left: 10px; z-index: 2; padding: 3px 10px; border-radius: 999px; background: #d63e4f; color: #fff; font-size: 0.78rem; font-weight: 700; box-shadow: 0 6px 12px -6px rgba(214, 62, 79, 0.8); }
+.gm-was { margin: 4px 0 0; font-size: 0.86rem; color: #b33645; font-weight: 600; }
+.gm-was s { color: var(--gm-soft); font-weight: 400; }
+.gm-deal-head { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; padding: 12px 16px; border-radius: 14px; background: linear-gradient(120deg, #fff1ee, #fff8ec); border: 1px solid #f3c9c0; }
+.gm-deal-head b { display: inline-flex; align-items: center; gap: 6px; color: #b33645; font-family: var(--gm-title); font-size: 1.05rem; }
+.gm-chip.gm-chip-deal { border-color: #e9a3a0; color: #b33645; }
+.gm-chip.gm-chip-deal[aria-selected='true'] { background: #d63e4f; border-color: #d63e4f; color: #fff; }
+.gm-shop-card.gated .gm-shop-thumb { filter: saturate(0.75); }
+.gm-need { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 999px; background: #f1ecf8; color: #5d4a8a; font-size: 0.85rem; font-weight: 600; }
+.gm-need .ic { width: 1em; height: 1em; }
+.gm-collect { display: grid; gap: 6px; margin: 0 0 12px; padding: 12px 16px; border-radius: 14px; background: var(--gm-paper); border: 1px solid var(--gm-line); }
+.gm-collect.mini { margin: 4px 0 0; padding: 10px 12px; width: 100%; font-size: 0.9rem; }
+.gm-bar-collect span { background: linear-gradient(90deg, #c0396f, #e9b53b) !important; }
+.ga-twinkle { transform-box: fill-box; transform-origin: center; animation: gaTwinkle 2.4s ease-in-out infinite; }
+@keyframes gaTwinkle { 0%, 100% { opacity: 0.25; transform: scale(0.6); } 50% { opacity: 1; transform: scale(1.1); } }
+@media (prefers-reduced-motion: reduce) { .ga-twinkle, .gm-shop-card.gm-r-legend .gm-shop-thumb::after { animation: none; } }

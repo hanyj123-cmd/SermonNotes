@@ -165,9 +165,10 @@ const BIBLE_TOTAL = BIBLE_BOOKS.reduce((n, b) => n + b[2], 0); // 1189
 const chapterKey = (bookId, chapter) => `${Number(bookId)}:${Number(chapter)}`;
 
 const SLOT_LABELS = { skin: '피부', hair: '머리 모양', hairColor: '머리 색', robe: '옷', head: '머리 장식', handR: '오른손', handL: '왼손', chest: '가슴', belt: '허리', feet: '신', pet: '동물 친구', bg: '배경' };
-const RARITY_LABELS = { common: '일반', rare: '희귀', legend: '전설' };
+const RARITY_LABELS = { common: '일반', rare: '희귀', epic: '보물', legend: '전설' };
 
-// [id, slot, 이름, 가격, src, 희귀도, 설명]
+// [id, slot, 이름, 가격, src, 희귀도, 설명, 조건]
+// 조건(need): 'lv10' = 레벨 10부터 살 수 있음 · 'b:perfect10' = 그 업적을 받아야 살 수 있음
 const GAME_ITEM_LIST = [
   ['s1', 'skin', '밝은 피부', 0, 'start', 'common', ''],
   ['s2', 'skin', '따뜻한 피부', 0, 'start', 'common', ''],
@@ -207,13 +208,126 @@ const GAME_ITEM_LIST = [
   ['bg_zion', 'bg', '시온의 언덕', 300, 'shop', 'rare', ''],
   ['bg_garden', 'bg', '열매의 동산', 0, 'journey', 'rare', '나무가 다 자라면 받는 동산'],
   ['bg_stars', 'bg', '아브라함의 별밤', 0, 'journey', 'legend', '전신갑주를 모두 금으로 갖추면 받는 별밤'],
+  // ---- 새 머리 모양 ----
+  ['hair_pony', 'hair', '포니테일', 80, 'shop', 'common', '높이 묶어 찰랑이는 말총머리'],
+  ['hair_side', 'hair', '옆 가르마', 80, 'shop', 'common', '단정하게 넘긴 신사 머리'],
+  ['hair_twin', 'hair', '양갈래 머리', 120, 'shop', 'rare', '리본으로 묶은 발랄한 양갈래'],
+  ['hair_odango', 'hair', '양쪽 올림머리', 120, 'shop', 'rare', '동글동글 귀여운 쌍둥이 번'],
+  ['hair_braid', 'hair', '옆으로 땋은 머리', 150, 'shop', 'rare', '어깨로 길게 내린 한 갈래 땋은 머리'],
+  ['hair_wave', 'hair', '긴 웨이브', 180, 'shop', 'rare', '물결처럼 풍성한 긴 머리'],
+  ['hair_princess', 'hair', '공주님 롤 컬', 300, 'shop', 'epic', '돌돌 말린 우아한 롤 컬', 'lv5'],
+  // ---- 새 머리 색 ----
+  ['midnight', 'hairColor', '밤하늘 남색', 60, 'shop', 'common', ''],
+  ['rose', 'hairColor', '로즈 핑크', 80, 'shop', 'rare', '샤론의 꽃처럼 (아 2:1)'],
+  ['lavender', 'hairColor', '라벤더', 80, 'shop', 'rare', ''],
+  ['platinum', 'hairColor', '백금', 150, 'shop', 'epic', '정금처럼 빛나는 머리', 'lv5'],
+  // ---- 새 옷 ----
+  ['robe_pink', 'robe', '벚꽃 원피스', 150, 'shop', 'rare', '봄날 같은 분홍 원피스'],
+  ['robe_kitty', 'robe', '고양이 발자국 옷', 220, 'shop', 'rare', '말랑한 발바닥 무늬가 콕콕'],
+  ['robe_pearl', 'robe', '진주 드레스', 500, 'shop', 'epic', '“값진 진주 하나를 발견하매” (마 13:46)', 'lv8'],
+  ['robe_royal', 'robe', '왕실 벨벳 망토', 650, 'shop', 'epic', '흰 털로 두른 자주빛 왕의 망토', 'lv10'],
+  ['robe_gold', 'robe', '솔로몬의 금실 예복', 1200, 'shop', 'legend', '“솔로몬의 모든 영광으로도” (마 6:29)', 'lv15'],
+  // ---- 새 머리 장식 ----
+  ['ribbon', 'head', '큰 리본', 90, 'shop', 'common', '머리 위에 사뿐히 얹은 리본'],
+  ['star_pin', 'head', '별 머리핀', 120, 'shop', 'common', '반짝이는 별 두 개'],
+  ['kitty_band', 'head', '고양이 귀 머리띠', 160, 'shop', 'rare', '쫑긋 세운 아기 고양이 귀'],
+  ['tiara_pearl', 'head', '진주 티아라', 450, 'shop', 'epic', '진주와 다이아몬드가 박힌 티아라', 'lv8'],
+  ['crown_ruby', 'head', '루비 왕관', 700, 'shop', 'epic', '“현숙한 여인… 그 값은 진주보다 더 하니라” (잠 31:10)', 'lv10'],
+  ['crown_diamond', 'head', '다이아몬드 왕관', 1500, 'shop', 'legend', '만점 10번을 이룬 사람만 쓸 수 있는 왕관', 'b:perfect10'],
+  // ---- 보석 · 장신구 (가슴) ----
+  ['neck_pearl', 'chest', '진주 목걸이', 300, 'shop', 'rare', '동글동글 하얀 진주 한 줄'],
+  ['neck_ruby', 'chest', '루비 펜던트', 550, 'shop', 'epic', '하트 모양 루비와 금 사슬', 'lv8'],
+  ['breastplate', 'chest', '대제사장의 흉패', 1300, 'shop', 'legend', '열두 보석에 열두 지파의 이름을 (출 28:21)', 'lv12'],
+  // ---- 손 ----
+  ['bouquet', 'handR', '들꽃 다발', 140, 'shop', 'common', '들의 백합화를 한 아름'],
+  ['harp', 'handR', '다윗의 수금', 450, 'shop', 'epic', '“다윗이 수금을 들고 손으로 탄즉” (삼상 16:23)', 'lv8'],
+  ['scepter', 'handR', '보석 홀', 1100, 'shop', 'legend', '“왕이 손에 잡았던 금 규를 내미니” (에 5:2)', 'lv12'],
+  ['alabaster', 'handL', '향유 옥합', 320, 'shop', 'rare', '지극히 비싼 향유 한 옥합 (막 14:3)'],
+  ['kitty_bag', 'handL', '고양이 핸드백', 260, 'shop', 'rare', '고양이 얼굴 모양 작은 가방'],
+  // ---- 신 ----
+  ['shoe_ribbon', 'feet', '리본 구두', 120, 'shop', 'common', '앞코에 리본이 달린 구두'],
+  ['shoe_gold', 'feet', '금빛 샌들', 400, 'shop', 'epic', '“좋은 소식을 전하는 자의 발이여” (사 52:7)', 'lv8'],
+  // ---- 동물 친구 ----
+  ['pet_kitten', 'pet', '아기 고양이', 300, 'shop', 'rare', '방울 목걸이를 단 치즈색 아기 고양이'],
+  ['pet_kitten_gray', 'pet', '회색 아기 고양이', 300, 'shop', 'rare', '하늘빛 리본 목걸이를 한 회색 고양이'],
+  ['pet_peacock', 'pet', '솔로몬의 공작', 650, 'shop', 'epic', '다시스의 배가 실어 온 공작 (왕상 10:22)', 'lv10'],
+  ['pet_lion', 'pet', '유다 지파의 사자', 1400, 'shop', 'legend', '“유다 지파의 사자 다윗의 뿌리가 이기었으니” (계 5:5)', 'lv15'],
+  // ---- 배경 ----
+  ['bg_sakura', 'bg', '벚꽃 길', 180, 'shop', 'rare', ''],
+  ['bg_kitty', 'bg', '고양이 놀이방', 200, 'shop', 'rare', '털실 뭉치와 쿠션이 가득'],
+  ['bg_palace', 'bg', '솔로몬의 궁전', 600, 'shop', 'epic', '금으로 입힌 상아 보좌 (왕상 10:18)', 'lv10'],
+  ['bg_jerusalem', 'bg', '새 예루살렘', 1600, 'shop', 'legend', '“그 성의 성곽은 각색 보석으로 꾸몄는데” (계 21:19)', 'lv15'],
 ];
 // 전신갑주 장비 18개 (여정에서 받음)
 ARMOR_ORDER.forEach(([piece, name, ref]) => {
   const slot = { belt: 'belt', chest: 'chest', feet: 'feet', shield: 'handL', helmet: 'head', sword: 'handR' }[piece];
   TIER_NAMES.forEach(([tier, tname], ti) => GAME_ITEM_LIST.push([`${piece}_${tier}`, slot, `${name} (${tname})`, 0, 'journey', ti === 2 ? 'legend' : ti === 1 ? 'rare' : 'common', `${ref}`]));
 });
-const GAME_ITEMS = Object.fromEntries(GAME_ITEM_LIST.map(([id, slot, name, price, src, rarity, desc]) => [id, { id, slot, name, price, src, rarity, desc }]));
+const GAME_ITEMS = Object.fromEntries(GAME_ITEM_LIST.map(([id, slot, name, price, src, rarity, desc, need = '']) => [id, { id, slot, name, price, src, rarity, desc, need }]));
+
+/** 살 수 있는 조건을 채웠나요? (조건이 없으면 true) */
+function itemNeedMet(need, { level = 1, badges = [] } = {}) {
+  if (!need) return true;
+  const lv = /^lv(\d+)$/.exec(need);
+  if (lv) return level >= Number(lv[1]);
+  const b = /^b:(\w+)$/.exec(need);
+  if (b) return badges.includes(b[1]);
+  return false;
+}
+function itemNeedLabel(need) {
+  const lv = /^lv(\d+)$/.exec(need || '');
+  if (lv) return `Lv.${lv[1]}부터`;
+  const b = /^b:(\w+)$/.exec(need || '');
+  if (b) {
+    const badge = BADGES.find(([id]) => id === b[1]);
+    return `업적 「${badge ? badge[1] : b[1]}」 필요`;
+  }
+  return '';
+}
+/** 모은 아이템 수 (처음부터 있던 것은 빼고) */
+const COLLECTIBLE_IDS = GAME_ITEM_LIST.filter(([, , , , src]) => src !== 'start').map(([id]) => id);
+const collectedCount = (inv) => COLLECTIBLE_IDS.filter((id) => (inv || []).includes(id)).length;
+
+// 이번 주 특가: 매주 월요일 바뀌는 할인 3개 (일반·희귀 2개 30% · 보물·전설 1개 20%).
+// 서버도 같은 순서·같은 계산으로 값을 정합니다 (npm test 가 확인합니다).
+const DEAL_RULES = { small: 2, smallOff: 30, big: 1, bigOff: 20 };
+const DEAL_POOL_SMALL = GAME_ITEM_LIST.filter(([, , , price, src, rarity]) => src === 'shop' && price > 0 && (rarity === 'common' || rarity === 'rare')).map(([id]) => id);
+const DEAL_POOL_BIG = GAME_ITEM_LIST.filter(([, , , price, src, rarity]) => src === 'shop' && price > 0 && (rarity === 'epic' || rarity === 'legend')).map(([id]) => id);
+function dealHash(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+function dealPick(pool, n, seed) {
+  const out = [];
+  let k = 0;
+  while (out.length < Math.min(n, pool.length) && k < 50) {
+    const id = pool[(seed + k * 7919) % pool.length];
+    if (!out.includes(id)) out.push(id);
+    k += 1;
+  }
+  return out;
+}
+/** weekKey(월요일 날짜 yyyy-mm-dd) → { 아이템 id: 할인율(%) } */
+function weeklyDeals(weekKey) {
+  const seed = dealHash(String(weekKey || ''));
+  const out = {};
+  dealPick(DEAL_POOL_SMALL, DEAL_RULES.small, seed).forEach((id) => (out[id] = DEAL_RULES.smallOff));
+  dealPick(DEAL_POOL_BIG, DEAL_RULES.big, seed >>> 3).forEach((id) => (out[id] = DEAL_RULES.bigOff));
+  return out;
+}
+const dealPrice = (price, off) => (off ? Math.max(5, Math.round((price * (100 - off)) / 100 / 5) * 5) : price);
+/** 그 날짜가 속한 주의 월요일 (서버 gameWeekKey 와 같음) */
+function weekKeyOf(day) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(day || ''));
+  if (!m) return '';
+  const n = Math.round(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) / 86400000);
+  const dow = (new Date(n * 86400000).getUTCDay() + 6) % 7;
+  return new Date((n - dow) * 86400000).toISOString().slice(0, 10);
+}
 
 const DEFAULT_LOOK = { skin: 's1', hair: 'hair_short', hairColor: 'black', robe: 'robe_brown', head: '', handR: '', handL: '', chest: '', belt: '', feet: '', pet: '', bg: '' };
 
@@ -234,6 +348,10 @@ const BADGES = [
   ['bible', '성경 일독', '성경 66권을 모두 읽었어요', 1000],
   ['journey1', '첫 여정 완주', '여정 하나를 끝까지', 100],
   ['journey3', '세 여정 완주', '여정 세 개를 모두 완주', 300],
+  ['collect10', '꾸미기 시작', '아이템 10개 모으기', 50],
+  ['collect25', '보물 수집가', '아이템 25개 모으기', 150],
+  ['collect50', '보물 창고', '아이템 50개 모으기', 400],
+  ['treasure1', '첫 보물', '보물·전설 아이템 갖기', 80],
 ];
 
 // 서버(Code.gs)에 넣는 설정 묶음 — scripts/game-conf.mjs 가 이 함수로 만들어 Code.gs 에 붙여 넣습니다
@@ -244,7 +362,10 @@ function gameServerConf() {
     streak: STREAK_BONUS,
     journeys: Object.fromEntries(JOURNEY_KEYS.map((k) => [k, { steps: JOURNEYS[k].steps, xpPerStep: JOURNEYS[k].xpPerStep, title: JOURNEYS[k].title, rewards: JOURNEYS[k].rewards }])),
     armor: Array.from({ length: 18 }, (_, i) => armorItemAt(i + 1)),
-    items: Object.fromEntries(GAME_ITEM_LIST.map(([id, slot, , price, src]) => [id, [slot, price, src]])),
+    items: Object.fromEntries(GAME_ITEM_LIST.map(([id, slot, , price, src, , , need = '']) => [id, need ? [slot, price, src, need] : [slot, price, src]])),
+    collectible: COLLECTIBLE_IDS,
+    treasures: GAME_ITEM_LIST.filter(([, , , , , rarity]) => rarity === 'epic' || rarity === 'legend').map(([id]) => id),
+    deals: { rules: DEAL_RULES, small: DEAL_POOL_SMALL, big: DEAL_POOL_BIG },
     look: DEFAULT_LOOK,
     badges: BADGES.map(([id, , , reward]) => [id, reward]),
     levelTitles: LEVEL_TITLES,

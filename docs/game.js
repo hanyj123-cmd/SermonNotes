@@ -95,7 +95,8 @@ const itemLook = (id, base = DEFAULT_LOOK) => {
 function itemThumb(id, size = 84) {
   const it = GAME_ITEMS[id];
   const base = { ...DEFAULT_LOOK, bg: it && it.slot === 'bg' ? id : '' };
-  return avatarNode(itemLook(id, base), { size, frame: !!(it && it.slot === 'bg') });
+  const crop = it && it.slot === 'head' ? '24 -6 152 140' : it && it.slot === 'hair' ? '14 -4 172 200' : it && it.slot === 'chest' && !/_(bronze|silver|gold)$/.test(id) ? '50 104 100 92' : '';
+  return avatarNode(itemLook(id, base), { size: crop ? Math.round(size * 1.25) : size, frame: !!(it && it.slot === 'bg'), crop });
 }
 function rarityChip(r) {
   return h('span', { class: `gm-rarity gm-r-${r}`, text: RARITY_LABELS[r] || '' });
@@ -580,7 +581,7 @@ const CLOSET_GROUPS = [
 ];
 const REQUIRED_SLOTS = ['skin', 'hair', 'hairColor', 'robe'];
 function itemHint(it) {
-  if (it.src === 'shop') return `상점 ${it.price} 달란트`;
+  if (it.src === 'shop') return it.need ? `${itemNeedLabel(it.need)} · ${it.price} 달란트` : `상점 ${it.price} 달란트`;
   if (it.src === 'journey') {
     const armor = Object.keys(GAME_ITEMS).filter((id) => /_(bronze|silver|gold)$/.test(id));
     if (armor.includes(it.id)) return '전신갑주 여정';
@@ -670,27 +671,46 @@ function renderCloset(st, focusId) {
   });
   drawPreview();
   drawGrid();
-  return h('div', { class: 'gm-closet' }, h('div', { class: 'gm-closet-left' }, preview, h('div', { class: 'gm-row' }, save, reset), status), h('div', { class: 'gm-closet-right' }, tabs, grid));
+  const got = collectedCount(st.inv);
+  return h('div', { class: 'gm-closet' }, h('div', { class: 'gm-closet-left' }, preview, h('div', { class: 'gm-row' }, save, reset), status, h('div', { class: 'gm-collect mini' }, h('b', { text: `모은 아이템 ${got} / ${COLLECTIBLE_IDS.length}` }), progressBar(got, COLLECTIBLE_IDS.length, 'gm-bar-collect'))), h('div', { class: 'gm-closet-right' }, tabs, grid));
 }
 
 /* ---------- 상점 ---------- */
 const SHOP_GROUPS = [
+  ['deal', '이번 주 특가', []],
   ['robe', '옷', ['robe']],
-  ['look', '머리 · 모자', ['hair', 'hairColor', 'head']],
+  ['hair', '머리', ['hair', 'hairColor']],
+  ['jewel', '보석 · 장식', ['head', 'chest', 'handR', 'handL', 'feet']],
   ['pet', '동물 친구', ['pet']],
   ['bg', '배경', ['bg']],
   ['special', '특별', []],
 ];
+const RARITY_ORDER = { common: 0, rare: 1, epic: 2, legend: 3 };
+/** 다음 월요일까지 남은 날 (특가가 바뀌는 날) */
+function daysToMonday(today) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(today || ''));
+  if (!m) return 7;
+  const dow = (new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay() + 6) % 7;
+  return 7 - dow;
+}
 function renderShop(st) {
-  let group = 'robe';
+  let group = 'deal';
   const grid = h('div', { class: 'gm-shop-grid' });
   const tabs = h('div', { class: 'gm-chips', role: 'tablist' });
-  const buyCard = (title, thumb, desc, price, owned, onBuy, rarity = 'common', extra = null) => {
+  const deals = st.deals || weeklyDeals(weekKeyOf(st.today));
+  const me = { level: st.level || levelOf(st.xp), badges: st.badges || [] };
+  // opts: { orig: 할인 전 값, off: 할인율, need: 조건 }
+  const buyCard = (title, thumb, desc, price, owned, onBuy, rarity = 'common', extra = null, opts = {}) => {
     const can = st.talents >= price;
+    const needOk = itemNeedMet(opts.need, me);
     const act = h('div', { class: 'gm-shop-act' });
     const drawAct = () => {
       if (owned()) {
         act.replaceChildren(h('span', { class: 'gm-chip-soft ok', text: '가지고 있어요' }), extra ? extra() : null);
+        return;
+      }
+      if (!needOk) {
+        act.replaceChildren(h('span', { class: 'gm-need' }, icon('lock'), itemNeedLabel(opts.need)), h('span', { class: 'meta' }, coin(price)));
         return;
       }
       const b = h('button', { class: `btn ${can ? 'primary' : ''}`, type: 'button', disabled: !can }, coin(price), can ? ' 구입' : ` 부족 (${price - st.talents} 더)`);
@@ -708,7 +728,8 @@ function renderShop(st) {
             return;
           }
           Object.assign(st, gameState);
-          toast(`${title}을(를) 샀어요!`);
+          const badge = (r.events || []).filter((e) => e.type === 'badge');
+          toast(`${title}을(를) 샀어요!${badge.length ? ` 업적 「${(BADGES.find(([id]) => id === badge[0].id) || [, badge[0].id])[1]}」 달성!` : ''}`, badge.length ? 3500 : 2200);
           renderGame('shop').then(() => {
             const top = document.querySelector('.gm-pill-coin');
             if (top) top.classList.add('gm-pop');
@@ -719,7 +740,29 @@ function renderShop(st) {
       act.replaceChildren(b);
     };
     drawAct();
-    return h('article', { class: `gm-shop-card gm-r-${rarity}` }, h('div', { class: 'gm-shop-thumb' }, thumb), h('div', { class: 'gm-shop-info' }, h('h3', {}, title, ' ', rarityChip(rarity)), desc ? h('p', { class: 'meta', text: desc }) : null), act);
+    return h(
+      'article',
+      { class: `gm-shop-card gm-r-${rarity}${opts.off ? ' deal' : ''}${needOk ? '' : ' gated'}` },
+      opts.off ? h('span', { class: 'gm-deal-tag', text: `${opts.off}% 할인` }) : null,
+      h('div', { class: 'gm-shop-thumb' }, thumb),
+      h('div', { class: 'gm-shop-info' }, h('h3', {}, title, ' ', rarityChip(rarity)), desc ? h('p', { class: 'meta', text: desc }) : null, opts.off ? h('p', { class: 'gm-was' }, h('s', { text: `${opts.orig}` }), ` → ${price} 달란트`) : null),
+      act,
+    );
+  };
+  const itemCard = (it) => {
+    const off = deals[it.id] || 0;
+    const price = dealPrice(it.price, off);
+    return buyCard(
+      it.name,
+      it.slot === 'hairColor' ? h('span', { class: 'gm-swatch huge', style: `background:${HAIR_COLOR[it.id]}` }) : itemThumb(it.id, 96),
+      it.desc || SLOT_LABELS[it.slot],
+      price,
+      () => st.inv.includes(it.id),
+      () => gameCall('game_buy', { item: it.id }),
+      it.rarity,
+      () => h('a', { class: 'btn small', href: `#/g/closet?${it.id}`, onclick: (e) => (e.preventDefault(), openCloset(it.id)) }, '입어 보기'),
+      { off, orig: it.price, need: it.need },
+    );
   };
   const draw = () => {
     if (group === 'special') {
@@ -735,25 +778,23 @@ function renderShop(st) {
       );
       return;
     }
+    if (group === 'deal') {
+      const left = daysToMonday(st.today);
+      const ids = Object.keys(deals).filter((id) => GAME_ITEMS[id]);
+      grid.replaceChildren(
+        h('div', { class: 'gm-deal-head' }, h('b', {}, icon('flame'), ' 이번 주에만 이 값!'), h('span', { class: 'meta', text: left <= 1 ? '오늘 밤이 지나면 바뀌어요' : `${left}일 뒤 월요일에 새 특가로 바뀌어요` })),
+        ...ids.map((id) => itemCard(GAME_ITEMS[id])),
+      );
+      return;
+    }
     const [, , slots] = SHOP_GROUPS.find(([k]) => k === group);
-    const items = GAME_ITEM_LIST.map(([id]) => GAME_ITEMS[id]).filter((it) => it.src === 'shop' && slots.includes(it.slot));
-    grid.replaceChildren(
-      ...items.map((it) =>
-        buyCard(
-          it.name,
-          it.slot === 'hairColor' ? h('span', { class: 'gm-swatch huge', style: `background:${HAIR_COLOR[it.id]}` }) : itemThumb(it.id, 96),
-          it.desc || SLOT_LABELS[it.slot],
-          it.price,
-          () => st.inv.includes(it.id),
-          () => gameCall('game_buy', { item: it.id }),
-          it.rarity,
-          () => h('a', { class: 'btn small', href: `#/g/closet?${it.id}`, onclick: (e) => (e.preventDefault(), openCloset(it.id)) }, '입어 보기'),
-        ),
-      ),
-    );
+    const items = GAME_ITEM_LIST.map(([id]) => GAME_ITEMS[id])
+      .filter((it) => it.src === 'shop' && slots.includes(it.slot))
+      .sort((a, b) => RARITY_ORDER[a.rarity] - RARITY_ORDER[b.rarity] || a.price - b.price);
+    grid.replaceChildren(...items.map(itemCard));
   };
   SHOP_GROUPS.forEach(([k, label]) => {
-    const b = h('button', { class: 'gm-chip', type: 'button', role: 'tab', 'aria-selected': String(k === group) }, label);
+    const b = h('button', { class: `gm-chip${k === 'deal' ? ' gm-chip-deal' : ''}`, type: 'button', role: 'tab', 'aria-selected': String(k === group) }, label);
     b.addEventListener('click', () => {
       group = k;
       tabs.querySelectorAll('.gm-chip').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
@@ -762,7 +803,15 @@ function renderShop(st) {
     tabs.append(b);
   });
   draw();
-  return h('div', { class: 'gm-shop' }, h('p', { class: 'meta', text: '달란트는 퀘스트 정답 · 도장 · 업적으로 모여요. 여정에서만 얻을 수 있는 특별한 아이템도 있어요.' }), tabs, grid);
+  const got = collectedCount(st.inv);
+  return h(
+    'div',
+    { class: 'gm-shop' },
+    h('div', { class: 'gm-collect' }, h('div', {}, h('b', { text: `내 보물 창고 ${got} / ${COLLECTIBLE_IDS.length}` }), h('span', { class: 'meta', text: ' · 10 · 25 · 50개를 모으면 업적 달란트' })), progressBar(got, COLLECTIBLE_IDS.length, 'gm-bar-collect')),
+    h('p', { class: 'meta', text: '달란트는 퀘스트 정답 · 도장 · 업적으로 모여요. 보물·전설 아이템은 레벨이나 업적을 이뤄야 살 수 있어요. 입으면 몸 주위가 반짝반짝!' }),
+    tabs,
+    grid,
+  );
 }
 function openCloset(itemId) {
   history.replaceState(null, '', '#/g/closet');
@@ -776,7 +825,7 @@ function boardList(players, compact = false, metric = 'weekXp') {
   const val = (p) => Number(p[metric]) || 0;
   players = [...players].sort((a, b) => val(b) - val(a) || b.weekXp - a.weekXp || b.xp - a.xp);
   const top = Math.max(1, ...players.map(val));
-  const unit = metric === 'weekScore' ? '점' : ' XP';
+  const unit = metric === 'weekScore' ? '점' : metric === 'collect' ? '개' : ' XP';
   return h(
     'ol',
     { class: `gm-board${compact ? ' compact' : ''}` },
@@ -800,7 +849,7 @@ function renderRank(st) {
   const tabs = h('div', { class: 'gm-board-tabs', role: 'tablist' });
   const holder = h('div', {}, h('p', { class: 'meta', text: '불러오는 중…' }));
   const draw = () => {
-    tabs.replaceChildren(...[['weekXp', '경험치 순위'], ['weekScore', '퀘스트 점수 순위']].map(([k, label]) => {
+    tabs.replaceChildren(...[['weekXp', '경험치 순위'], ['weekScore', '퀘스트 점수 순위'], ['collect', '보물 수집 순위']].map(([k, label]) => {
       const b = h('button', { class: 'gm-board-tab', type: 'button', role: 'tab', 'aria-selected': String(metric === k), text: label });
       b.addEventListener('click', () => {
         metric = k;
@@ -808,7 +857,7 @@ function renderRank(st) {
       });
       return b;
     }));
-    if (players) holder.replaceChildren(boardList(players, false, metric), metric === 'weekScore' ? h('p', { class: 'meta', text: '이번 주에 처음 푼 퀘스트의 점수를 모두 더해요. 빨리 · 연속으로 맞힐수록 높아져요.' }) : null);
+    if (players) holder.replaceChildren(boardList(players, false, metric), metric === 'weekScore' ? h('p', { class: 'meta', text: '이번 주에 처음 푼 퀘스트의 점수를 모두 더해요. 빨리 · 연속으로 맞힐수록 높아져요.' }) : metric === 'collect' ? h('p', { class: 'meta', text: `상점·여정에서 모은 아이템 수예요 (모두 ${COLLECTIBLE_IDS.length}개). 보물·전설 아이템을 입으면 캐릭터가 반짝여요.` }) : null);
   };
   box.append(tabs, holder);
   draw();
