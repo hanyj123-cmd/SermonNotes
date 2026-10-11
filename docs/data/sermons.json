@@ -1,6 +1,6 @@
 {
- "updated": "2026-10-11T16:34:09.385Z",
- "count": 36,
+ "updated": "2026-10-11T22:27:01.386Z",
+ "count": 40,
  "sermons": [
   {
    "id": "WpOZRTv1hvg",
@@ -231,6 +231,25 @@
    "complete": true
   },
   {
+   "id": "oP7yQsLzd5Q",
+   "category": "dawn",
+   "title": "새벽기도 - 사무엘하 19장",
+   "date": "2026-09-23",
+   "url": "https://www.youtube.com/watch?v=oP7yQsLzd5Q",
+   "preacher": "윤정환 목사",
+   "scripture": "사무엘하 19장",
+   "book": "사무엘하",
+   "bookIdx": 10,
+   "summary_short": "우리의 슬픔이 아무리 크더라도 그것이 하나님이 주신 은혜와 책임까지 가리게 해서는 안 되며, 눈물이 남아 있어도 다시 일어á서 하나님이 맡기신 자리로 나아가야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
    "id": "52Tu3Dkf3Ng",
    "category": "wednesday",
    "title": "수요예배 - 죄에서 자유를 얻게 함은",
@@ -250,6 +269,44 @@
    "complete": true
   },
   {
+   "id": "EJOm_L9HC2A",
+   "category": "dawn",
+   "title": "새벽기도 - 사무엘하 18장",
+   "date": "2026-09-22",
+   "url": "https://www.youtube.com/watch?v=EJOm_L9HC2A",
+   "preacher": "강삼엘 목사",
+   "scripture": "사무엘하 18장",
+   "book": "사무엘하",
+   "bookIdx": 10,
+   "summary_short": "비록 죄의 아픈 결과로 인해 슬픔과 징계를 겪을지라도, 하나님은 회개하는 백성을 결코 버리지 않으시고 끝까지 붙드시며 은혜를 베푸십니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "RUO_WRk2Jik",
+   "category": "dawn",
+   "title": "새벽기도 - 사무엘하 17장",
+   "date": "2026-09-21",
+   "url": "https://www.youtube.com/watch?v=RUO_WRk2Jik",
+   "preacher": "강산 목사",
+   "scripture": "사무엘하 17장",
+   "book": "사무엘하",
+   "bookIdx": 10,
+   "summary_short": "다윗과 아히도벨의 대조를 통해 억울함과 분노의 순간에도 내 삶의 주인이 하나님이심을 인정하고 그분께 모든 것을 맡기는 자가 복이 있습니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
    "id": "9vD6ZcrrzYU",
    "category": "sunday",
    "title": "주일예배 - 고난을 두려워하지 않는 믿음",
@@ -260,6 +317,25 @@
    "book": "요한계시록",
    "bookIdx": 66,
    "summary_short": "성도착적인 세속적 부유함과 우상숭배의 가치관을 거부하고, 오직 주님을 향한 믿음을 지키기 위해 때로는 자발적 고난과 가난을 감내하는 자들에게 주님은 영원한 생명의 면류관을 약속하십니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "uteMjugUdoc",
+   "category": "dawn",
+   "title": "새벽기도 - 사무엘하 15장",
+   "date": "2026-09-19",
+   "url": "https://www.youtube.com/watch?v=uteMjugUdoc",
+   "preacher": "전대혁 목사",
+   "scripture": "사무엘하 15장",
+   "book": "사무엘하",
+   "bookIdx": 10,
+   "summary_short": "다윗은 아들의 반역이라는 위기 속에서 하나님의 임재를 자신의 도구로 이용하지 않고, 오직 하나님의 선하신 뜻과 계획에 온전히 순종하는 참된 믿음의 본을 보여 줍니다.",
    "modes": [
     "review",
     "qt",
