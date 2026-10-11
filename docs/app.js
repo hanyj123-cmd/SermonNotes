@@ -97,6 +97,62 @@ async function load() {
   }
 }
 
+/* ---------- 새로고침: 오른쪽 위 단추 · 관리 화면 공용 ---------- */
+// "방금 전" · "3분 전" · "2시간 전" · "3일 전"
+function relativeTime(iso) {
+  const t = new Date(iso).getTime();
+  if (!iso || isNaN(t)) return '';
+  const min = Math.floor((Date.now() - t) / 60000);
+  if (min < 1) return '방금 전';
+  if (min < 60) return `${min}분 전`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}시간 전`;
+  return `${Math.floor(hr / 24)}일 전`;
+}
+
+// 맨 아래의 "자료 업데이트" 문구 (= 마지막 동기화로 사이트에 올라간 시각)
+function renderUpdatedFooter() {
+  const upd = document.getElementById('updated');
+  const updatedAt = formatDateTime(state.updated);
+  if (upd && updatedAt) upd.textContent = `설교 · 말씀 자료 업데이트 ${updatedAt}${state.demo ? ' (샘플 데이터)' : ''}`;
+}
+
+// 올라간 최신 자료를 다시 받습니다: 설교 목록 + 오늘의 말씀 · 잠언 묵상 화면에 담아 둔 내용
+async function refreshData() {
+  window.refreshNonce = Date.now(); // daily.js · proverbs.js 가 파일 주소에 붙여 브라우저 캐시를 건너뜁니다
+  if (typeof dailyCache !== 'undefined') dailyCache.clear();
+  if (typeof dailyIndexCache !== 'undefined') dailyIndexCache = null;
+  if (typeof provCache !== 'undefined') provCache.clear();
+  if (typeof provIndexCache !== 'undefined') provIndexCache = null;
+  await load();
+  renderUpdatedFooter();
+  document.dispatchEvent(new CustomEvent('sn:data-refreshed'));
+}
+
+function initRefreshButton() {
+  const btn = document.getElementById('refresh-btn');
+  if (!btn) return;
+  btn.append(icon('refresh'));
+  btn.addEventListener('click', async () => {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.classList.add('busy');
+    try {
+      await refreshData();
+      // 퀴즈 · 핸드아웃 · 관리 화면은 풀던 문제나 입력 중인 내용이 사라지지 않도록 다시 그리지 않습니다.
+      const kind = location.hash.split('/')[1];
+      if (kind !== 'q' && kind !== 'h' && kind !== 'admin') route();
+      const when = formatDateTime(state.updated);
+      toast(when ? `새로고침했습니다 · 자료 업데이트 ${when}` : '새로고침했습니다', 2600);
+    } catch (e) {
+      toast(`새로고침하지 못했습니다: ${e.message || e}`, 3200);
+    } finally {
+      btn.classList.remove('busy');
+      btn.disabled = false;
+    }
+  });
+}
+
 /* ---------- 라우팅: #/c/<구분>  #/u  #/u/add  #/v/<영상ID>[/<모드>]  #/h/<영상ID>[/<모드>]  #/g[/<탭>]  #/q/<영상ID>  #/r[/<날짜>[/<모드>]]  #/admin ---------- */
 function route() {
   const [, kind, arg, arg2] = location.hash.split('/');
@@ -633,12 +689,24 @@ function renderAdminPanel(password) {
     if (run.state === 'failed') return [icon('alert'), ` 마지막 실행이 실패했습니다${when ? ` (${when})` : ''}. 자세한 내용은 GitHub Actions 기록을 확인하세요.`];
     return ['아직 실행 기록이 없습니다.'];
   };
+  let prevRunState = '';
   const renderSync = (run) => {
-    syncInfo.replaceChildren(...syncText(run));
-    if (run.state === 'failed' && /^https:\/\/github\.com\//.test(run.url || '')) {
-      syncInfo.append(' ', h('a', { href: run.url, target: '_blank', rel: 'noopener', text: '기록 보기' }));
+    // 위의 "재생목록 새로고침" 칸과 아래 "지금 동기화" 칸이 같은 실행 상태를 보여 줍니다
+    for (const el of [syncInfo, plRun]) {
+      el.replaceChildren(...syncText(run));
+      if (run.state === 'failed' && /^https:\/\/github\.com\//.test(run.url || '')) {
+        el.append(' ', h('a', { href: run.url, target: '_blank', rel: 'noopener', text: '기록 보기' }));
+      }
     }
     syncBtn.disabled = run.state === 'running';
+    plBtn.disabled = run.state === 'running';
+    // 이 화면에서 지켜보던 실행이 끝나면, 사이트가 새 자료를 올릴 때까지 기다렸다가 "마지막 동기화" 시각을 다시 읽습니다.
+    if (prevRunState === 'running' && run.state === 'success') {
+      setTimeout(() => {
+        if (document.body.contains(plStamp)) refreshData().catch(() => {});
+      }, 90000);
+    }
+    prevRunState = run.state;
   };
   async function refreshSync() {
     clearTimeout(syncTimer);
@@ -658,19 +726,21 @@ function renderAdminPanel(password) {
     }
   }
   // 동기화 실행 요청. 성공하면 true (선택한 영상 정리에서도 같이 씁니다)
-  async function requestSync(count, categories, extra) {
+  // infoEl: 요청 결과 문구를 보여 줄 칸 (기본은 "지금 동기화" 칸)
+  async function requestSync(count, categories, extra, infoEl) {
+    const out = infoEl || syncInfo;
     syncBtn.disabled = true;
-    syncInfo.textContent = '실행을 요청하는 중…';
+    out.textContent = '실행을 요청하는 중…';
     try {
       const r = await adminPost({ action: 'sync_run', password, max_new: String(count), categories: categories || syncCategories(), ...(extra || {}) });
       if (passwordRejected(r)) return false;
       if (!r.ok) throw new Error(r.error || '실행하지 못했습니다.');
-      syncInfo.replaceChildren(icon('clock'), r.workflow_old && extra && extra.sermon_modes ? ' 실행을 요청했지만 GitHub의 sync.yml 이 옛 버전이라 고른 부분만이 아니라 전부 다시 만들 수 있어요. 새 sync.yml 을 올려 주세요.' : ' 실행을 요청했습니다. 잠시 뒤 상태가 표시됩니다…');
+      out.replaceChildren(icon('clock'), r.workflow_old && extra && extra.sermon_modes ? ' 실행을 요청했지만 GitHub의 sync.yml 이 옛 버전이라 고른 부분만이 아니라 전부 다시 만들 수 있어요. 새 sync.yml 을 올려 주세요.' : ' 실행을 요청했습니다. 잠시 뒤 상태가 표시됩니다…');
       // GitHub가 실행을 등록하기까지 몇 초 걸립니다. 그 사이 이전 기록이 보이지 않게 잠시 기다립니다.
       syncTimer = setTimeout(refreshSync, 6000);
       return true;
     } catch (e) {
-      syncInfo.textContent = `오류: ${e.message || e}`;
+      out.textContent = `오류: ${e.message || e}`;
       syncBtn.disabled = false;
       return false;
     }
@@ -686,6 +756,32 @@ function renderAdminPanel(password) {
     return keys.length ? keys : ['none'];
   };
   syncBtn.addEventListener('click', () => requestSync(syncMax.value));
+
+  // 재생목록 새로고침 (주일예배 · 새벽기도): 재생목록을 지금 바로 다시 읽어 새 영상을 정리하고, 마지막 동기화 시각을 보여 줍니다.
+  // 새벽기도 영상 연결(오늘의 말씀)도 일반 실행에 포함되어 있어 같이 채워집니다.
+  const plBtn = h('button', { class: 'btn primary', type: 'button' }, icon('refresh'), '재생목록 새로고침');
+  const plStamp = h('p', { class: 'meta sync-stamp', role: 'status' });
+  const plRun = h('p', { class: 'meta', role: 'status' });
+  const renderStamp = () => {
+    const when = formatDateTime(state.updated);
+    const ago = relativeTime(state.updated);
+    plStamp.replaceChildren(icon('clock'), when ? ` 마지막 동기화: ${when}${ago ? ` (${ago})` : ''}` : ' 마지막 동기화 시각을 알 수 없습니다.');
+  };
+  renderStamp();
+  const stampTick = setInterval(() => {
+    if (!document.body.contains(plStamp)) return clearInterval(stampTick);
+    renderStamp();
+  }, 30000);
+  const onDataRefreshed = () => {
+    if (!document.body.contains(plStamp)) return document.removeEventListener('sn:data-refreshed', onDataRefreshed);
+    renderStamp();
+  };
+  document.addEventListener('sn:data-refreshed', onDataRefreshed);
+  plBtn.addEventListener('click', async () => {
+    plBtn.disabled = true;
+    const ok = await requestSync(5, ['sunday', 'dawn'], null, plRun);
+    if (!ok) plBtn.disabled = false;
+  });
 
   // 오늘의 말씀 지금 동기화: 과거 5일 ~ 미래 2일 중 빠진 날 (또는 전부 다시)
   const dailyInfo = h('p', { class: 'meta', role: 'status' });
@@ -903,6 +999,15 @@ function renderAdminPanel(password) {
       { class: 'admin-head' },
       h('h1', { text: '관리' }),
       logout,
+    ),
+    h(
+      'section',
+      { class: 'point admin-sync admin-pl' },
+      h('h2', { text: '재생목록 새로고침' }),
+      h('p', { class: 'meta', text: '주일예배 · 새벽기도 재생목록을 지금 바로 다시 읽어서 새로 올라온 영상을 찾아 정리하고 사이트에 반영합니다. 한 번에 최대 5편이고, 영상 1편에 몇 분씩 걸려요. 새 영상이 더 남았으면 한 번 더 누르세요. 자동 수집은 주일예배 매주 일요일 밤 10:00(토론토)입니다.' }),
+      h('div', { class: 'admin-row' }, plBtn),
+      plStamp,
+      plRun,
     ),
     h(
       'section',
@@ -1153,9 +1258,8 @@ function initFontControl() {
   } catch (e) {
     loadError = e;
   }
-  const upd = document.getElementById('updated');
-  const updatedAt = formatDateTime(state.updated);
-  if (upd && updatedAt) upd.textContent = `설교 · 말씀 자료 업데이트 ${updatedAt}${state.demo ? ' (샘플 데이터)' : ''}`;
+  renderUpdatedFooter();
+  initRefreshButton();
   showPushTime();
   window.addEventListener('hashchange', route);
   window.addEventListener('pagehide', () => {

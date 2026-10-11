@@ -65,7 +65,7 @@ async function loadDaily(date) {
   if (dailyCache.has(date)) return dailyCache.get(date);
   let data = null;
   try {
-    const r = await fetch(`${dataBase()}daily/${date}.json?t=${Math.floor(Date.now() / 600000)}`);
+    const r = await fetch(`${dataBase()}daily/${date}.json?t=${Math.floor(Date.now() / 600000)}&r=${window.refreshNonce || 0}`);
     if (r.ok) data = await r.json();
   } catch {
     data = null;

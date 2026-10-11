@@ -63,6 +63,13 @@ button { font: inherit; color: inherit; }
 .header-row { display: flex; align-items: center; gap: 14px; }
 .admin-link { font-size: 0.85rem; color: var(--muted); text-decoration: none; white-space: nowrap; }
 .admin-link:hover { color: var(--blue); text-decoration: underline; }
+/* 오른쪽 위 새로고침 단추 (글자 크기를 바꿔도 커지지 않게 px로 고정) */
+.refresh-btn { appearance: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex: none; width: 34px; height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 99px; background: var(--surface); color: var(--blue); }
+.refresh-btn:hover:not(:disabled) { background: var(--blue-soft); }
+.refresh-btn:disabled { cursor: progress; opacity: 0.7; }
+.refresh-btn .ic { width: 18px; height: 18px; vertical-align: 0; }
+.refresh-btn.busy .ic { animation: aiSpin 0.9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .refresh-btn.busy .ic { animation: none; } }
 .account { display: flex; align-items: center; gap: 8px; min-height: 32px; }
 .account-name { font-size: 0.88rem; color: var(--muted); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

@@ -75,6 +75,7 @@ const ICON_PATHS = {
   sprout: [['path', { d: 'M12 20v-8' }], ['path', { d: 'M12 12c0-3.5-2.5-6-6.5-6 0 3.8 2.6 6 6.5 6zM12 14c0-3.2 2.3-5.5 6-5.5 0 3.5-2.4 5.5-6 5.5z' }]],
   shield: [['path', { d: 'M12 3.8l7 2.7v5c0 4.3-3 7.6-7 8.7-4-1.1-7-4.4-7-8.7v-5z' }], ['path', { d: 'M12 8v8M8.5 11.5h7' }]],
   lock: [['rect', { x: '5.5', y: '10.5', width: '13', height: '9.5', rx: '2' }], ['path', { d: 'M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5' }]],
+  refresh: [['path', { d: 'M19.5 12a7.5 7.5 0 1 1-2.2-5.3' }], ['path', { d: 'M19.7 3.8v3.4h-3.4' }]],
 };
 const SVG_NS = 'http://www.w3.org/2000/svg';
 function icon(name, { label = '' } = {}) {

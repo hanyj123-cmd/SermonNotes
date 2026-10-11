@@ -34,7 +34,7 @@ let provIndexCache = null;
 async function loadProverbIndex() {
   if (provIndexCache) return provIndexCache;
   try {
-    const r = await fetch(`${dataBase()}proverbs/index.json?t=${Math.floor(Date.now() / 600000)}`);
+    const r = await fetch(`${dataBase()}proverbs/index.json?t=${Math.floor(Date.now() / 600000)}&r=${window.refreshNonce || 0}`);
     provIndexCache = r.ok ? (await r.json()).chapters || [] : [];
   } catch {
     provIndexCache = [];
@@ -83,7 +83,7 @@ async function loadProverb(ch) {
   if (provCache.has(ch)) return provCache.get(ch);
   let d = null;
   try {
-    const r = await fetch(`${dataBase()}proverbs/${ch}.json?t=${Math.floor(Date.now() / 600000)}`);
+    const r = await fetch(`${dataBase()}proverbs/${ch}.json?t=${Math.floor(Date.now() / 600000)}&r=${window.refreshNonce || 0}`);
     if (r.ok) d = await r.json();
   } catch {
     d = null;
