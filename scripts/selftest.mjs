@@ -8,6 +8,7 @@ import { parseTitle, parseScripture, preacherName, bookOf, tidyTitle, normalizeP
 import { koReference, parseNumberedLines, parseNumberedFlow, parseBskorea, parseBibleGateway, fetchBibleBlock, bibleIsCurrent, bibleSignature, bskoreaUrl, bibleGatewayUrl, BIBLE_SOURCES } from './lib/bible-web.mjs';
 import { normalizePassages, toUsfm } from './lib/bible-books.mjs';
 import { extractJson, normalizeReview, normalizeQt, normalizeStudy, normalizeGroup, readResponseText, blankKey, normalizeDailyQt, normalizeDailyStudy, normalizeDailyQuiz } from './lib/gemini.mjs';
+import { mixQuiz, optionsOrderFree } from './lib/quizmix.mjs';
 import { QUIZ_COUNTS, systemPromptForDaily, buildDailyMessage } from './lib/prompt.mjs';
 import { MODES, systemPromptFor, buildUserMessage } from './lib/prompt.mjs';
 import { buildQueue } from './lib/queue.mjs';
@@ -210,7 +211,51 @@ await t('객관식 난이도 표시(쉬움·중간·어려움)를 받아 둠', (
   const raw = rawStudy();
   raw.quiz.multiple_choice = mcq(5).map((m, i) => ({ ...m, level: ['쉬움', '중간', '어려움', 'hard?', ''][i] }));
   const s = normalizeStudy(raw);
-  assert.deepEqual(s.quiz.multiple_choice.map((m) => m.level), ['쉬움', '중간', '어려움', '', '']);
+  assert.deepEqual(s.quiz.multiple_choice.map((m) => m.level).sort(), ['', '', '쉬움', '어려움', '중간']); // 순서는 섞이므로 모음만 비교
+});
+await t('퀴즈 섞기: 문제·난이도 순서가 섞이고, 정답은 보기를 따라 움직임', () => {
+  const lv = ['쉬움', '쉬움', '쉬움', '중간', '중간', '중간', '중간', '중간', '중간', '중간', '어려움', '어려움', '어려움', '어려움', '어려움'];
+  const mc = lv.map((level, i) => ({ question: `문제${i}`, options: [`가${i}`, `나${i}`, `다${i}`, `라${i}`], answer_index: 0, level, explanation: '' }));
+  const fb = Array.from({ length: 5 }, (_, i) => ({ question: `빈칸${i} ____`, answer: '은혜', accept: [], explanation: '' }));
+  const a = mixQuiz(mc, fb);
+  const b = mixQuiz(mc, fb);
+  assert.deepEqual(a, b); // 같은 문제는 항상 같은 순서
+  assert.equal(a.mc.length, 15);
+  assert.deepEqual(a.mc.map((q) => q.question).sort(), mc.map((q) => q.question).sort());
+  assert.notDeepEqual(a.mc.map((q) => q.question), mc.map((q) => q.question)); // 원래 순서가 아님
+  assert.notDeepEqual(a.fb.map((q) => q.question), fb.map((q) => q.question));
+  // 정답 보기 글자는 그대로 (원래 정답은 항상 '가N')
+  a.mc.forEach((q) => assert.ok(q.options[q.answer_index].startsWith('가'), '정답이 보기와 함께 움직여야 함'));
+  // 같은 난이도 3연속 없음
+  for (let i = 2; i < a.mc.length; i++) assert.ok(!(a.mc[i].level === a.mc[i - 1].level && a.mc[i].level === a.mc[i - 2].level), `난이도 3연속 ${i}`);
+  // 정답 위치가 한쪽으로 쏠리지 않음 (원래는 전부 0번)
+  const pos = [0, 0, 0, 0];
+  a.mc.forEach((q) => (pos[q.answer_index] += 1));
+  assert.ok(Math.max(...pos) <= 6 && Math.min(...pos) >= 1, `정답 위치 분포 ${pos}`);
+  for (let i = 2; i < a.mc.length; i++) assert.ok(!(a.mc[i].answer_index === a.mc[i - 1].answer_index && a.mc[i].answer_index === a.mc[i - 2].answer_index), `정답 번호 3연속 ${i}`);
+});
+await t('퀴즈 섞기: 보기끼리 가리키는 문제("모두" 등)는 보기 순서를 바꾸지 않음', () => {
+  assert.equal(optionsOrderFree(['가', '나', '다', '라']), true);
+  assert.equal(optionsOrderFree(['가', '나', '다', '위의 모두']), false);
+  assert.equal(optionsOrderFree(['ㄱ. 가', 'ㄴ. 나', 'ㄷ. 다', 'ㄹ. 라']), false);
+  const q = { question: 'q', options: ['가', '나', '다', '가와 나 모두'], answer_index: 3, level: '중간', explanation: '' };
+  const r = mixQuiz([q], []);
+  assert.deepEqual(r.mc[0].options, q.options);
+  assert.equal(r.mc[0].answer_index, 3);
+});
+await t('객관식: 정답이 거의 매번 가장 긴 보기면 다시 만들게 함', () => {
+  const raw = rawStudy();
+  raw.quiz.multiple_choice = Array.from({ length: 10 }, (_, i) => ({ question: `문제${i}`, options: ['짧다', '짧다요', '조금 짧다', '이것이 훨씬 길고 자세한 정답입니다'], answer_index: 3, level: '중간', explanation: '' }));
+  assert.throws(() => normalizeStudy(raw), /가장 긴 보기/);
+  raw.quiz.multiple_choice = raw.quiz.multiple_choice.map((m, i) => (i % 2 ? { ...m, options: ['이것이 훨씬 길고 자세한 오답입니다', '짧다요', '조금 짧다', '정답'], answer_index: 3 } : m));
+  assert.doesNotThrow(() => normalizeStudy(raw));
+});
+await t('퀴즈 프롬프트: 순서는 앱이 섞고, 정답이 가장 긴 보기가 되지 않게 안내', () => {
+  for (const p of [systemPromptFor('study'), systemPromptForDaily('quiz')]) {
+    assert.match(p, /가장 긴 문제는 4개 이하/);
+    assert.match(p, /앱이 .*섞/);
+    assert.doesNotMatch(p, /쉬운 것에서 어려운 것/);
+  }
 });
 await t('소그룹 질문: 길잡이(guide) 받음', () => {
   const raw = rawGroup();

@@ -2,6 +2,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { MODES, systemPromptFor, buildUserMessage, buildTranscribeMessage, DAILY_MODES, systemPromptForDaily, buildDailyMessage, PROVERB_MODES, systemPromptForProverb, buildProverbMessage } from './prompt.mjs';
 import { normalizePassages } from './bible-books.mjs';
+import { mixQuiz } from './quizmix.mjs';
 
 export const DEFAULT_MODEL = 'gemini-3.8-flash';
 const MAX_TRANSCRIPT_CHARS = 150_000;
@@ -130,7 +131,16 @@ export function normalizeQuiz(q = {}) {
   const sa = (Array.isArray(q.short_answer) ? q.short_answer : [])
     .map((x) => ({ question: asString(x?.question), answer: asString(x?.answer), explanation: asString(x?.explanation) }))
     .filter((x) => x.question && x.answer);
-  return { multiple_choice: mc, fill_blank: fb, short_answer: sa };
+  // 정답이 거의 매번 "가장 긴 보기"면 티가 나므로 다시 만들게 합니다 (재시도)
+  if (mc.length >= 8) {
+    const longest = mc.filter((x) => {
+      const len = x.options.map((o) => o.length);
+      return len[x.answer_index] === Math.max(...len) && len.filter((n) => n === len[x.answer_index]).length === 1;
+    }).length;
+    need(longest / mc.length <= 0.65, `객관식 정답이 가장 긴 보기인 문제가 너무 많습니다 (${longest}/${mc.length})`);
+  }
+  const mixed = mixQuiz(mc, fb);
+  return { multiple_choice: mixed.mc, fill_blank: mixed.fb, short_answer: sa };
 }
 
 export function normalizeStudy(raw, { requireQuiz = true } = {}) {
