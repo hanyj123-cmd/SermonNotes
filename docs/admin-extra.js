@@ -13,7 +13,8 @@ const GEMINI_MODELS = [
   { id: 'gemini-3-flash-preview', hint: '미리보기' },
 ];
 const CUSTOM_MODEL = '__custom__';
-const MAX_PER_RUN = 10; // 선택한 영상을 한 번에 정리하는 최대 편수 (한 번 실행은 최대 60분)
+const MAX_PER_RUN = 10; // 선택한 영상을 한 번에 정리하는 최대 편수 (한 번 실행은 최대 120분)
+const MAX_PER_RUN_PARTIAL = 30; // 일부만 새로 만들 때는 영상 한 편이 훨씬 빨라서 더 많이
 
 const VIDEO_STATUS = {
   pending: ['자동 대기', 'wait'],
@@ -31,6 +32,32 @@ const CATEGORY_RAW = { dawn: 'dawn', 새벽: 'dawn', 새벽기도: 'dawn', wedne
 // 영상 관리 탭: 교회 4구분 + 사용자 영상
 const MANAGER_TABS = [...CATEGORIES, { key: 'user', label: '사용자 영상' }];
 const categoryKeyOf = (raw) => CATEGORY_RAW[String(raw || '').trim().toLowerCase().replace(/\s+/g, '')] || '';
+
+/* ---------- 새로 만들 부분 고르기 (오늘의 말씀 · 잠언 · 설교 · 사용자 영상 공통) ---------- */
+// "전부"가 기본입니다. 부분을 하나라도 체크하면 그 부분만 새로 만들고, 모두 해제하면 다시 "전부"가 됩니다.
+function partChecks(parts, onChange = () => {}) {
+  const allCb = h('input', { type: 'checkbox', 'aria-label': '전부 새로 만들기' });
+  allCb.checked = true;
+  const boxes = parts.map(([key, label]) => {
+    const cb = h('input', { type: 'checkbox', value: key, 'aria-label': `${label}만 새로 만들기` });
+    return { key, label, cb };
+  });
+  const sync = (src) => {
+    if (src === allCb) {
+      if (allCb.checked) boxes.forEach((b) => (b.cb.checked = false));
+      else if (!boxes.some((b) => b.cb.checked)) allCb.checked = true;
+    } else allCb.checked = !boxes.some((b) => b.cb.checked);
+    onChange();
+  };
+  allCb.addEventListener('change', () => sync(allCb));
+  boxes.forEach((b) => b.cb.addEventListener('change', () => sync(b.cb)));
+  const picked = () => boxes.filter((b) => b.cb.checked).map((b) => b.key);
+  return {
+    el: h('div', { class: 'ad-pick-parts' }, h('span', { class: 'meta', text: '새로 만들 부분' }), h('label', { class: 'ho-opt' }, allCb, '전부'), ...boxes.map((b) => h('label', { class: 'ho-opt' }, b.cb, b.label))),
+    picked, // [] = 전부
+    text: () => (picked().length ? boxes.filter((b) => b.cb.checked).map((b) => b.label).join(' · ') : '전부'),
+  };
+}
 
 /* ---------- AI 모델 ---------- */
 function renderModelSection(password, onPasswordRejected) {
@@ -102,6 +129,8 @@ function renderVideoManager(password, onPasswordRejected, requestSync) {
     [['all', '전체'], ['todo', '아직 안 한 것'], ['done', '완료'], ['fail', '실패·자막 없음'], ['skip', '제외']].map(([v, t]) => h('option', { value: v, text: t })),
   );
   const btnAi = h('button', { class: 'btn primary', type: 'button' }, 'AI로 정리');
+  // 새로 만들 부분: 전부(기본) 또는 설교 리뷰 · QT · 성경공부(퀴즈 포함) · 소그룹 중 일부만
+  const parts = partChecks([['review', '설교 리뷰'], ['qt', 'QT 묵상'], ['study', '성경공부·퀴즈'], ['group', '소그룹']], () => updateButtons());
   const btnSkip = h('button', { class: 'btn', type: 'button' }, '자동 정리에서 제외');
   const btnWait = h('button', { class: 'btn', type: 'button' }, '대기로 되돌리기');
   const btnAll = h('button', { class: 'btn small', type: 'button' }, '이 목록 모두 선택');
@@ -121,7 +150,8 @@ function renderVideoManager(password, onPasswordRejected, requestSync) {
   };
   const updateButtons = () => {
     const n = selected.size;
-    btnAi.textContent = n ? `선택한 ${n}편 AI로 정리` : 'AI로 정리';
+    const only = parts.picked().length ? `${parts.text()}만 ` : '';
+    btnAi.textContent = n ? `선택한 ${n}편 ${only}AI로 정리` : 'AI로 정리';
     [btnAi, btnSkip, btnWait].forEach((b) => (b.disabled = n === 0));
   };
   const drawTabs = () => {
@@ -197,14 +227,16 @@ function renderVideoManager(password, onPasswordRejected, requestSync) {
   }
   btnAi.addEventListener('click', async () => {
     const ids = [...selected];
-    if (ids.length > MAX_PER_RUN) return (status.textContent = `한 번에 최대 ${MAX_PER_RUN}편까지 정리할 수 있습니다. 선택을 줄여 주세요.`);
+    const modes = parts.picked();
+    const limit = modes.length ? MAX_PER_RUN_PARTIAL : MAX_PER_RUN; // 일부만 새로 만들 때는 더 많이 한꺼번에
+    if (ids.length > limit) return (status.textContent = `한 번에 최대 ${limit}편까지 정리할 수 있습니다. 선택을 줄여 주세요.`);
     const doneCount = videos.filter((v) => selected.has(v.video_id) && v.status === 'done').length;
-    if (doneCount && !confirm(`이미 정리된 ${doneCount}편이 포함되어 있습니다. 다시 정리하면 기존 결과가 새 결과로 바뀝니다. 계속할까요?`)) return;
+    if (doneCount && !confirm(`이미 정리된 ${doneCount}편이 포함되어 있습니다. 다시 정리하면 ${modes.length ? `${parts.text()} 부분이` : '기존 결과가'} 새 결과로 바뀝니다. 계속할까요?`)) return;
     btnAi.disabled = true;
     try {
       if (!(await mark('redo', (n) => `${n}편을 정리 대상으로 표시했습니다. 동기화를 시작합니다…`))) return;
-      const started = await requestSync(ids.length, ['none']); // 재생목록은 다시 훑지 않고 선택한 영상만 정리
-      status.textContent = started ? `${ids.length}편 정리를 시작했습니다. 위의 "지금 동기화" 상태에서 진행을 볼 수 있습니다. (영상 1편에 몇 분 걸립니다)` : '정리 대상으로 표시는 했지만 동기화를 시작하지 못했습니다. 위 "지금 동기화"를 눌러 주세요.';
+      const started = await requestSync(ids.length, ['none'], modes.length ? { sermon_modes: modes } : {}); // 재생목록은 다시 훑지 않고 선택한 영상만 정리
+      status.textContent = started ? `${ids.length}편 ${modes.length ? `${parts.text()} 부분을 새로 ` : ''}정리를 시작했습니다. 위의 "지금 동기화" 상태에서 진행을 볼 수 있습니다. (영상 1편에 몇 분 걸립니다)` : '정리 대상으로 표시는 했지만 동기화를 시작하지 못했습니다. 위 "지금 동기화"를 눌러 주세요.';
       selected.clear();
       await reload();
     } catch (e) {
@@ -247,10 +279,11 @@ function renderVideoManager(password, onPasswordRejected, requestSync) {
     'section',
     { class: 'point admin-videos' },
     h('h2', { text: '영상 선택해서 정리하기' }),
-    h('p', { class: 'meta', text: `예배별로 영상을 보고, 정리할 영상을 골라 AI로 돌립니다. 한 번에 최대 ${MAX_PER_RUN}편까지 가능합니다. 새로 올라온 영상은 자동으로 정리되고, 오래된 영상은 여기서 골라야 정리됩니다.` }),
+    h('p', { class: 'meta', text: `예배별로 영상을 보고, 정리할 영상을 여러 개 골라 AI로 돌립니다. 아래에서 "새로 만들 부분"을 고르면 그 부분만 다시 만듭니다(설교 리뷰 · QT · 성경공부 · 소그룹, 사용자 영상도 같아요). 한 번에 전부는 최대 ${MAX_PER_RUN}편, 일부만은 최대 ${MAX_PER_RUN_PARTIAL}편까지 가능합니다. 새로 올라온 영상은 자동으로 정리되고, 오래된 영상은 여기서 골라야 정리됩니다.` }),
     tabs,
     h('div', { class: 'vid-tools' }, filter, btnAll, btnNone),
     list,
+    parts.el,
     h('div', { class: 'admin-row' }, btnAi, btnSkip, btnWait),
     status,
   );
@@ -446,14 +479,24 @@ function renderSermonEditor(d, onSaved) {
 }
 
 /* ---------- 잠언 묵상 (관리) ---------- */
-// 31장 진행 상황 · 빠진 장 지금 만들기 · 장별(부분) 다시 만들기
+// 31장 진행 상황 · 빠진 장 지금 만들기 · 장을 여러 개 골라 부분(말씀·QT·성경공부·소그룹·퀴즈)만 다시 만들기
+const PROV_PICK_MAX = 12; // 한 번에 고를 수 있는 장 수 (Code.gs · scripts/lib/proverbs.mjs 와 같은 값)
 function renderProverbsSection(password, onPasswordRejected) {
   const info = h('p', { class: 'meta', role: 'status' });
   const grid = h('div', { class: 'pv-admin-grid' }, h('p', { class: 'meta', text: '불러오는 중…' }));
-  const chSel = h('select', { class: 'search ad-redo-sel', 'aria-label': '장' }, Array.from({ length: 31 }, (_, i) => h('option', { value: String(i + 1), text: `${i + 1}장` })));
-  const partSel = h('select', { class: 'search ad-redo-sel', 'aria-label': '다시 만들 부분' }, [['', '전부'], ['word', '말씀'], ['qt', 'QT'], ['study', '성경공부'], ['group', '소그룹'], ['quiz', '퀴즈']].map(([v, l]) => h('option', { value: v, text: l })));
-  const redo = h('button', { class: 'btn', type: 'button' }, '이 장 다시 만들기');
-  const missing = h('button', { class: 'btn primary', type: 'button' }, '빠진 장 지금 만들기');
+  const picked = new Set();
+  let chapters = [];
+  const redo = h('button', { class: 'btn primary', type: 'button', disabled: true }, '선택한 장 새로 만들기');
+  const missing = h('button', { class: 'btn', type: 'button' }, '빠진 장 지금 만들기');
+  const selMissing = h('button', { class: 'btn small', type: 'button' }, '빠진·실패한 장 선택');
+  const selNone = h('button', { class: 'btn small', type: 'button' }, '선택 해제');
+  const parts = partChecks([['word', '말씀'], ['qt', 'QT'], ['study', '성경공부'], ['group', '소그룹'], ['quiz', '퀴즈']]);
+  const refreshButtons = () => {
+    redo.textContent = picked.size ? `선택한 ${picked.size}장 새로 만들기` : '선택한 장 새로 만들기';
+    redo.disabled = !picked.size;
+    grid.querySelectorAll('.pv-admin-cell').forEach((c) => c.classList.toggle('sel', picked.has(Number(c.dataset.ch))));
+    grid.querySelectorAll('.pv-admin-cell').forEach((c) => c.setAttribute('aria-pressed', String(picked.has(Number(c.dataset.ch)))));
+  };
   const run = async (payload, okText) => {
     info.textContent = '실행을 요청하는 중…';
     try {
@@ -468,34 +511,51 @@ function renderProverbsSection(password, onPasswordRejected) {
   };
   missing.addEventListener('click', () => run({ proverbs: 'missing' }, '빠진 장을 6개까지 만드는 중입니다. 한 장에 몇 분씩 걸려요. 진행 상태는 위 "지금 동기화"에 보입니다.'));
   redo.addEventListener('click', () => {
-    const part = partSel.options[partSel.selectedIndex].text;
-    if (!confirm(`잠언 ${chSel.value}장 ${part === '전부' ? '전부' : `${part}만`} 새로 만들까요?`)) return;
-    run({ proverbs: chSel.value, force: true, modes: partSel.value ? [partSel.value] : [] }, `잠언 ${chSel.value}장 ${part}을(를) 다시 만드는 중입니다.`);
+    const list = [...picked].sort((x, y) => x - y);
+    const part = parts.text();
+    if (!confirm(`잠언 ${list.join(', ')}장 (${list.length}개)\n${part === '전부' ? '전부' : `${part}만`} 새로 만들까요? (한 장에 몇 분씩 걸립니다)`)) return;
+    run({ proverbs: list.join(','), force: true, modes: parts.picked() }, `잠언 ${list.join(', ')}장 ${part}을(를) 다시 만드는 중입니다. 진행 상태는 위 "지금 동기화"에 보입니다.`);
+  });
+  selMissing.addEventListener('click', () => {
+    picked.clear();
+    chapters.filter((c) => c.status !== 'done').slice(0, PROV_PICK_MAX).forEach((c) => picked.add(c.chapter));
+    info.textContent = picked.size ? `${picked.size}장을 선택했어요.` : '모든 장이 완료되어 있어요.';
+    refreshButtons();
+  });
+  selNone.addEventListener('click', () => {
+    picked.clear();
+    refreshButtons();
   });
   async function load() {
     try {
       const r = await adminPost({ action: 'proverbs_status', password });
       if (onPasswordRejected(r)) return;
       if (!r.ok) throw new Error(/알 수 없는 작업/.test(r.error || '') ? 'Apps Script가 옛 버전입니다. 새 Code.gs로 다시 배포해 주세요.' : r.error || '');
-      const list = r.chapters || [];
-      const done = list.filter((c) => c.status === 'done').length;
+      chapters = r.chapters || [];
+      const done = chapters.filter((c) => c.status === 'done').length;
       grid.replaceChildren(
-        h('p', { class: 'meta', text: `${done} / 31장 완료` }),
+        h('p', { class: 'meta', text: `${done} / 31장 완료 · 칸을 눌러 장을 고르세요 (여러 개 가능, 한 번에 최대 ${PROV_PICK_MAX}장)` }),
         h(
           'div',
           { class: 'pv-admin-cells' },
-          list.map((c) => {
-            const parts = ['word', 'qt', 'study', 'group', 'quiz'].filter((k) => c[k]).length;
+          chapters.map((c) => {
+            const n = ['word', 'qt', 'study', 'group', 'quiz'].filter((k) => c[k]).length;
             const cls = c.status === 'done' ? 'ok' : c.status === 'running' ? 'run' : c.status ? 'err' : '';
-            const cell = h('button', { class: `pv-admin-cell ${cls}`, type: 'button', title: `${c.chapter}장 · ${c.status || '아직 없음'}${c.note ? ` · ${c.note}` : ''}` }, h('b', { text: String(c.chapter) }), h('span', { text: c.status ? `${parts}/5` : '—' }));
+            const cell = h('button', { class: `pv-admin-cell ${cls}`, type: 'button', 'data-ch': String(c.chapter), 'aria-pressed': 'false', title: `${c.chapter}장 · ${c.status || '아직 없음'}${c.note ? ` · ${c.note}` : ''}` }, h('b', { text: String(c.chapter) }), h('span', { text: c.status ? `${n}/5` : '—' }));
             cell.addEventListener('click', () => {
-              chSel.value = String(c.chapter);
+              if (picked.has(c.chapter)) picked.delete(c.chapter);
+              else if (picked.size >= PROV_PICK_MAX) {
+                info.textContent = `한 번에 최대 ${PROV_PICK_MAX}장까지 고를 수 있어요.`;
+                return;
+              } else picked.add(c.chapter);
               info.textContent = `${c.chapter}장: ${c.status === 'done' ? '완료' : c.status ? `일부 실패 — ${c.note || ''}` : '아직 없음'}`;
+              refreshButtons();
             });
             return cell;
           }),
         ),
       );
+      refreshButtons();
     } catch (e) {
       grid.replaceChildren(h('p', { class: 'meta', text: `진행 상황을 불러오지 못했습니다: ${e.message || e}` }));
     }
@@ -505,10 +565,11 @@ function renderProverbsSection(password, onPasswordRejected) {
     'section',
     { class: 'point admin-sync admin-prov' },
     h('h2', { text: '잠언 묵상' }),
-    h('p', { class: 'meta', text: '잠언 1~31장을 한 번씩 만들어 둡니다(화면에서 한 달에 한 장씩 골라 묵상). 매일 동기화 때 빠진 장을 3개씩 만들고, 아래 버튼으로 지금 만들거나 장별로 다시 만들 수 있습니다.' }),
+    h('p', { class: 'meta', text: '잠언 1~31장을 한 번씩 만들어 둡니다(화면에서 한 달에 한 장씩 골라 묵상). 매일 동기화 때 빠진 장을 3개씩 만들고, 아래에서 장을 여러 개 골라 전부 또는 일부(말씀 · QT · 성경공부 · 소그룹 · 퀴즈)만 다시 만들 수 있습니다.' }),
     grid,
-    h('div', { class: 'admin-row' }, missing),
-    h('div', { class: 'admin-row' }, chSel, partSel, redo),
+    h('div', { class: 'admin-row' }, selMissing, selNone),
+    parts.el,
+    h('div', { class: 'admin-row' }, redo, missing),
     info,
   );
 }

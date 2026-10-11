@@ -634,7 +634,7 @@ function dispatchSync(maxNew, categories, exportOnly, extra) {
   Object.keys(extra || {}).forEach(function (k) { inputs[k] = extra[k]; });
   // GitHub 에 올라간 sync.yml 에 새 입력이 아직 없으면 422 "Unexpected inputs" 로 거절됩니다.
   // 그때는 거절된 입력만 빼고 다시 요청합니다 (최대 3번). 반환: true = 옛 sync.yml 이라 일부 입력을 뺐음
-  const NEWER = ['export_only', 'daily_dates', 'daily_force', 'daily_modes', 'proverbs'];
+  const NEWER = ['export_only', 'daily_dates', 'daily_force', 'daily_modes', 'proverbs', 'sermon_modes'];
   let dropped = false;
   for (let tries = 0; ; tries++) {
     try {
@@ -677,9 +677,9 @@ function syncRun(body) {
     return { ok: true, dawn: true, workflow_old: oldDawn };
   }
   if (body.proverbs !== undefined && body.proverbs !== null && body.proverbs !== '') {
-    // 잠언 묵상: 고른 장(최대 8장) 또는 'missing'(빠진 장 6개까지). force 면 다시 만들기(modes 로 부분만)
+    // 잠언 묵상: 고른 장(최대 12장) 또는 'missing'(빠진 장 6개까지). force 면 다시 만들기(modes 로 부분만)
     const raw = Array.isArray(body.proverbs) ? body.proverbs.join(',') : String(body.proverbs);
-    const chs = raw.split(/[\s,]+/).map(Number).filter(function (n, i, a) { return n >= 1 && n <= 31 && a.indexOf(n) === i; }).slice(0, 8);
+    const chs = raw.split(/[\s,]+/).map(Number).filter(function (n, i, a) { return n >= 1 && n <= 31 && a.indexOf(n) === i; }).slice(0, 12);
     const which = /missing/i.test(raw) || !chs.length ? 'missing' : chs.join(',');
     const pforce = body.force === true || body.force === 'true';
     const pmodes = (Array.isArray(body.modes) ? body.modes : String(body.modes || '').split(/[\s,]+/))
@@ -708,8 +708,12 @@ function syncRun(body) {
   }
   const categories = cleanCategories(body.categories);
   const exportOnly = body.export_only === true || body.export_only === 'true';
-  const oldWorkflow = dispatchSync(n, categories, exportOnly);
-  return { ok: true, max_new: n, categories: categories, export_only: exportOnly && !oldWorkflow, workflow_old: oldWorkflow };
+  // 설교·사용자 영상 "다시 정리"에서 고른 부분만 새로 만들기 (review · qt · study · group, 비우면 전부)
+  const smodes = (Array.isArray(body.sermon_modes) ? body.sermon_modes : String(body.sermon_modes || '').split(/[\s,]+/))
+    .filter(function (m, i, a) { return ['review', 'qt', 'study', 'group'].indexOf(m) >= 0 && a.indexOf(m) === i; });
+  const sextra = smodes.length ? { sermon_modes: smodes.join(',') } : null;
+  const oldWorkflow = dispatchSync(n, categories, exportOnly, sextra);
+  return { ok: true, max_new: n, categories: categories, export_only: exportOnly && !oldWorkflow, sermon_modes: smodes, workflow_old: oldWorkflow };
 }
 
 /* ---------- 설정 (AI 모델) — Settings 탭 ---------- */

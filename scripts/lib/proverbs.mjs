@@ -11,6 +11,7 @@ export const PROVERB_COLUMNS = { word: ['word_json'], qt: ['qt_json'], study: ['
 const MODE_COL = { word: 'word_json', qt: 'qt_json', study: 'study_json', group: 'group_json', quiz: 'quiz_json' };
 export const PROVERB_MODES_ALL = ['word', 'qt', 'study', 'group', 'quiz'];
 export const PROVERB_CHAPTERS = 31;
+export const PROVERB_PICK_MAX = 12; // 관리 화면에서 한 번에 고를 수 있는 장 수
 
 
 const parseJson = (s) => {
@@ -103,7 +104,7 @@ export function proverbChaptersToBuild(rows, { want = '', force = false, perRun 
   const picked = String(want || '').trim().toLowerCase();
   if (picked && picked !== 'missing') {
     const list = [...new Set(picked.split(/[\s,]+/).map(Number).filter((n) => n >= 1 && n <= PROVERB_CHAPTERS))];
-    return (force ? list : list.filter((ch) => !isDone(ch))).slice(0, 8);
+    return (force ? list : list.filter((ch) => !isDone(ch))).slice(0, PROVERB_PICK_MAX);
   }
   const list = Array.from({ length: PROVERB_CHAPTERS }, (_, i) => i + 1).filter((ch) => !isDone(ch));
   return list.slice(0, picked === 'missing' ? 6 : perRun);

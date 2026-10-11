@@ -41,6 +41,10 @@ on:
         description: '다시 만들 부분만 (쉼표로: qt,study,group,quiz,videos · 잠언은 word,qt,study,group,quiz — 비우면 전부)'
         required: false
         default: ''
+      sermon_modes:
+        description: '다시 정리 표시한 영상에서 새로 만들 부분만 (쉼표로: review,qt,study,group — 비우면 전부)'
+        required: false
+        default: ''
       proverbs:
         description: '잠언 묵상: 만들 장 (쉼표로 3,7 / missing = 빠진 장 6개까지 — 비우면 오늘·내일 장 + 빠진 장 3개)'
         required: false
@@ -74,7 +78,7 @@ jobs:
     needs: gate
     if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -106,6 +110,7 @@ jobs:
           DAILY_DATES: ${{ github.event.inputs.daily_dates }}
           DAILY_FORCE: ${{ github.event.inputs.daily_force }}
           DAILY_MODES: ${{ github.event.inputs.daily_modes }}
+          SERMON_MODES: ${{ github.event.inputs.sermon_modes }}
           PROVERBS: ${{ github.event.inputs.proverbs }}
         run: node scripts/sync.mjs ${{ github.event.inputs.export_only == 'true' && '--export-only' || '' }}
 

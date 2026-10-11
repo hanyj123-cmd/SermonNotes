@@ -607,6 +607,26 @@ await t('처리: redo 는 처음부터 다시 만듦', async () => {
   await run(sermonRow({ status: 'redo', ...done.patch }), { ai: fakeAi({ calls }) });
   assert.deepEqual(calls, MODES);
 });
+await t('처리: redo + 고른 부분만(redoModes) → 그 모드만 새로 만들고 나머지는 그대로', async () => {
+  const done = await run(sermonRow(), { ai: fakeAi() });
+  const calls = [];
+  const again = await run(sermonRow({ ...done.patch, status: 'redo' }), { ai: fakeAi({ calls }), redoModes: ['qt', 'study'] });
+  assert.deepEqual(calls, ['qt', 'study']);
+  assert.equal(again.result, 'done');
+  assert.ok(again.patch.mode_qt && again.patch.mode_study && again.patch.mode_group && again.patch.result_json); // 고르지 않은 부분도 그대로 저장돼 있음
+  const calls2 = [];
+  await run(sermonRow({ ...done.patch, status: 'redo' }), { ai: fakeAi({ calls: calls2 }), redoModes: ['x', ''] }); // 알 수 없는 값은 무시 → 전부
+  assert.deepEqual(calls2, MODES);
+  const calls3 = [];
+  await run(sermonRow({ status: 'redo' }), { ai: fakeAi({ calls: calls3 }), redoModes: ['group'] }); // 아직 만든 것이 없으면 빠진 것까지 전부
+  assert.deepEqual(calls3, MODES);
+});
+await t('처리: 일부만 새로 만들다 실패해도 나머지 부분은 지워지지 않음', async () => {
+  const done = await run(sermonRow(), { ai: fakeAi() });
+  const r = await run(sermonRow({ ...done.patch, status: 'redo' }), { ai: fakeAi({ failModes: ['qt'] }), redoModes: ['qt'] });
+  assert.equal(r.result, 'error');
+  assert.ok(r.patch.mode_study && r.patch.mode_group && r.patch.result_json);
+});
 await t('처리: 자막을 못 구하면 no_transcript + 안내', async () => {
   const { result, patch } = await run(sermonRow(), { ai: fakeAi(), obtain: async () => ({ kind: 'none', problems: ['자막 없음'] }) });
   assert.equal(result, 'no_transcript');

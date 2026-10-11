@@ -62,9 +62,17 @@ export async function processRow(row, deps) {
     obtain = defaultObtain,
     now = () => new Date().toISOString(),
     log = { info: console.log, warn: console.warn, error: console.error },
+    redoModes = [], // 다시 정리하기에서 고른 부분만 새로 만들 때: ['qt'] 처럼 (비어 있으면 전부 새로)
   } = deps;
 
-  const resume = row.status === 'error' ? readExisting(row) : { bible: null };
+  // 오류 재시도: 이미 만든 모드는 두고 빠진 것만. 부분 다시 정리: 고른 모드만 비우고 나머지는 그대로 둡니다.
+  const picked = (redoModes || []).filter((m) => MODES.includes(m));
+  let resume = { bible: null };
+  if (row.status === 'error') resume = readExisting(row);
+  else if (row.status === 'redo' && picked.length) {
+    resume = readExisting(row);
+    for (const m of picked) delete resume[m];
+  }
   const material = await obtain(row, { supadataKey, geminiVideo, log: (m) => log.warn(`   ${m}`) });
 
   if (material.kind === 'none') {

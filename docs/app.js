@@ -658,14 +658,14 @@ function renderAdminPanel(password) {
     }
   }
   // 동기화 실행 요청. 성공하면 true (선택한 영상 정리에서도 같이 씁니다)
-  async function requestSync(count, categories) {
+  async function requestSync(count, categories, extra) {
     syncBtn.disabled = true;
     syncInfo.textContent = '실행을 요청하는 중…';
     try {
-      const r = await adminPost({ action: 'sync_run', password, max_new: String(count), categories: categories || syncCategories() });
+      const r = await adminPost({ action: 'sync_run', password, max_new: String(count), categories: categories || syncCategories(), ...(extra || {}) });
       if (passwordRejected(r)) return false;
       if (!r.ok) throw new Error(r.error || '실행하지 못했습니다.');
-      syncInfo.replaceChildren(icon('clock'), ' 실행을 요청했습니다. 잠시 뒤 상태가 표시됩니다…');
+      syncInfo.replaceChildren(icon('clock'), r.workflow_old && extra && extra.sermon_modes ? ' 실행을 요청했지만 GitHub의 sync.yml 이 옛 버전이라 고른 부분만이 아니라 전부 다시 만들 수 있어요. 새 sync.yml 을 올려 주세요.' : ' 실행을 요청했습니다. 잠시 뒤 상태가 표시됩니다…');
       // GitHub가 실행을 등록하기까지 몇 초 걸립니다. 그 사이 이전 기록이 보이지 않게 잠시 기다립니다.
       syncTimer = setTimeout(refreshSync, 6000);
       return true;
@@ -732,6 +732,60 @@ function renderAdminPanel(password) {
   };
   // 날짜별 다시 만들기: 전부 또는 한 부분(QT · 성경공부 · 소그룹 · 퀴즈 · 공동체 성경읽기 영상)
   const REDO_PARTS = [['', '전부'], ['study', '성경공부'], ['qt', 'QT'], ['group', '소그룹'], ['quiz', '퀴즈'], ['videos', '영상']];
+  // 여러 날짜를 체크해서 한꺼번에 (고른 부분만 또는 전부) 새로 만들기
+  const DAILY_BULK_MAX = 14; // Code.gs 와 같은 값
+  const dailySel = new Set();
+  let dailyDays = [];
+  let dailyRunning = false;
+  const dailyParts = partChecks(REDO_PARTS.slice(1), () => updateDailyBulk());
+  const dailyBulk = h('button', { class: 'btn primary', type: 'button', disabled: true }, '선택한 날짜 새로 만들기');
+  const dailySelMissing = h('button', { class: 'btn small', type: 'button' }, '빠진·실패한 날 선택');
+  const dailySelAll = h('button', { class: 'btn small', type: 'button' }, '전체 선택');
+  const dailySelNone = h('button', { class: 'btn small', type: 'button' }, '선택 해제');
+  function updateDailyBulk() {
+    const n = dailySel.size;
+    dailyBulk.textContent = n ? `선택한 ${n}일 ${dailyParts.picked().length ? `${dailyParts.text()}만 ` : ''}새로 만들기` : '선택한 날짜 새로 만들기';
+    dailyBulk.disabled = n === 0 || dailyRunning;
+    dailyList.querySelectorAll('input.ad-cb').forEach((cb) => (cb.checked = dailySel.has(cb.value)));
+  }
+  dailySelAll.addEventListener('click', () => {
+    dailyDays.slice(0, DAILY_BULK_MAX).forEach((d) => dailySel.add(d.date));
+    updateDailyBulk();
+  });
+  dailySelNone.addEventListener('click', () => {
+    dailySel.clear();
+    updateDailyBulk();
+  });
+  dailySelMissing.addEventListener('click', () => {
+    dailySel.clear();
+    dailyDays.filter((d) => d.status !== 'done' || !d.qt || !d.study || !d.group || !d.quiz).slice(0, DAILY_BULK_MAX).forEach((d) => dailySel.add(d.date));
+    dailyInfo.textContent = dailySel.size ? `${dailySel.size}일을 선택했어요.` : '빠지거나 실패한 날이 없어요.';
+    updateDailyBulk();
+  });
+  dailyBulk.addEventListener('click', async () => {
+    const dates = [...dailySel].sort();
+    if (!dates.length) return;
+    if (dates.length > DAILY_BULK_MAX) return (dailyInfo.textContent = `한 번에 최대 ${DAILY_BULK_MAX}일까지 만들 수 있어요. 선택을 줄여 주세요.`);
+    const modes = dailyParts.picked();
+    const what = modes.length ? `${dailyParts.text()}만` : 'QT · 성경공부 · 소그룹 · 퀴즈 · 영상을 모두';
+    if (!confirm(`${dates.map((d) => dayLabel(d)).join(', ')} (${dates.length}일)\n${what} 새로 만들까요? (하루에 몇 분씩 걸립니다)`)) return;
+    dailyBulk.disabled = true;
+    dailyInfo.textContent = '실행을 요청하는 중…';
+    try {
+      const r = await adminPost({ action: 'sync_run', password, daily: true, daily_force: true, dates, modes });
+      if (passwordRejected(r)) return;
+      if (!r.ok) throw new Error(r.error || '실행하지 못했습니다.');
+      dailyInfo.replaceChildren(icon('clock'), r.workflow_old ? ' 실행을 요청했지만 GitHub의 sync.yml 이 옛 버전이라 고른 부분만이 아니라 전부 다시 만들 수 있어요. 새 sync.yml 을 올려 주세요.' : ` ${dates.length}일 ${modes.length ? dailyParts.text() : '전부'}을(를) 다시 만드는 중입니다. 진행 상태는 아래 목록과 위 "지금 동기화"에 보입니다.`);
+      dailySel.clear();
+      clearTimeout(dailyTimer);
+      dailyTimer = setTimeout(refreshDaily, 8000);
+      syncTimer = setTimeout(refreshSync, 6000);
+    } catch (e) {
+      dailyInfo.textContent = `오류: ${e.message || e}`;
+    } finally {
+      updateDailyBulk();
+    }
+  });
   const rowRedo = (d, running) => {
     const sel = h('select', { class: 'search ad-redo-sel', 'aria-label': `${d.date} 다시 만들 부분` }, REDO_PARTS.map(([v, l]) => h('option', { value: v, text: l })));
     const btn = h('button', { class: 'btn small', type: 'button', disabled: running }, '다시 만들기');
@@ -762,6 +816,8 @@ function renderAdminPanel(password) {
       if (passwordRejected(r)) return;
       if (!r.ok) throw new Error(/알 수 없는 작업/.test(r.error || '') ? 'Apps Script가 옛 버전입니다. 새 Code.gs로 다시 배포해 주세요.' : r.error || '불러오지 못했습니다.');
       const running = r.run && r.run.state === 'running';
+      dailyRunning = !!running;
+      dailyDays = r.days || [];
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
       if (!r.days.length) dailyList.replaceChildren(h('li', { class: 'meta', text: '아직 만든 날이 없습니다.' }));
       else
@@ -772,7 +828,7 @@ function renderAdminPanel(password) {
             return h(
               'li',
               { class: `ad-row ad-${cls}` },
-              h('span', { class: 'ad-date' }, dayLabel(d.date), d.date === today ? h('em', { text: '오늘' }) : null),
+              h('label', { class: 'ad-date ad-pick' }, h('input', { class: 'ad-cb', type: 'checkbox', value: d.date, 'aria-label': `${dayLabel(d.date)} 선택` }), h('span', {}, dayLabel(d.date), d.date === today ? h('em', { text: '오늘' }) : null)),
               h('span', { class: 'ad-refs', text: d.refs || '—' }),
               h('span', { class: 'ad-parts' }, part(d.qt, 'QT'), part(d.study, '공부'), part(d.group, '소그룹'), part(d.quiz, '퀴즈'), part(d.videos > 0, `영상 ${d.videos}`), part(!!d.dawn, '새벽기도')),
               h('span', { class: `ad-chip ad-chip-${cls}`, text: label }),
@@ -783,6 +839,7 @@ function renderAdminPanel(password) {
             );
           }),
         );
+      updateDailyBulk();
       if (running || r.days.some((d) => d.status === 'running')) {
         dailyTimer = setTimeout(() => {
           if (document.body.contains(dailyList)) refreshDaily();
@@ -793,6 +850,13 @@ function renderAdminPanel(password) {
     }
   }
   dailyRefresh.addEventListener('click', refreshDaily);
+  dailyList.addEventListener('change', (e) => {
+    const cb = e.target.closest('input.ad-cb');
+    if (!cb) return;
+    if (cb.checked) dailySel.add(cb.value);
+    else dailySel.delete(cb.value);
+    updateDailyBulk();
+  });
 
   const rowFor = (p) => {
     const cat = h('select', { class: 'search admin-cat', 'aria-label': '구분' }, categoryOptions(p.category));
@@ -857,6 +921,10 @@ function renderAdminPanel(password) {
       h('div', { class: 'admin-row' }, h('label', { class: 'ho-opt' }, dailyForce, '이미 만든 날도 다시 만들기'), dailyBtn),
       dailyInfo,
       h('div', { class: 'admin-row ad-head' }, h('h3', { text: '날짜별 진행 상황' }), dailyRefresh),
+      h('p', { class: 'meta', text: `날짜 앞의 칸을 체크해서 여러 날을 한꺼번에 새로 만들 수 있어요 (한 번에 최대 ${DAILY_BULK_MAX}일). 줄 오른쪽 "다시 만들기"는 그 하루만 만듭니다.` }),
+      h('div', { class: 'admin-row ad-bulk' }, dailySelMissing, dailySelAll, dailySelNone),
+      dailyParts.el,
+      h('div', { class: 'admin-row ad-bulk' }, dailyBulk),
       dailyList,
     ),
     renderDawnSection(password, passwordRejected),

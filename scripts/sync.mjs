@@ -46,6 +46,7 @@ import { buildQueue } from './lib/queue.mjs';
 import { attachBibleAudio, buildPrayerMusic, musicIsStale } from './lib/media.mjs';
 import { fetchBibleBlock, bibleIsCurrent } from './lib/bible-web.mjs';
 import { processRow, CELL_LIMIT } from './lib/process.mjs';
+import { MODES, MODE_LABELS } from './lib/prompt.mjs';
 import { createGemini, DEFAULT_MODEL } from './lib/gemini.mjs';
 import { parseTitle, parseAnyTitle, parseScripture, bookOf, tidyTitle, normalizePreacher, displayTitle } from './lib/title.mjs';
 
@@ -504,6 +505,8 @@ async function main() {
   }
 
   const mediaState = {};
+  const sermonRedoModes = String(process.env.SERMON_MODES || '').split(/[\s,]+/).filter((m) => MODES.includes(m));
+  if (sermonRedoModes.length) console.log(`✂️  다시 정리 표시한 영상은 ${sermonRedoModes.map((m) => MODE_LABELS[m]).join(' · ')}만 새로 만듭니다.`);
   for (const row of queue) {
     console.log(`\n▶ [${row.category}] ${row.title} (${row.video_id})`);
     await processRow(row, {
@@ -511,6 +514,7 @@ async function main() {
       update: (patch) => updateSermonRow(sheets, spreadsheetId, row.rowNumber, patch),
       supadataKey,
       geminiVideo,
+      redoModes: sermonRedoModes, // 관리 화면에서 고른 부분만 다시 정리 (비면 전부)
       enrichSongs: null, // 찬양은 CCM 한 곡만, 영상은 화면에서 YouTube 검색 링크로 엽니다 (검색 할당량 아끼기)
       fetchBible: async (passages) => {
         const block = await fetchBibleBlock(passages, { log: (m) => console.warn(`   ${m}`) });

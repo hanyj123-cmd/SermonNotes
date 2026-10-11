@@ -552,6 +552,29 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
     const r2 = o.post({ action: 'sync_run', password: 'pw', max_new: '1' });
     check('옛 sync.yml: 평소 실행은 그대로 성공', r2.ok === true && r2.workflow_old === false, JSON.stringify(r2));
   }
+  // 설교·사용자 영상 부분 다시 정리 (sermon_modes)
+  g.post({ action: 'sync_run', password: 'pw', max_new: '3', categories: ['none'], sermon_modes: ['qt', 'study', 'x', 'qt'] });
+  check('설교 부분 다시 정리: 허용된 부분만 전달', sent().sermon_modes === 'qt,study' && sent().categories === 'none' && sent().max_new === '3', JSON.stringify(sent()));
+  g.post({ action: 'sync_run', password: 'pw', max_new: '3', categories: ['none'] });
+  check('설교 부분 다시 정리: 안 고르면 sermon_modes 없음(전부)', sent().sermon_modes === undefined);
+  g.post({ action: 'sync_run', password: 'pw', max_new: '3', categories: ['none'], sermon_modes: ['bad'] });
+  check('설교 부분 다시 정리: 알 수 없는 값만 보내면 없음', sent().sermon_modes === undefined);
+  {
+    const o4 = makeEnv({ ADMIN_PASSWORD: 'pw', GITHUB_TOKEN: 't', GITHUB_REPO: 'me/Repo' });
+    o4.setGh((url, opts) => {
+      if (opts.method === 'get') return { code: 200, body: { workflow_runs: [] } };
+      const inputs = JSON.parse(opts.payload).inputs;
+      return 'sermon_modes' in inputs ? { code: 422, body: { message: 'Unexpected inputs provided: ["sermon_modes"]' } } : { code: 204, body: {} };
+    });
+    const r = o4.post({ action: 'sync_run', password: 'pw', max_new: '2', categories: ['none'], sermon_modes: ['qt'] });
+    const last = JSON.parse(o4.ghCalls.filter((c) => c.opts.method === 'post').pop().opts.payload).inputs;
+    check('옛 sync.yml(sermon_modes 없음): 그 입력만 빼고 다시 요청', r.ok && r.workflow_old === true && !('sermon_modes' in last) && last.max_new === '2', JSON.stringify(last));
+  }
+  // 여러 날짜 · 여러 부분을 한꺼번에
+  g.post({ action: 'sync_run', password: 'pw', daily: true, daily_force: true, dates: ['2026-10-05', '2026-10-06', '2026-10-07'], modes: ['qt', 'quiz'] });
+  check('여러 날짜 한꺼번에: 날짜 3개 · 부분 2개', sent().daily_dates === '2026-10-05,2026-10-06,2026-10-07' && sent().daily_modes === 'qt,quiz' && sent().daily_force === 'true', JSON.stringify(sent()));
+  g.post({ action: 'sync_run', password: 'pw', proverbs: Array.from({ length: 20 }, (_, i) => i + 1), force: true, modes: ['qt', 'quiz'] });
+  check('잠언 여러 장 한꺼번에: 최대 12장', sent().proverbs === '1,2,3,4,5,6,7,8,9,10,11,12' && sent().daily_modes === 'qt,quiz', JSON.stringify(sent()));
   const pl = g.post({ action: 'add', password: 'pw', category: '청년부', playlist_url: 'https://www.youtube.com/playlist?list=PLabcdefghijk' });
   check('재생목록: 청년부예배 구분을 추가할 수 있음', pl.ok && g.sheets.get('Playlists').rows[1][0] === '청년부예배', JSON.stringify(pl));
 }
