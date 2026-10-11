@@ -48,8 +48,8 @@ function spreadLevels(list) {
 }
 
 /** 객관식·빈칸의 문제 순서를 섞고, 객관식 정답 위치를 고르게 흩습니다 */
-export function mixQuiz(mc, fb) {
-  const rng = makeRng([...mc.map((q) => q.question), ...fb.map((q) => q.question)].join('|'));
+export function mixQuiz(mc, fb, wa = []) {
+  const rng = makeRng([...mc.map((q) => q.question), ...fb.map((q) => q.question), ...wa.map((q) => q.question)].join('|'));
   let m = spreadLevels(shuffled(mc, rng)).map((q) => ({ ...q }));
   // 정답 위치: 보기 순서를 바꿔도 되는 문제는 0~3 번에 돌아가며 배정합니다 (같은 번호가 세 번 연속 나오지 않게)
   const free = m.map((q, i) => (optionsOrderFree(q.options) ? i : -1)).filter((i) => i >= 0);
@@ -67,5 +67,5 @@ export function mixQuiz(mc, fb) {
       q.answer_index = t;
     }
   });
-  return { mc: m, fb: shuffled(fb, rng) };
+  return { mc: m, fb: spreadLevels(shuffled(fb, rng)), wa: spreadLevels(shuffled(wa, rng)) };
 }

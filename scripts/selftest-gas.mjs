@@ -785,6 +785,14 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
   r = gp({ action: 'game_quiz', video_id: 'bible-20261008', mc: [0, 1, 2, 0], fb: [' 솔 로몬 '] });
   check('오늘의 말씀 퀴즈: Daily 탭으로 채점', r.ok && r.result.right === 4 && r.result.total === 5 && r.result.scored, JSON.stringify(r.result || r));
   check('오늘의 말씀 퀴즈: 아직 없는 날은 안내', /준비되지 않았/.test(gp({ action: 'game_quiz', video_id: 'bible-20261009', mc: [], fb: [] }).error || ''));
+  // 단답식(wa)도 채점하고, 푼 순서(order)대로 연속 정답을 셉니다
+  const quiz2 = { multiple_choice: [0, 1].map((i) => ({ question: `m${i}`, options: ['a', 'b', 'c', 'd'], answer_index: i })), fill_blank: [{ question: '____', answer: '솔로몬', accept: [] }], word_answer: [{ question: '누구?', answer: '여로보암', accept: ['여로보함'] }, { question: '무엇?', answer: '제단', accept: [] }] };
+  daily.rows.push(['2026-10-07', '열왕기상 10장', 'done', '[]', '', '', '', JSON.stringify(quiz2), '[]', '', '']);
+  check('퀴즈: 단답식이 있는데 답이 빠지면 안내', /모든 문제/.test(gp({ action: 'game_quiz', video_id: 'bible-20261007', mc: [0, 1], fb: ['솔로몬'] }).error || ''));
+  r = gp({ action: 'game_quiz', video_id: 'bible-20261007', mc: [0, 1], fb: ['솔로몬'], wa: [' 여로 보암 ', '틀림'], ms: [3000, 3000, 3000, 3000, 3000], order: [3, 0, 4, 1, 2] });
+  check('퀴즈: 단답식 채점(띄어쓰기 무시) · 푼 순서대로 연속 정답 계산', r.ok && r.result.right === 4 && r.result.total === 5 && JSON.stringify(r.result.wa) === '[true,false]' && r.result.score.total === 620, JSON.stringify(r.result || r));
+  r = gp({ action: 'game_quiz', video_id: 'bible-20261007', mc: [0, 1], fb: ['솔로몬'], wa: ['여로보함', '틀림'], ms: [3000, 3000, 3000, 3000, 3000], order: [0, 0, 1, 2, 3] });
+  check('퀴즈: 올바르지 않은 order 는 번호 순서로 계산 (다른 표기 인정)', r.ok && r.result.right === 4 && r.result.score.total === 660, JSON.stringify(r.result || r));
 
   // 신약 완독 업적: 신약 260장을 모두 체크하면
   const nt = [];

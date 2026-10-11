@@ -918,7 +918,10 @@ async function renderQuest(id) {
   }
   if (!location.hash.startsWith('#/q/')) return;
   const quiz = (d.study && d.study.quiz) || {};
-  const items = [...(quiz.multiple_choice || []).map((q) => ({ kind: 'mc', q })), ...(quiz.fill_blank || []).map((q) => ({ kind: 'fb', q }))];
+  // 번호 순서(객관식 → 빈칸 → 단답식)는 서버 채점 기준이고, 푸는 순서(items)는 세 종류를 섞습니다
+  const canon = [];
+  [['mc', quiz.multiple_choice], ['fb', quiz.fill_blank], ['wa', quiz.word_answer]].forEach(([kind, list]) => (list || []).forEach((q, ki) => canon.push({ kind, q, ki, ci: canon.length })));
+  const items = mixQuestKinds(canon);
   const back = h('a', { class: 'back', href: questHome(d) }, icon('back'), questHomeLabel(d));
   if (!items.length) {
     app.replaceChildren(back, h('div', { class: 'empty' }, h('p', { text: d.daily ? '이 날의 말씀 퀴즈는 아직 준비 중이에요.' : '이 설교에는 아직 퀴즈가 없어요.' })));
@@ -931,7 +934,8 @@ async function renderQuest(id) {
 
   const nMc = (quiz.multiple_choice || []).length;
   const nFb = (quiz.fill_blank || []).length;
-  const maxXp = nMc * GAME_RULES.xp.mc + nFb * GAME_RULES.xp.blank + GAME_RULES.xp.perfect;
+  const nWa = (quiz.word_answer || []).length;
+  const maxXp = nMc * GAME_RULES.xp.mc + (nFb + nWa) * GAME_RULES.xp.blank + GAME_RULES.xp.perfect;
   const intro = h(
     'section',
     { class: 'gm-card gm-qintro' },
@@ -941,7 +945,7 @@ async function renderQuest(id) {
       {},
       h('p', { class: 'gm-kicker', text: d.proverb ? '잠언 묵상' : d.daily ? `오늘의 말씀 · ${dateLabel(d.date)}` : `${catLabel(d.category)} · ${formatDate(d.date)}` }),
       h('h1', { text: d.title }),
-      h('p', { class: 'meta', text: `객관식 ${nMc}문제 · 빈칸 ${nFb}문제 (빈칸은 직접 입력, 띄어쓰기는 상관없어요)` }),
+      h('p', { class: 'meta', text: `객관식 ${nMc}문제${nFb ? ` · 빈칸 ${nFb}문제` : ''}${nWa ? ` · 단답식 ${nWa}문제` : ''} — 종류가 섞여 나와요 (빈칸·단답식은 직접 입력, 글자 수 힌트가 있고 띄어쓰기는 상관없어요)` }),
       h('p', { class: 'gm-rules' }, icon('flame'), ' 빨리 맞힐수록, 연속으로 맞힐수록 점수가 올라가요. 가족 순위에는 ', h('b', { text: '처음 푼 한 번' }), '의 점수가 올라가니 신중하게 도전하세요!'),
       h('div', { class: 'gm-qboard-slot' }),
       practice ? h('p', { class: 'gm-practice', text: why }) : h('p', { class: 'gm-stake' }, icon('star'), `모두 맞히면 최대 ${maxXp} XP · 달란트 ×${st.mult} (연속 ${st.streak}일)`),
@@ -952,7 +956,7 @@ async function renderQuest(id) {
   fillQuestBoard(intro.querySelector('.gm-qboard-slot'), d.id, { before: true });
 
   function play() {
-    const answers = { mc: new Array(nMc).fill(null), fb: new Array(nFb).fill('') };
+    const answers = { mc: new Array(nMc).fill(null), fb: new Array(nFb).fill(''), wa: new Array(nWa).fill('') };
     const correct = [];
     const ms = []; // 문제마다 걸린 시간 (속도 보너스 · 순위용)
     const kinds = items.map((it) => it.kind);
@@ -991,13 +995,13 @@ async function renderQuest(id) {
     const showQ = () => {
       const it = items[i];
       counter.textContent = `${i + 1} / ${items.length}`;
-      const lvl = it.kind === 'mc' ? it.q.level || '' : '';
-      const limitMs = it.kind === 'fb' ? QUEST_SCORE.limitBlank : QUEST_SCORE.limitMc;
+      const lvl = it.q.level || '';
+      const limitMs = it.kind === 'mc' ? QUEST_SCORE.limitMc : QUEST_SCORE.limitBlank;
       const timerFill = h('span', { class: 'gm-timer-fill', style: `animation-duration:${limitMs}ms` });
       const timerTxt = h('span', { class: 'gm-timer-txt', text: '⚡ 빠를수록 보너스' });
       const timer = h('div', { class: 'gm-timer', 'aria-hidden': 'true' }, h('span', { class: 'gm-timer-track' }, timerFill), timerTxt);
       const t0 = performance.now();
-      const card = h('section', { class: 'gm-qcard' }, h('div', { class: 'gm-qtags' }, h('span', { class: 'gm-chip-soft', text: it.kind === 'mc' ? '객관식' : '빈칸 채우기' }), lvl ? h('span', { class: `gm-chip-soft lv-${lvl}`, text: lvl }) : null), timer);
+      const card = h('section', { class: 'gm-qcard' }, h('div', { class: 'gm-qtags' }, h('span', { class: 'gm-chip-soft', text: it.kind === 'mc' ? '객관식' : it.kind === 'fb' ? '빈칸 채우기' : '단답식' }), lvl ? h('span', { class: `gm-chip-soft lv-${lvl}`, text: lvl }) : null), timer);
       timerFill.addEventListener('animationend', () => {
         timer.classList.add('out');
         timerTxt.textContent = '속도 보너스 끝 — 그래도 맞히면 점수!';
@@ -1040,7 +1044,7 @@ async function renderQuest(id) {
         feedback.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       };
       if (it.kind === 'mc') {
-        const mi = items.slice(0, i).filter((x) => x.kind === 'mc').length;
+        const mi = it.ki;
         card.append(h('h2', { class: 'gm-qtext' }, inlineMd(it.q.question)));
         const opts = h('div', { class: 'gm-opts' });
         it.q.options.forEach((o, k) => {
@@ -1058,9 +1062,10 @@ async function renderQuest(id) {
         });
         card.append(opts);
       } else {
-        const fi = items.slice(0, i).filter((x) => x.kind === 'fb').length;
-        const parts = String(it.q.question).split(/_{2,}/);
-        const input = h('input', { class: 'gm-blank-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', enterkeyhint: 'done', 'aria-label': '빈칸에 들어갈 말' });
+        const fi = it.ki;
+        const isWa = it.kind === 'wa';
+        const parts = isWa ? [String(it.q.question)] : String(it.q.question).split(/_{2,}/);
+        const input = h('input', { class: 'gm-blank-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', enterkeyhint: 'done', 'aria-label': isWa ? '답' : '빈칸에 들어갈 말' });
         const sentence = h('h2', { class: 'gm-qtext' }, parts.length > 1 ? [inlineMd(parts[0]), h('span', { class: 'gm-blank', text: '?' }), h('span', { class: 'gm-blank-len', text: blankHint(it.q.answer) }), inlineMd(parts.slice(1).join('____'))] : inlineMd(blankQuestionText({ question: it.q.question, answer: it.q.answer })));
         const check = h('button', { class: 'btn primary', type: 'button' }, '확인');
         const submit = () => {
@@ -1069,7 +1074,7 @@ async function renderQuest(id) {
             input.focus();
             return;
           }
-          answers.fb[fi] = v;
+          answers[it.kind][fi] = v;
           input.disabled = true;
           check.disabled = true;
           const accept = [it.q.answer, ...(it.q.accept || [])];
@@ -1088,7 +1093,7 @@ async function renderQuest(id) {
             submit();
           }
         });
-        card.append(sentence, h('div', { class: 'gm-blank-row' }, input, check), h('p', { class: 'meta', text: `핵심 단어 하나를 적어 주세요${blankHint(it.q.answer) ? ` ${blankHint(it.q.answer)}` : ''}. 띄어쓰기는 상관없어요.` }));
+        card.append(sentence, h('div', { class: 'gm-blank-row' }, input, check), h('p', { class: 'meta', text: `${isWa ? '짧은 낱말로 답해 주세요' : '핵심 단어 하나를 적어 주세요'}${blankHint(it.q.answer) ? ` ${blankHint(it.q.answer)}` : ''}. 띄어쓰기는 상관없어요.` }));
         setTimeout(() => input.focus({ preventScroll: true }), 80);
       }
       card.append(feedback);
@@ -1106,7 +1111,10 @@ async function renderQuest(id) {
       markQuestDone(d.id, right, items.length); // 이 퀴즈의 문제·해설 목록이 열립니다
       const localScore = questScore(correct.map(Boolean), ms, kinds);
       if (gameCanSave()) {
-        const r = await gameCall('game_quiz', { video_id: d.id, mc: answers.mc.map((x) => (x == null ? -1 : x)), fb: answers.fb, ms: ms.map((x) => x || 0) });
+        // ms 는 번호 순서(객관식 → 빈칸 → 단답식)로, order 는 실제로 푼 순서(번호)로 보냅니다
+        const msByNo = new Array(items.length).fill(0);
+        items.forEach((it, k) => (msByNo[it.ci] = ms[k] || 0));
+        const r = await gameCall('game_quiz', { video_id: d.id, mc: answers.mc.map((x) => (x == null ? -1 : x)), fb: answers.fb, wa: answers.wa, ms: msByNo, order: items.map((it) => it.ci) });
         if (r.ok) {
           server = r.result;
           events = r.events || [];
@@ -1189,6 +1197,42 @@ function eventCard(ev) {
     default:
       return null;
   }
+}
+
+/** 객관식·빈칸·단답식을 섞은 푸는 순서. 직접 입력하는 문제(빈칸·단답식)를 객관식 사이사이에 고르게 흩어 놓습니다. */
+function mixQuestKinds(canon) {
+  const shuffle = (list) => {
+    const a = list.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+  const mc = shuffle(canon.filter((x) => x.kind === 'mc'));
+  let typed = shuffle(canon.filter((x) => x.kind !== 'mc'));
+  // 빈칸·단답식끼리도 같은 종류가 연달아 나오지 않게
+  for (let i = 1; i < typed.length; i++) {
+    if (typed[i].kind === typed[i - 1].kind) {
+      const k = typed.findIndex((x, j) => j > i && x.kind !== typed[i].kind);
+      if (k > 0) [typed[i], typed[k]] = [typed[k], typed[i]];
+    }
+  }
+  const n = canon.length;
+  if (!typed.length || !mc.length) return shuffle(canon);
+  // 전체를 직접 입력 문제 수만큼의 구간으로 나누고, 구간마다 직접 입력 문제를 하나씩 무작위 위치에 넣습니다
+  const out = [];
+  let mi = 0;
+  typed.forEach((t, j) => {
+    const from = Math.floor((j * n) / typed.length);
+    const to = Math.floor(((j + 1) * n) / typed.length);
+    const at = from + Math.floor(Math.random() * Math.max(1, to - from));
+    while (out.length < at && mi < mc.length) out.push(mc[mi++]);
+    out.push(t);
+    while (out.length < to - 1 && mi < mc.length && j + 1 < typed.length) out.push(mc[mi++]);
+  });
+  while (mi < mc.length) out.push(mc[mi++]);
+  return out;
 }
 
 function renderResult({ d, items, correct, answers, right, total, server, events, err, bestCombo, shell, score }) {

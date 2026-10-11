@@ -9,7 +9,7 @@ import { koReference, parseNumberedLines, parseNumberedFlow, parseBskorea, parse
 import { normalizePassages, toUsfm } from './lib/bible-books.mjs';
 import { extractJson, normalizeReview, normalizeQt, normalizeStudy, normalizeGroup, readResponseText, blankKey, normalizeDailyQt, normalizeDailyStudy, normalizeDailyQuiz } from './lib/gemini.mjs';
 import { mixQuiz, optionsOrderFree } from './lib/quizmix.mjs';
-import { QUIZ_COUNTS, systemPromptForDaily, buildDailyMessage } from './lib/prompt.mjs';
+import { QUIZ_COUNTS, QUIZ_LEVEL_COUNTS, systemPromptForDaily, buildDailyMessage } from './lib/prompt.mjs';
 import { MODES, systemPromptFor, buildUserMessage } from './lib/prompt.mjs';
 import { buildQueue } from './lib/queue.mjs';
 import { guessFromTitle, parseAnyTitle } from './lib/title.mjs';
@@ -151,7 +151,7 @@ const rawReview = () => ({
 const rawQt = () => ({ opening_prayer: '여는 기도', closing_prayer: '맺는 기도', songs: [{ title: '곡', artist: '가수', kind: 'ccm' }], outline: [{ heading: 'h', paragraphs: ['p'] }], questions: ['질문?'], applications: [{ title: 't', detail: 'd' }] });
 const mcq = (n) => Array.from({ length: n }, (_, i) => ({ question: `q${i}`, options: ['a', 'b', 'c', 'd'], answer_index: 1, explanation: 'e' }));
 const sa = (n) => Array.from({ length: n }, (_, i) => ({ question: `q${i}`, answer: `a${i}`, explanation: 'e' }));
-const rawStudy = () => ({ opening_prayer: '여', closing_prayer: '맺', songs: [], deep_dive: [{ heading: 'h', paragraphs: ['p'], word_notes: [{ word: '믿음', original: 'pistis', meaning: '신뢰' }] }], summary: 's', quiz: { multiple_choice: mcq(5), fill_blank: sa(5), short_answer: sa(5) } });
+const rawStudy = () => ({ opening_prayer: '여', closing_prayer: '맺', songs: [], deep_dive: [{ heading: 'h', paragraphs: ['p'], word_notes: [{ word: '믿음', original: 'pistis', meaning: '신뢰' }] }], summary: 's', quiz: { multiple_choice: mcq(20), fill_blank: sa(5), word_answer: sa(5), short_answer: sa(5) } });
 const rawGroup = () => ({
   representative_prayer: '대표 기도', closing_prayer: '맺는 기도', songs: [], outline: [{ heading: 'h', paragraphs: ['p'] }], applications: [{ title: 't', detail: 'd' }],
   questions: { icebreaker: { question: '아이스브레이크', answer: '예' }, observation: [{ question: '관찰', answer: '답' }], reflection: ['묵상'], application: [], prayer: [] },
@@ -177,11 +177,11 @@ await t('QT 묵상: 찬양 종류 CCM 통일, 필수 항목 검사', () => {
   assert.throws(() => normalizeQt({ ...rawQt(), questions: [] }), /질문/);
   assert.throws(() => normalizeQt({ ...rawQt(), opening_prayer: '' }), /기도/);
 });
-await t('성경공부: 퀴즈 15문제(5·5·5), 정답 번호가 잘못된 객관식은 걸러냄', () => {
+await t('성경공부: 퀴즈 객관식 20 · 빈칸 5 · 단답식 5 · 주관식 5, 정답 번호가 잘못된 객관식은 걸러냄', () => {
   const s = normalizeStudy(rawStudy());
-  assert.deepEqual([s.quiz.multiple_choice.length, s.quiz.fill_blank.length, s.quiz.short_answer.length], [5, 5, 5]);
+  assert.deepEqual([s.quiz.multiple_choice.length, s.quiz.fill_blank.length, s.quiz.word_answer.length, s.quiz.short_answer.length], [20, 5, 5, 5]);
   const bad = rawStudy();
-  bad.quiz.multiple_choice = mcq(5).map((m, i) => (i < 3 ? { ...m, answer_index: 9 } : m));
+  bad.quiz.multiple_choice = mcq(20).map((m, i) => (i < 5 ? { ...m, answer_index: 9 } : m));
   assert.throws(() => normalizeStudy(bad), /퀴즈가 부족/);
 });
 await t('QT 묵상 질문: 길잡이·예시 답안이 붙은 새 형식과 글자만 온 옛 형식 모두 받음', () => {
@@ -189,8 +189,12 @@ await t('QT 묵상 질문: 길잡이·예시 답안이 붙은 새 형식과 글�
   assert.deepEqual(q.questions[0], { question: '무엇을 내려놓을까요?', guide: '12:1을 다시 읽어 보세요', example: '저는…' });
   assert.deepEqual(q.questions[1], { question: '옛 질문', guide: '', example: '' });
 });
-await t('퀴즈 개수: 객관식 15 · 빈칸 5 · 주관식 5, 프롬프트에 헷갈리는 보기·키워드 규칙', () => {
-  assert.deepEqual(QUIZ_COUNTS, { multiple_choice: 15, fill_blank: 5, short_answer: 5 });
+await t('퀴즈 개수: 객관식 20(5·8·7) · 빈칸 5(2·2·1) · 단답식 5(2·2·1) · 주관식 5, 프롬프트에 헷갈리는 보기·키워드 규칙', () => {
+  assert.deepEqual(QUIZ_COUNTS, { multiple_choice: 20, fill_blank: 5, word_answer: 5, short_answer: 5 });
+  for (const k of ['multiple_choice', 'fill_blank', 'word_answer']) assert.equal(Object.values(QUIZ_LEVEL_COUNTS[k]).reduce((a, b) => a + b, 0), QUIZ_COUNTS[k]);
+  assert.deepEqual(QUIZ_LEVEL_COUNTS, { multiple_choice: { 쉬움: 5, 중간: 8, 어려움: 7 }, fill_blank: { 쉬움: 2, 중간: 2, 어려움: 1 }, word_answer: { 쉬움: 2, 중간: 2, 어려움: 1 } });
+  assert.match(systemPromptFor('study'), /쉬움 5개, 중간 8개, 어려움 7개/);
+  assert.match(systemPromptFor('study'), /단답식/);
   const p = systemPromptFor('study');
   assert.match(p, /오답 보기 3개는 모두 그럴듯/);
   assert.match(p, /짧은 단어 하나/);
@@ -202,16 +206,19 @@ await t('빈칸: 정답 키워드·다른 표기(accept)·띄어쓰기 무시 �
   const raw = rawStudy();
   raw.quiz.fill_blank = [{ question: '____ 안에서', answer: '하나님 나라', accept: ['천국', '  '], explanation: '' }, ...sa(4)];
   const s = normalizeStudy(raw);
-  assert.deepEqual(s.quiz.fill_blank[0].accept, ['천국']);
+  assert.deepEqual(s.quiz.fill_blank.find((x) => x.answer === '하나님 나라').accept, ['천국']); // 문제 순서는 섞임
   assert.equal(blankKey('하나님 나라'), blankKey('하나님나라'));
   assert.equal(blankKey(' "칭의." '), '칭의');
   assert.equal(blankKey('Grace'), blankKey('grace'));
 });
 await t('객관식 난이도 표시(쉬움·중간·어려움)를 받아 둠', () => {
   const raw = rawStudy();
-  raw.quiz.multiple_choice = mcq(5).map((m, i) => ({ ...m, level: ['쉬움', '중간', '어려움', 'hard?', ''][i] }));
+  raw.quiz.multiple_choice = mcq(20).map((m, i) => ({ ...m, level: ['쉬움', '중간', '어려움', 'hard?', ''][i % 5] }));
+  raw.quiz.fill_blank = sa(5).map((m, i) => ({ ...m, level: ['쉬움', '쉬움', '중간', '중간', '어려움'][i] }));
   const s = normalizeStudy(raw);
-  assert.deepEqual(s.quiz.multiple_choice.map((m) => m.level).sort(), ['', '', '쉬움', '어려움', '중간']); // 순서는 섞이므로 모음만 비교
+  const cnt = (list) => list.reduce((o, m) => ((o[m.level] = (o[m.level] || 0) + 1), o), {}); // 순서는 섞이므로 개수만 비교
+  assert.deepEqual(cnt(s.quiz.multiple_choice), { 쉬움: 4, 중간: 4, 어려움: 4, '': 8 });
+  assert.deepEqual(cnt(s.quiz.fill_blank), { 쉬움: 2, 중간: 2, 어려움: 1 });
 });
 await t('퀴즈 섞기: 문제·난이도 순서가 섞이고, 정답은 보기를 따라 움직임', () => {
   const lv = ['쉬움', '쉬움', '쉬움', '중간', '중간', '중간', '중간', '중간', '중간', '중간', '어려움', '어려움', '어려움', '어려움', '어려움'];
@@ -245,14 +252,14 @@ await t('퀴즈 섞기: 보기끼리 가리키는 문제("모두" 등)는 보기
 });
 await t('객관식: 정답이 거의 매번 가장 긴 보기면 다시 만들게 함', () => {
   const raw = rawStudy();
-  raw.quiz.multiple_choice = Array.from({ length: 10 }, (_, i) => ({ question: `문제${i}`, options: ['짧다', '짧다요', '조금 짧다', '이것이 훨씬 길고 자세한 정답입니다'], answer_index: 3, level: '중간', explanation: '' }));
+  raw.quiz.multiple_choice = Array.from({ length: 20 }, (_, i) => ({ question: `문제${i}`, options: ['짧다', '짧다요', '조금 짧다', '이것이 훨씬 길고 자세한 정답입니다'], answer_index: 3, level: '중간', explanation: '' }));
   assert.throws(() => normalizeStudy(raw), /가장 긴 보기/);
   raw.quiz.multiple_choice = raw.quiz.multiple_choice.map((m, i) => (i % 2 ? { ...m, options: ['이것이 훨씬 길고 자세한 오답입니다', '짧다요', '조금 짧다', '정답'], answer_index: 3 } : m));
   assert.doesNotThrow(() => normalizeStudy(raw));
 });
 await t('퀴즈 프롬프트: 순서는 앱이 섞고, 정답이 가장 긴 보기가 되지 않게 안내', () => {
   for (const p of [systemPromptFor('study'), systemPromptForDaily('quiz')]) {
-    assert.match(p, /가장 긴 문제는 4개 이하/);
+    assert.match(p, /가장 긴 문제는 6개 이하/);
     assert.match(p, /앱이 .*섞/);
     assert.doesNotMatch(p, /쉬운 것에서 어려운 것/);
   }
@@ -444,7 +451,7 @@ const dailyAi = (fail = []) => ({
     this.calls.push(mode);
     if (fail.includes(mode)) throw new Error('일시 오류');
     assert.match(text, /솔로몬/);
-    if (mode === 'quiz') return normalizeDailyQuiz({ quiz: { multiple_choice: mcq(15), fill_blank: sa(5), short_answer: sa(5) } });
+    if (mode === 'quiz') return normalizeDailyQuiz({ quiz: { multiple_choice: mcq(20), fill_blank: sa(5), word_answer: sa(5), short_answer: sa(5) } });
     if (mode === 'qt') return normalizeDailyQt({ ...rawQt(), key_verse: { reference: '마가복음 10:45', text: '인자가 온 것은' }, summaries: [{ reference: '열왕기상 11장', summary: '솔로몬이 마음을 돌립니다' }] });
     if (mode === 'study') return normalizeDailyStudy({ ...rawStudy(), quiz: undefined });
     return normalizeGroup(rawGroup());
@@ -457,7 +464,7 @@ await t('오늘의 말씀 하루치: 4가지 생성 · 영상 · 일부 실패�
   assert.equal(row.status, 'error');
   assert.equal(row.refs, '열왕기상 11장 · 마가복음 10장');
   assert.match(row.note, /group/);
-  assert.equal(JSON.parse(row.quiz_json).multiple_choice.length, 15);
+  assert.equal(JSON.parse(row.quiz_json).multiple_choice.length, 20);
   const ai2 = dailyAi();
   const row2 = await buildDailyDay('2026-10-08', row, { ai: ai2, fetchReading: async () => { throw new Error('다시 가져오면 안 됨'); }, now: () => 'T' });
   assert.deepEqual(ai2.calls, ['group']);
@@ -574,11 +581,11 @@ await t('오늘의 말씀 내보내기: 날짜별 파일 + 목록(최신순)', a
   assert.equal(one.passages[0].book, '열왕기상');
   await fs.rm(dir, { recursive: true, force: true });
 });
-await t('오늘의 말씀 프롬프트: 본문에서만 출제 · 객관식 15 · 쉬움/중간/어려움 · CCM 한 곡', () => {
+await t('오늘의 말씀 프롬프트: 본문에서만 출제 · 객관식 20 · 쉬움/중간/어려움 · CCM 한 곡', () => {
   const q = systemPromptForDaily('quiz');
   assert.match(q, /반드시 아래에 주어진 오늘의 성경 본문 내용에서만/);
-  assert.match(q, /쉬움 4개, 중간 6개, 어려움 5개/);
-  assert.match(q, /객관식 15개 · 빈칸 5개 · 주관식 5개/);
+  assert.match(q, /쉬움 5개, 중간 8개, 어려움 7개/);
+  assert.match(q, /객관식 20개 · 빈칸 5개 · 단답식 5개 · 주관식 5개/);
   for (const m of ['qt', 'study', 'group']) assert.match(systemPromptForDaily(m), /CCM을 정확히 1곡/);
   assert.match(systemPromptFor('qt'), /CCM을 정확히 1곡/); // 설교도 CCM 한 곡
   assert.match(systemPromptForDaily('qt'), /summaries/);

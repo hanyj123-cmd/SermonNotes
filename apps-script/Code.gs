@@ -1652,6 +1652,15 @@ function proverbsStatus() {
   return { ok: true, run: latestRunSafe(), chapters: chapters };
 }
 // 잠언 퀴즈 ID: prov-YYYYMM-CC (달마다 다시 풀 수 있게 달이 들어 있습니다)
+/** 저장된 퀴즈에서 채점하는 문제 묶음: 객관식(mc) · 빈칸(fb) · 단답식(wa). 예전 퀴즈에는 단답식이 없습니다. */
+function gameQuizLists(quiz) {
+  return {
+    mc: Array.isArray(quiz.multiple_choice) ? quiz.multiple_choice : [],
+    fb: Array.isArray(quiz.fill_blank) ? quiz.fill_blank : [],
+    wa: Array.isArray(quiz.word_answer) ? quiz.word_answer : [],
+  };
+}
+
 function gameProverbQuiz(id) {
   const ch = Number(/^prov-\d{6}-(\d{2})$/.exec(id)[1]);
   const t = proverbsSheetRows();
@@ -1660,7 +1669,7 @@ function gameProverbQuiz(id) {
   for (let i = 0; i < t.rows.length; i++) {
     if (Number(t.rows[i][cCh]) === ch) {
       const quiz = parseJsonObject(t.rows[i][cQuiz]);
-      if (Array.isArray(quiz.multiple_choice) && quiz.multiple_choice.length) return { mc: quiz.multiple_choice, fb: Array.isArray(quiz.fill_blank) ? quiz.fill_blank : [] };
+      if (Array.isArray(quiz.multiple_choice) && quiz.multiple_choice.length) return gameQuizLists(quiz);
     }
   }
   throw new Error('이 장의 잠언 퀴즈가 아직 준비되지 않았습니다.');
@@ -1679,7 +1688,7 @@ function gameDailyQuiz(id) {
   for (let i = 0; i < rows.length; i++) {
     if (String(rows[i][cDate]) === date) {
       const quiz = parseJsonObject(rows[i][cQuiz]);
-      return { mc: Array.isArray(quiz.multiple_choice) ? quiz.multiple_choice : [], fb: Array.isArray(quiz.fill_blank) ? quiz.fill_blank : [] };
+      return gameQuizLists(quiz);
     }
   }
   throw new Error('이 날의 말씀 퀴즈가 아직 준비되지 않았습니다.');
@@ -1696,7 +1705,7 @@ function gameStudyQuiz(videoId) {
     if (String(ids[i][0]) === videoId) {
       const study = parseJsonObject(sh.getRange(i + 2, COL.mode_study, 1, 1).getValues()[0][0]);
       const quiz = study.quiz || {};
-      return { mc: Array.isArray(quiz.multiple_choice) ? quiz.multiple_choice : [], fb: Array.isArray(quiz.fill_blank) ? quiz.fill_blank : [] };
+      return gameQuizLists(quiz);
     }
   }
   throw new Error('설교를 찾을 수 없습니다.');
@@ -1714,7 +1723,7 @@ function gameQuestPoints(ok, ms, kind, combo) {
   if (!ok) return { base: 0, speed: 0, combo: 0 };
   const Q = GAME_CONF.score;
   const t = gameClampMs(ms);
-  const limit = kind === 'fb' ? Q.limitBlank : Q.limitMc;
+  const limit = kind === 'fb' || kind === 'wa' ? Q.limitBlank : Q.limitMc;
   const speed = t <= Q.speedFast ? Q.speedMax : t >= limit ? 0 : Math.round((Q.speedMax * (limit - t)) / (limit - Q.speedFast));
   return { base: Q.base, speed: speed, combo: combo >= 2 ? Q.comboStep * Math.min(combo - 1, Q.comboCap) : 0 };
 }
@@ -1769,33 +1778,59 @@ function gameQuestBoard(user, body) {
   return { ok: true, id: id, count: list.length, players: list.slice(0, 10) };
 }
 
+/** 화면에서 푼 순서(0..n-1 의 순열). 올바르지 않으면 null (번호 순서로 계산) */
+function gameQuestOrder(order, n) {
+  if (!Array.isArray(order) || order.length !== n) return null;
+  const seen = {};
+  for (let i = 0; i < order.length; i++) {
+    const v = Number(order[i]);
+    if (!Number.isInteger(v) || v < 0 || v >= n || seen[v]) return null;
+    seen[v] = true;
+  }
+  return order.map(Number);
+}
+
 function gameQuiz(st, body, today, events) {
   const videoId = checkVideoId(body.video_id);
   const quiz = gameStudyQuiz(videoId);
-  const total = quiz.mc.length + quiz.fb.length;
+  const total = quiz.mc.length + quiz.fb.length + quiz.wa.length;
   if (!total) throw new Error('이 설교에는 퀴즈가 없습니다.');
   const mcAns = Array.isArray(body.mc) ? body.mc : [];
   const fbAns = Array.isArray(body.fb) ? body.fb : [];
-  if (mcAns.length !== quiz.mc.length || fbAns.length !== quiz.fb.length) throw new Error('모든 문제에 답한 뒤 제출해 주세요.');
+  const waAns = Array.isArray(body.wa) ? body.wa : [];
+  if (mcAns.length !== quiz.mc.length || fbAns.length !== quiz.fb.length || waAns.length !== quiz.wa.length) throw new Error('모든 문제에 답한 뒤 제출해 주세요.');
   const mcOk = quiz.mc.map(function (q, i) {
     return Number(mcAns[i]) === Number(q.answer_index);
   });
-  const fbOk = quiz.fb.map(function (q, i) {
-    const got = gameBlankKey(String(fbAns[i] || '').slice(0, 80));
-    if (!got) return false;
-    const accept = [q.answer].concat(Array.isArray(q.accept) ? q.accept : []);
-    return accept.some(function (a) {
-      return gameBlankKey(a) === got;
+  const typedOk = function (list, answers) {
+    return list.map(function (q, i) {
+      const got = gameBlankKey(String(answers[i] || '').slice(0, 80));
+      if (!got) return false;
+      const accept = [q.answer].concat(Array.isArray(q.accept) ? q.accept : []);
+      return accept.some(function (a) {
+        return gameBlankKey(a) === got;
+      });
     });
-  });
+  };
+  const fbOk = typedOk(quiz.fb, fbAns);
+  const waOk = typedOk(quiz.wa, waAns);
   const mcRight = mcOk.filter(Boolean).length;
   const fbRight = fbOk.filter(Boolean).length;
-  const right = mcRight + fbRight;
+  const waRight = waOk.filter(Boolean).length;
+  const right = mcRight + fbRight + waRight;
   // 퀘스트 점수 (가족 순위용): 정답 + 빠른 정답 + 연속 정답 + 만점. 걸린 시간(ms)은 화면에서 받아 범위만 맞춰 씁니다.
-  const oks = mcOk.concat(fbOk);
-  const kinds = quiz.mc.map(function () { return 'mc'; }).concat(quiz.fb.map(function () { return 'fb'; }));
+  // 문제는 객관식 → 빈칸 → 단답식 순으로 번호를 매기고(ms 도 같은 번호), 화면에서 푼 순서(order)대로 연속 정답을 셉니다.
+  let oks = mcOk.concat(fbOk, waOk);
+  let kinds = quiz.mc.map(function () { return 'mc'; }).concat(quiz.fb.map(function () { return 'fb'; }), quiz.wa.map(function () { return 'wa'; }));
   const msIn = Array.isArray(body.ms) ? body.ms : [];
-  const score = gameQuestScore(oks, oks.map(function (_, i) { return msIn[i]; }), kinds);
+  let msList = oks.map(function (_, i) { return msIn[i]; });
+  const order = gameQuestOrder(body.order, oks.length);
+  if (order) {
+    oks = order.map(function (i) { return oks[i]; });
+    kinds = order.map(function (i) { return kinds[i]; });
+    msList = order.map(function (i) { return msList[i]; });
+  }
+  const score = gameQuestScore(oks, msList, kinds);
   const perfect = right === total;
   const passed = right >= Math.ceil(total * GAME_CONF.rules.passRate);
   if (st.daily.day !== today) st.daily = { day: today, n: 0 };
@@ -1808,8 +1843,8 @@ function gameQuiz(st, body, today, events) {
   if (scored) {
     const r = GAME_CONF.rules;
     const mult = gameMult(st.streak);
-    xp = mcRight * r.xp.mc + fbRight * r.xp.blank + (perfect ? r.xp.perfect : 0);
-    talents = Math.round((mcRight * r.talent.mc + fbRight * r.talent.blank + (perfect ? r.talent.perfect : 0)) * mult);
+    xp = mcRight * r.xp.mc + (fbRight + waRight) * r.xp.blank + (perfect ? r.xp.perfect : 0);
+    talents = Math.round((mcRight * r.talent.mc + (fbRight + waRight) * r.talent.blank + (perfect ? r.talent.perfect : 0)) * mult);
     st.daily.n += 1;
     st.quizzes[videoId] = { s: right, t: total, at: today };
     st.stats.quests += 1;
@@ -1843,6 +1878,7 @@ function gameQuiz(st, body, today, events) {
       mult: gameMult(st.streak),
       mc: mcOk,
       fb: fbOk,
+      wa: waOk,
     },
   };
 }

@@ -7,6 +7,8 @@ import { mixQuiz } from './quizmix.mjs';
 export const DEFAULT_MODEL = 'gemini-3.8-flash';
 const MAX_TRANSCRIPT_CHARS = 150_000;
 const MAX_ATTEMPTS = 3;
+// 새로 만든 퀴즈가 최소한 이만큼은 있어야 저장합니다 (정해진 개수보다 조금 여유를 둡니다)
+const QUIZ_MIN = { multiple_choice: 17, fill_blank: 4, word_answer: 4 };
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 
 export function extractJson(text) {
@@ -16,6 +18,7 @@ export function extractJson(text) {
   return JSON.parse(text.slice(start, end + 1));
 }
 
+const LEVEL_OF = (v) => (/어려/.test(asString(v)) ? '어려움' : /중/.test(asString(v)) ? '중간' : /쉬/.test(asString(v)) ? '쉬움' : '');
 const asArray = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim()) : []);
 const asString = (v) => (typeof v === 'string' ? v.trim() : '');
 const clip = (v, n) => asString(v).slice(0, n);
@@ -121,13 +124,16 @@ export function normalizeQuiz(q = {}) {
     .map((x) => {
       const options = asArray(x?.options).slice(0, 5);
       const idx = Number(x?.answer_index);
-      const level = /어려/.test(asString(x?.level)) ? '어려움' : /중/.test(asString(x?.level)) ? '중간' : /쉬/.test(asString(x?.level)) ? '쉬움' : '';
+      const level = LEVEL_OF(x?.level);
       return { question: asString(x?.question), options, answer_index: Number.isInteger(idx) ? idx : -1, level, explanation: asString(x?.explanation) };
     })
     .filter((x) => x.question && x.options.length >= 2 && x.answer_index >= 0 && x.answer_index < x.options.length);
-  const fb = (Array.isArray(q.fill_blank) ? q.fill_blank : [])
-    .map((x) => ({ question: asString(x?.question), answer: clip(x?.answer, 40), accept: asArray(x?.accept).map((a) => a.slice(0, 40)).filter((a) => blankKey(a)).slice(0, 6), explanation: asString(x?.explanation) }))
-    .filter((x) => x.question && blankKey(x.answer));
+  const shortWord = (list) =>
+    (Array.isArray(list) ? list : [])
+      .map((x) => ({ question: asString(x?.question), answer: clip(x?.answer, 40), accept: asArray(x?.accept).map((a) => a.slice(0, 40)).filter((a) => blankKey(a)).slice(0, 6), level: LEVEL_OF(x?.level), explanation: asString(x?.explanation) }))
+      .filter((x) => x.question && blankKey(x.answer));
+  const fb = shortWord(q.fill_blank);
+  const wa = shortWord(q.word_answer);
   const sa = (Array.isArray(q.short_answer) ? q.short_answer : [])
     .map((x) => ({ question: asString(x?.question), answer: asString(x?.answer), explanation: asString(x?.explanation) }))
     .filter((x) => x.question && x.answer);
@@ -139,12 +145,12 @@ export function normalizeQuiz(q = {}) {
     }).length;
     need(longest / mc.length <= 0.65, `객관식 정답이 가장 긴 보기인 문제가 너무 많습니다 (${longest}/${mc.length})`);
   }
-  const mixed = mixQuiz(mc, fb);
-  return { multiple_choice: mixed.mc, fill_blank: mixed.fb, short_answer: sa };
+  const mixed = mixQuiz(mc, fb, wa);
+  return { multiple_choice: mixed.mc.slice(0, 20), fill_blank: mixed.fb.slice(0, 5), word_answer: mixed.wa.slice(0, 5), short_answer: sa.slice(0, 5) };
 }
 
 export function normalizeStudy(raw, { requireQuiz = true } = {}) {
-  const { multiple_choice: mc, fill_blank: fb, short_answer: sa } = normalizeQuiz(raw.quiz || {});
+  const { multiple_choice: mc, fill_blank: fb, word_answer: wa, short_answer: sa } = normalizeQuiz(raw.quiz || {});
   const out = {
     opening_prayer: asString(raw.opening_prayer),
     songs: songItems(raw.songs),
@@ -160,11 +166,11 @@ export function normalizeStudy(raw, { requireQuiz = true } = {}) {
       })
       .filter(Boolean),
     summary: asString(raw.summary),
-    quiz: { multiple_choice: mc, fill_blank: fb, short_answer: sa },
+    quiz: { multiple_choice: mc, fill_blank: fb, word_answer: wa, short_answer: sa },
     closing_prayer: asString(raw.closing_prayer),
   };
   need(out.deep_dive.length, '신학 딥다이브(deep_dive)가 비어 있습니다');
-  if (requireQuiz) need(mc.length >= 3 && fb.length >= 3 && sa.length >= 3, `퀴즈가 부족합니다 (객관식 ${mc.length}, 빈칸 ${fb.length}, 주관식 ${sa.length})`);
+  if (requireQuiz) need(mc.length >= QUIZ_MIN.multiple_choice && fb.length >= QUIZ_MIN.fill_blank && wa.length >= QUIZ_MIN.word_answer && sa.length >= 3, `퀴즈가 부족합니다 (객관식 ${mc.length}, 빈칸 ${fb.length}, 단답식 ${wa.length}, 주관식 ${sa.length})`);
   need(out.opening_prayer && out.closing_prayer, '기도문이 비어 있습니다');
   return out;
 }
@@ -244,7 +250,7 @@ export function normalizeDailyStudy(raw) {
 }
 export function normalizeDailyQuiz(raw) {
   const quiz = normalizeQuiz(raw.quiz || raw);
-  need(quiz.multiple_choice.length >= 8 && quiz.fill_blank.length >= 3, `퀴즈가 부족합니다 (객관식 ${quiz.multiple_choice.length}, 빈칸 ${quiz.fill_blank.length})`);
+  need(quiz.multiple_choice.length >= QUIZ_MIN.multiple_choice && quiz.fill_blank.length >= QUIZ_MIN.fill_blank && quiz.word_answer.length >= QUIZ_MIN.word_answer, `퀴즈가 부족합니다 (객관식 ${quiz.multiple_choice.length}, 빈칸 ${quiz.fill_blank.length}, 단답식 ${quiz.word_answer.length})`);
   return quiz;
 }
 const DAILY_NORMALIZERS = { qt: normalizeDailyQt, study: normalizeDailyStudy, group: normalizeGroup, quiz: normalizeDailyQuiz };

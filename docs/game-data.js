@@ -17,7 +17,7 @@ const QUEST_SCORE = {
   base: 100, // 정답 하나
   speedMax: 50, // 빠른 정답 보너스 (speedFast 안에 맞히면 최대, limit 에 가까울수록 0)
   speedFast: 3000,
-  limitMc: 20000, // 객관식은 20초, 빈칸은 30초 안에 맞혀야 속도 보너스가 남아 있어요
+  limitMc: 20000, // 객관식은 20초, 빈칸·단답식은 30초 안에 맞혀야 속도 보너스가 남아 있어요
   limitBlank: 30000,
   minMs: 1000, // 이보다 빨라도 1초로 쳐요
   maxMs: 120000,
@@ -30,11 +30,11 @@ function questPoints(ok, ms, kind, combo) {
   if (!ok) return { base: 0, speed: 0, combo: 0 };
   const Q = QUEST_SCORE;
   const t = Math.min(Q.maxMs, Math.max(Q.minMs, Math.round(Number(ms) || Q.maxMs)));
-  const limit = kind === 'fb' ? Q.limitBlank : Q.limitMc;
+  const limit = kind === 'fb' || kind === 'wa' ? Q.limitBlank : Q.limitMc;
   const speed = t <= Q.speedFast ? Q.speedMax : t >= limit ? 0 : Math.round((Q.speedMax * (limit - t)) / (limit - Q.speedFast));
   return { base: Q.base, speed, combo: combo >= 2 ? Q.comboStep * Math.min(combo - 1, Q.comboCap) : 0 };
 }
-/** oks: 문제별 정답 여부, msList: 문제별 걸린 시간(ms), kinds: 'mc' | 'fb' */
+/** oks: 문제별 정답 여부, msList: 문제별 걸린 시간(ms), kinds: 'mc' | 'fb' | 'wa' (단답식은 빈칸과 같은 규칙) */
 function questScore(oks, msList, kinds) {
   let combo = 0;
   const out = { base: 0, speed: 0, combo: 0, perfect: 0, total: 0, ms: 0, right: 0 };

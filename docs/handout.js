@@ -130,12 +130,12 @@ function buildHandoutDoc(d, mode, opts) {
 
   // 말씀 퀘스트를 풀기 전에는 퀴즈 문제를 유인물에도 싣지 않습니다 (미리 보기 방지)
   const quizLockedFor = (quiz) => {
-    const playable = ((quiz && quiz.multiple_choice) || []).length + ((quiz && quiz.fill_blank) || []).length;
+    const playable = ((quiz && quiz.multiple_choice) || []).length + ((quiz && quiz.fill_blank) || []).length + ((quiz && quiz.word_answer) || []).length;
     return !!playable && typeof questUnlocked === 'function' && !questUnlocked(d.quizId || d.id);
   };
   const quizLockSec = () => sec('퀴즈', h('p', { class: 'ho-note', text: '퀴즈는 앱에서 "말씀 퀘스트"를 한 번 풀면 문제지로 나와요. 퀘스트를 먼저 풀고 다시 열어 주세요.' }));
 
-  // 퀴즈 문제지 (잠언 묵상 등): 객관식 · 빈칸 · 주관식, 정답은 옵션을 켜면 맨 뒤에
+  // 퀴즈 문제지 (잠언 묵상 등): 객관식 · 빈칸 · 단답식 · 주관식, 정답은 옵션을 켜면 맨 뒤에
   const quizSection = (quiz) => {
     let n = 0;
     const qItems = [];
@@ -155,6 +155,10 @@ function buildHandoutDoc(d, mode, opts) {
       h('li', {}, h('strong', { text: `${no}. ${CIRCLED[it.answer_index] || it.answer_index + 1} ${it.options[it.answer_index]}` }), it.explanation ? h('div', { class: 'ho-note', text: it.explanation }) : null),
     ]);
     group('빈칸 채우기', quiz.fill_blank, (it, no) => [
+      h('div', { class: 'ho-qz' }, h('div', { class: 'ho-qz-q' }, h('strong', { text: `${no}. ` }), inlineMd(blankQuestionText(it))), opts.lines ? lines(1) : null),
+      h('li', {}, h('strong', { text: `${no}. ${it.answer}` }), it.explanation ? h('div', { class: 'ho-note', text: it.explanation }) : null),
+    ]);
+    group('단답식', quiz.word_answer, (it, no) => [
       h('div', { class: 'ho-qz' }, h('div', { class: 'ho-qz-q' }, h('strong', { text: `${no}. ` }), inlineMd(blankQuestionText(it))), opts.lines ? lines(1) : null),
       h('li', {}, h('strong', { text: `${no}. ${it.answer}` }), it.explanation ? h('div', { class: 'ho-note', text: it.explanation }) : null),
     ]);
@@ -280,6 +284,10 @@ function buildHandoutDoc(d, mode, opts) {
       h('li', {}, h('strong', { text: `${no}. ${CIRCLED[it.answer_index] || it.answer_index + 1} ${it.options[it.answer_index]}` }), it.explanation ? h('div', { class: 'ho-note', text: it.explanation }) : null),
     ]);
     group('빈칸 채우기', quiz.fill_blank, (it, no) => [
+      h('div', { class: 'ho-qz' }, h('div', { class: 'ho-qz-q' }, h('strong', { text: `${no}. ` }), inlineMd(blankQuestionText(it))), opts.lines ? lines(1) : null),
+      h('li', {}, h('strong', { text: `${no}. ${it.answer}` }), it.explanation ? h('div', { class: 'ho-note', text: it.explanation }) : null),
+    ]);
+    group('단답식', quiz.word_answer, (it, no) => [
       h('div', { class: 'ho-qz' }, h('div', { class: 'ho-qz-q' }, h('strong', { text: `${no}. ` }), inlineMd(blankQuestionText(it))), opts.lines ? lines(1) : null),
       h('li', {}, h('strong', { text: `${no}. ${it.answer}` }), it.explanation ? h('div', { class: 'ho-note', text: it.explanation }) : null),
     ]);

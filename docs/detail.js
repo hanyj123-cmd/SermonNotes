@@ -131,6 +131,12 @@ function renderQuiz(quiz) {
     all.push({ btn, box });
     return h('li', { class: 'qz-item', value: no }, h('div', { class: 'qz-q' }, inlineMd(blankQuestionText(it))), h('div', { class: 'qz-act' }, btn), box);
   });
+  const wa = groupBlock('단답식', '짧은 낱말로 답을 떠올려 본 뒤 [답보기]로 확인하세요.', quiz.word_answer || [], (it, no) => {
+    const ans = h('div', { class: 'reveal-body' }, h('p', {}, h('strong', { text: `정답  ${it.answer}` })), it.explanation ? h('p', { class: 'md' }, inlineMd(it.explanation)) : null);
+    const { btn, box } = revealBox('답보기', ans);
+    all.push({ btn, box });
+    return h('li', { class: 'qz-item', value: no }, h('div', { class: 'qz-q' }, inlineMd(blankQuestionText(it))), h('div', { class: 'qz-act' }, btn), box);
+  });
   const sa = groupBlock('주관식 (채점하지 않아요)', '내 말로 답을 정리해 본 뒤 [답보기]로 참고 답안을 확인하세요.', quiz.short_answer || [], (it, no) => {
     const ans = h('div', { class: 'reveal-body' }, h('p', {}, h('strong', { text: '참고 답안' })), h('p', { class: 'md' }, inlineMd(it.answer)), it.explanation ? h('p', { class: 'md' }, inlineMd(it.explanation)) : null);
     const { btn, box } = revealBox('답보기', ans);
@@ -147,19 +153,19 @@ function renderQuiz(quiz) {
     });
     toggleAll.textContent = open ? '모든 답 감추기' : '모든 답 한꺼번에 보기';
   });
-  return block('quiz', '퀴즈', h('div', { class: 'block-head' }, h('h2', { text: `퀴즈 ${n}문제` }), toggleAll), mc, fb, sa);
+  return block('quiz', '퀴즈', h('div', { class: 'block-head' }, h('h2', { text: `퀴즈 ${n}문제` }), toggleAll), mc, fb, wa, sa);
 }
 
-// 성경공부 퀴즈를 게임으로: 객관식 + 빈칸(직접 타이핑)으로 도전하고 달란트·경험치를 받습니다
+// 성경공부 퀴즈를 게임으로: 객관식 + 빈칸 + 단답식(직접 타이핑)으로 도전하고 달란트·경험치를 받습니다
 function renderQuizCta(d) {
   const quiz = (d.study && d.study.quiz) || {};
-  const n = (quiz.multiple_choice || []).length + (quiz.fill_blank || []).length;
+  const n = (quiz.multiple_choice || []).length + (quiz.fill_blank || []).length + (quiz.word_answer || []).length;
   if (!n) return null;
   return h(
     'a',
     { class: 'quiz-cta', href: `#/q/${encodeURIComponent(d.id)}` },
     h('span', { class: 'quiz-cta-art', 'aria-hidden': 'true' }, typeof avatarSvg === 'function' ? svgNode(avatarSvg(typeof gameLook === 'function' ? gameLook() : {}, { size: 64, frame: false, mood: 'cheer' })) : null),
-    h('span', { class: 'quiz-cta-text' }, h('strong', { text: '말씀 퀘스트 도전!' }), h('span', { text: `객관식 ${(quiz.multiple_choice || []).length}문제 · 빈칸 ${(quiz.fill_blank || []).length}문제 — 맞히면 달란트와 경험치를 받아요` })),
+    h('span', { class: 'quiz-cta-text' }, h('strong', { text: '말씀 퀘스트 도전!' }), h('span', { text: `객관식 ${(quiz.multiple_choice || []).length}문제${(quiz.fill_blank || []).length ? ` · 빈칸 ${quiz.fill_blank.length}문제` : ''}${(quiz.word_answer || []).length ? ` · 단답식 ${quiz.word_answer.length}문제` : ''} — 맞히면 달란트와 경험치를 받아요` })),
     h('span', { class: 'quiz-cta-go', text: '시작' }),
   );
 }
@@ -169,7 +175,7 @@ function renderQuizCta(d) {
  * 퀘스트로 낼 수 있는 문제(객관식·빈칸)가 없으면 잠그지 않습니다.
  */
 function renderQuizGate(id, quiz) {
-  const playable = ((quiz && quiz.multiple_choice) || []).length + ((quiz && quiz.fill_blank) || []).length;
+  const playable = ((quiz && quiz.multiple_choice) || []).length + ((quiz && quiz.fill_blank) || []).length + ((quiz && quiz.word_answer) || []).length;
   if (!playable || typeof questUnlocked !== 'function' || questUnlocked(id)) return renderQuiz(quiz || {});
   const total = playable + ((quiz.short_answer || []).length);
   return block(
