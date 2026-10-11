@@ -70,6 +70,10 @@ button { font: inherit; color: inherit; }
 .refresh-btn .ic { width: 18px; height: 18px; vertical-align: 0; }
 .refresh-btn.busy .ic { animation: aiSpin 0.9s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .refresh-btn.busy .ic { animation: none; } }
+/* 동기화를 기다리는 중 표시 줄 (머리말 바로 아래) */
+.sync-banner { background: var(--blue-soft); color: var(--blue-deep); border-bottom: 1px solid var(--line); font-size: 0.9rem; }
+.sync-banner-in { display: flex; align-items: center; gap: 10px; padding-top: 8px; padding-bottom: 8px; }
+.sync-banner-in span { flex: 1; min-width: 0; }
 .account { display: flex; align-items: center; gap: 8px; min-height: 32px; }
 .account-name { font-size: 0.88rem; color: var(--muted); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

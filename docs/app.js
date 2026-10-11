@@ -126,6 +126,8 @@ async function refreshData() {
   if (typeof provIndexCache !== 'undefined') provIndexCache = null;
   await load();
   renderUpdatedFooter();
+  const w = readWatch();
+  if (w && state.updated && state.updated !== w.base) stopSyncWatch(); // 기다리던 새 자료를 방금 받았습니다
   document.dispatchEvent(new CustomEvent('sn:data-refreshed'));
 }
 
@@ -151,6 +153,102 @@ function initRefreshButton() {
       btn.disabled = false;
     }
   });
+}
+
+/* ---------- 동기화가 끝나면 자동 반영 ----------
+   "재생목록 새로고침" · "지금 동기화"를 누르면, 이 브라우저는 새 자료가 올라올 때까지 1분마다 확인했다가
+   올라오면 자동으로 받아 보여 줍니다. 정리한 영상은 실행이 모두 끝난 뒤에 한꺼번에 올라가서
+   영상이 여러 편이면 10분 넘게 걸릴 수 있습니다. 관리 화면을 떠나거나 새로 열어도 이어서 기다립니다. */
+const WATCH_KEY = 'sn-sync-watch';
+const WATCH_MAX_MS = 3 * 60 * 60 * 1000; // 3시간 넘게 안 올라오면 기다리기를 멈춥니다
+let watchTimer = null;
+let watchMem = null;
+function readWatch() {
+  if (watchMem) return watchMem;
+  try {
+    return JSON.parse(localStorage.getItem(WATCH_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+function writeWatch(w) {
+  watchMem = w;
+  try {
+    if (w) localStorage.setItem(WATCH_KEY, JSON.stringify(w));
+    else localStorage.removeItem(WATCH_KEY);
+  } catch {
+    /* 저장 불가 환경: 이 탭을 닫기 전까지만 기다립니다 */
+  }
+}
+
+function renderWatchBanner() {
+  let el = document.getElementById('sync-banner');
+  const w = readWatch();
+  if (!w) {
+    if (el) el.remove();
+    return;
+  }
+  if (!el) {
+    el = h('div', { id: 'sync-banner', class: 'sync-banner', role: 'status' });
+    document.querySelector('.site-header').after(el);
+  }
+  const since = formatDateTime(new Date(w.since).toISOString());
+  el.replaceChildren(
+    h(
+      'div',
+      { class: 'wrap sync-banner-in' },
+      icon('clock'),
+      h('span', { text: `동기화를 요청했어요${since ? ` (${since})` : ''}. 영상 1편에 몇 분씩 걸리고, 모두 끝나야 한꺼번에 올라옵니다. 올라오면 자동으로 보여 드려요.` }),
+      h('button', { type: 'button', class: 'btn small', onclick: stopSyncWatch }, '그만 기다리기'),
+    ),
+  );
+}
+
+function stopSyncWatch() {
+  clearTimeout(watchTimer);
+  writeWatch(null);
+  renderWatchBanner();
+}
+
+function scheduleWatch() {
+  clearTimeout(watchTimer);
+  watchTimer = setTimeout(checkWatch, 60000);
+}
+
+async function checkWatch() {
+  const w = readWatch();
+  if (!w) return;
+  if (Date.now() - w.since > WATCH_MAX_MS) return stopSyncWatch();
+  try {
+    const r = await fetch(`${dataBase()}sermons.json?t=${Date.now()}`, { cache: 'no-store' });
+    const data = r.ok ? await r.json() : null;
+    if (data && data.updated && data.updated !== w.base) {
+      stopSyncWatch();
+      await refreshData();
+      // 설교 목록을 보고 있으면 바로 다시 그립니다. 설교를 읽거나 퀴즈를 푸는 중에는 건드리지 않고, 다음에 열 때 새 자료가 보입니다.
+      const kind = location.hash.split('/')[1];
+      if (kind === 'c' || kind === 'u') route();
+      toast('새 자료가 올라와서 새로고침했어요', 3200);
+      return;
+    }
+  } catch {
+    /* 잠깐 안 되면 다음 확인 때 다시 */
+  }
+  scheduleWatch();
+}
+
+// 동기화를 요청한 시점의 "올라가 있는 자료 시각"을 기준으로 삼아, 그것이 바뀌면 새 자료가 올라온 것으로 봅니다.
+async function startSyncWatch() {
+  let base = state.updated;
+  try {
+    const r = await fetch(`${dataBase()}sermons.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (r.ok) base = (await r.json()).updated || base;
+  } catch {
+    /* 못 읽으면 지금 화면의 시각을 기준으로 */
+  }
+  writeWatch({ since: Date.now(), base });
+  renderWatchBanner();
+  scheduleWatch();
 }
 
 /* ---------- 라우팅: #/c/<구분>  #/u  #/u/add  #/v/<영상ID>[/<모드>]  #/h/<영상ID>[/<모드>]  #/g[/<탭>]  #/q/<영상ID>  #/r[/<날짜>[/<모드>]]  #/admin ---------- */
@@ -738,6 +836,7 @@ function renderAdminPanel(password) {
       out.replaceChildren(icon('clock'), r.workflow_old && extra && extra.sermon_modes ? ' 실행을 요청했지만 GitHub의 sync.yml 이 옛 버전이라 고른 부분만이 아니라 전부 다시 만들 수 있어요. 새 sync.yml 을 올려 주세요.' : ' 실행을 요청했습니다. 잠시 뒤 상태가 표시됩니다…');
       // GitHub가 실행을 등록하기까지 몇 초 걸립니다. 그 사이 이전 기록이 보이지 않게 잠시 기다립니다.
       syncTimer = setTimeout(refreshSync, 6000);
+      startSyncWatch(); // 새 자료가 올라오면 어느 화면에 있든 자동으로 받아 보여 줍니다
       return true;
     } catch (e) {
       out.textContent = `오류: ${e.message || e}`;
@@ -1004,7 +1103,7 @@ function renderAdminPanel(password) {
       'section',
       { class: 'point admin-sync admin-pl' },
       h('h2', { text: '재생목록 새로고침' }),
-      h('p', { class: 'meta', text: '주일예배 · 새벽기도 재생목록을 지금 바로 다시 읽어서 새로 올라온 영상을 찾아 정리하고 사이트에 반영합니다. 한 번에 최대 5편이고, 영상 1편에 몇 분씩 걸려요. 새 영상이 더 남았으면 한 번 더 누르세요. 자동 수집은 주일예배 매주 일요일 밤 10:00(토론토)입니다.' }),
+      h('p', { class: 'meta', text: '주일예배 · 새벽기도 재생목록을 지금 바로 다시 읽어서 새로 올라온 영상을 찾아 정리하고 사이트에 반영합니다. 한 번에 최대 5편이고, 영상 1편에 몇 분씩 걸려요. 정리한 영상은 실행이 모두 끝나야 한꺼번에 올라가서, 여러 편이면 10분 넘게 걸릴 수 있어요. 올라오면 어느 화면에서든 자동으로 새로고침해 보여 드립니다. 새 영상이 더 남았으면 한 번 더 누르세요. 자동 수집은 주일예배 매주 일요일 밤 10:00(토론토)입니다.' }),
       h('div', { class: 'admin-row' }, plBtn),
       plStamp,
       plRun,
@@ -1260,6 +1359,11 @@ function initFontControl() {
   }
   renderUpdatedFooter();
   initRefreshButton();
+  if (readWatch()) {
+    // 동기화를 기다리던 중에 화면을 새로 연 경우: 이어서 기다립니다
+    renderWatchBanner();
+    checkWatch();
+  }
   showPushTime();
   window.addEventListener('hashchange', route);
   window.addEventListener('pagehide', () => {
