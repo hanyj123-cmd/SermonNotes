@@ -1,6 +1,6 @@
 {
- "updated": "2026-10-12T00:01:00.048Z",
- "count": 41,
+ "updated": "2026-10-12T08:42:12.758Z",
+ "count": 46,
  "sermons": [
   {
    "id": "awBJpwgQiHc",
@@ -725,6 +725,43 @@
    "complete": true
   },
   {
+   "id": "KTqSFTQ8Qhs",
+   "category": "sunday",
+   "title": "주일예배 - 마태복음 5:48",
+   "date": "2026-07-12",
+   "url": "https://www.youtube.com/watch?v=KTqSFTQ8Qhs",
+   "preacher": "",
+   "scripture": "마태복음 5:48",
+   "book": "마태복음",
+   "bookIdx": 40,
+   "summary_short": "율법의 진정한 목적은 겉멋 어린 행위 규범을 지키는 것이 아니라, 하나님의 온전하심을 닮아 하나님을 향한 거룩한 사랑으로 순종하는 것입니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "r2ZRzI9d8lI",
+   "category": "sunday",
+   "title": "주일예배 - 시선이 머무는 곳",
+   "date": "2026-07-05",
+   "url": "https://www.youtube.com/watch?v=r2ZRzI9d8lI",
+   "preacher": "전대혁 목사",
+   "scripture": "출 20:17",
+   "book": "출애굽기",
+   "bookIdx": 2,
+   "summary_short": "우리의 시선이 가장 간절히 머무는 곳은 곧 우리의 정체성과 마음의 상태를 보여주며, 참된 만족이신 하나님께 시선을 고정할 때 헛된 탐욕을 넘어설 수 있습니다.",
+   "modes": [
+    "review",
+    "qt",
+    "group"
+   ],
+   "complete": false
+  },
+  {
    "id": "uCKqcQ5tUas",
    "category": "user",
    "title": "부르심(03) - 내가 여기 있습니다",
@@ -735,6 +772,25 @@
    "book": "이사야",
    "bookIdx": 23,
    "summary_short": "세상 권세가 무너지는 절망의 자리에서 영원한 보좌에 앉으신 하나님을 바라보고, 십자가의 거룩한 은혜를 경험한 자만이 진정한 부르심에 \"내가 여기 있나이다\"라고 응답할 수 있습니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "XeEAe-tw43g",
+   "category": "sunday",
+   "title": "주일예배 - 소문의 낙원",
+   "date": "2026-06-28",
+   "url": "https://www.youtube.com/watch?v=XeEAe-tw43g",
+   "preacher": "전대혁 목사",
+   "scripture": "출 20:16",
+   "book": "출애굽기",
+   "bookIdx": 2,
+   "summary_short": "우리는 소문과 험담이 가득한 세상 속에서 살아가고 있지만, 십계명의 아홉 번째 계명은 우리에게 혀를 통제하고 이웃을 살리는 진실한 말의 거룩함을 회복할 것을 촉구합니다.",
    "modes": [
     "review",
     "qt",
@@ -763,6 +819,24 @@
    "complete": true
   },
   {
+   "id": "yJGmKa-02To",
+   "category": "sunday",
+   "title": "주일예배 - 정당한 소유를 추구하는 삶",
+   "date": "2026-06-21",
+   "url": "https://www.youtube.com/watch?v=yJGmKa-02To",
+   "preacher": "전대혁 목사",
+   "scripture": "출 20:15",
+   "book": "출애굽기",
+   "bookIdx": 2,
+   "summary_short": "성경이 금하는 도둑질은 단순한 절도 행위를 넘어, 부당하게 타인의 이익을 빼앗는 모든 세속적 방식을 거부하고 하나님의 주권 아래 정직한 소유와 나눔을 실천하는 것입니다.",
+   "modes": [
+    "review",
+    "qt",
+    "group"
+   ],
+   "complete": false
+  },
+  {
    "id": "PqSsvTrKKIo",
    "category": "user",
    "title": "사용자 영상",
@@ -773,6 +847,25 @@
    "book": "창세기",
    "bookIdx": 1,
    "summary_short": "아브라함을 부르신 사건은 인간의 탁월한 믿음 때문이 아니라, 궤도를 이탈하는 연약한 인생을 하나님의 열심과 은혜로 끝까지 붙드시는 구속사의 샘플입니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "Aq7jQDBsVmU",
+   "category": "sunday",
+   "title": "주일예배 - 영적 분별과 정결한 삶",
+   "date": "2026-06-14",
+   "url": "https://www.youtube.com/watch?v=Aq7jQDBsVmU",
+   "preacher": "전대혁 목사",
+   "scripture": "출 20:14",
+   "book": "출애굽기",
+   "bookIdx": 2,
+   "summary_short": "하나님은 간음하지 말라는 계명을 통해 가정의 거룩한 울타리와 성의 선물을 지키게 하시며, 세속적 타락을 분별하고 정결한 삶을 살도록 우리를 부르십니다.",
    "modes": [
     "review",
     "qt",
