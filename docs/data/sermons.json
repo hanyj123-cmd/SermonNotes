@@ -1,7 +1,26 @@
 {
- "updated": "2026-10-12T20:06:41.530Z",
- "count": 46,
+ "updated": "2026-10-13T11:51:12.069Z",
+ "count": 50,
  "sermons": [
+  {
+   "id": "dsmuCh4crJo",
+   "category": "sunday",
+   "title": "주일예배 - 열왕기상 15장",
+   "date": "2026-10-12",
+   "url": "https://www.youtube.com/watch?v=dsmuCh4crJo",
+   "preacher": "강 산 목사",
+   "scripture": "열왕기상 15장",
+   "book": "열왕기상",
+   "bookIdx": 11,
+   "summary_short": "우리는 누구나 주변의 영향력 속에 살아가지만, 참된 구원과 온전함은 인간의 행위가 아닌 하나님의 신실하신 언약과 은혜에서 비롯됩니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
   {
    "id": "awBJpwgQiHc",
    "category": "sunday",
@@ -364,6 +383,44 @@
    "complete": true
   },
   {
+   "id": "w_jeeudXb-8",
+   "category": "dawn",
+   "title": "새벽기도 - 사무엘하 14장",
+   "date": "2026-09-18",
+   "url": "https://www.youtube.com/watch?v=w_jeeudXb-8",
+   "preacher": "정은희 목사",
+   "scripture": "사무엘하 14장",
+   "book": "사무엘하",
+   "bookIdx": 10,
+   "summary_short": "우리의 연약한 마음과 미해결된 감정을 정직하게 하나님 앞에 내어놓고, 성령의 다스림 안에서 진정한 회개와 회복을 이루어야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "_fo6-LZites",
+   "category": "dawn",
+   "title": "새벽기도 - 새벽기도회  (사무엘하 12장) -조성은 목사",
+   "date": "2026-09-16",
+   "url": "https://www.youtube.com/watch?v=_fo6-LZites",
+   "preacher": "조성은 목사",
+   "scripture": "사무엘하 12:1-15",
+   "book": "사무엘하",
+   "bookIdx": 10,
+   "summary_short": "하나님은 나단 선지자를 통해 다윗의 숨겨진 죄를 백주에 드러내시며, 진정한 회개만이 하나님의 진노 앞에서 살 길임을 보여 주십니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
    "id": "9c221eiafuk",
    "category": "wednesday",
    "title": "수요예배 - 내가 누구인지 이제 알았습니다",
@@ -374,6 +431,25 @@
    "book": "에베소서",
    "bookIdx": 49,
    "summary_short": "세상의 왜곡된 시선과 상처 속에서 방황하던 우리가 창세전부터 그리스도 안에서 택하심을 받은 하나님의 자녀라는 참된 정체성을 깨달을 때 비로소 풍성한 은혜의 삶을 누릴 수 있습니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "_MYDh3R-ShI",
+   "category": "dawn",
+   "title": "새벽기도 - 새벽기도회  (사무엘하 11장) -최형종 목사",
+   "date": "2026-09-15",
+   "url": "https://www.youtube.com/watch?v=_MYDh3R-ShI",
+   "preacher": "최형종 목사",
+   "scripture": "사무엘하 11:1-4",
+   "book": "사무엘하",
+   "bookIdx": 10,
+   "summary_short": "다윗의 범죄 사건을 통해 영적 나태함의 위험성과 죄를 은폐하는 어리석음을 깨닫고, 오직 주님 앞에서 깨어 회개하며 시험을 이겨야 합니다.",
    "modes": [
     "review",
     "qt",
