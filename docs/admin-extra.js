@@ -685,7 +685,7 @@ function renderDawnSection(password, onPasswordRejected) {
     'section',
     { class: 'point admin-sync admin-dawn' },
     h('h2', { text: '새벽기도 영상' }),
-    h('p', { class: 'meta', text: '오늘의 말씀 화면의 "새벽기도 보기" 버튼에 연결되는 영상입니다. 자동: 매일 오전 7:20(토론토)에 아래 재생목록에서 그 날 올라온 영상을 찾아 연결하고, 못 찾으면 8:00에 한 번 더 찾습니다. 영상 제목의 날짜(예: [2026.10.09])가 있으면 그 날짜, 없으면 올라온 날짜로 맞춥니다.' }),
+    h('p', { class: 'meta', text: '오늘의 말씀 화면의 "새벽기도 보기" 버튼에 연결되는 영상입니다. 자동: 매일 오전 7:15(토론토)에 아래 재생목록에서 그 날 올라온 영상을 찾아 연결하고, 못 찾으면 8:00에 한 번 더 찾습니다. 영상 제목의 날짜(예: [2026.10.09])가 있으면 그 날짜, 없으면 올라온 날짜로 맞춥니다.' }),
     h('h3', { text: '재생목록' }),
     h('div', { class: 'admin-fields' }, plInput),
     h('div', { class: 'admin-row' }, plSave, plReset, runBtn),

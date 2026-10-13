@@ -278,7 +278,7 @@ async function renderDaily(dateArg, modeArg) {
   app.replaceChildren(page);
 
   const dLike = { id, category: 'daily', title: refs, date, bible: false, qt: data && data.qt, study: data && data.study ? { ...data.study, quiz: null } : null, group: data && data.group };
-  const notReady = (what) => h('div', { class: 'gm-card rd-wait' }, h('p', {}, h('strong', { text: `${what}은(는) 아직 준비 중이에요.` })), h('p', { class: 'meta', text: '다음 날 분량은 매일 아침 7시(토론토)에 하루 먼저 만들어져요. 말씀 탭에서 본문은 바로 읽을 수 있어요.' }));
+  const notReady = (what) => h('div', { class: 'gm-card rd-wait' }, h('p', {}, h('strong', { text: `${what}은(는) 아직 준비 중이에요.` })), h('p', { class: 'meta', text: '다음 날 분량은 매일 아침 6시(토론토)에 하루 먼저 만들어져요. 말씀 탭에서 본문은 바로 읽을 수 있어요.' }));
 
   if (mode === 'read') body.append(renderReadingTab(date, id, passages, data, st, notes));
   else if (mode === 'qt') body.append(...(dLike.qt ? renderQtMode(dLike, notes) : [notReady('QT 묵상')]).filter(Boolean));

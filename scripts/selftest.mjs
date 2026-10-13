@@ -336,7 +336,7 @@ await t('토론토 시각: 여름(EDT, UTC-4)·겨울(EST, UTC-5)', () => {
 });
 await t('수요예배·새벽기도는 예약 없음', () => {
   assert.ok(!RULES.some((r) => r.category === 'wednesday' || r.category === 'dawn'));
-  assert.deepEqual(dueCategories(at('2026-10-08T11:03:00Z')), ['daily']); // 옛 수요예배 시각 = 지금은 오늘의 말씀 07:00
+  assert.deepEqual(dueCategories(at('2026-10-08T10:03:00Z')), ['daily']); // 오늘의 말씀 06:00
   assert.deepEqual(dueCategories(at('2026-10-09T15:02:00Z')), []); // 옛 새벽기도 시각
 });
 await t('주일예배: 일요일 22:00 (UTC로는 월요일 02:00/03:00)', () => {
@@ -344,9 +344,10 @@ await t('주일예배: 일요일 22:00 (UTC로는 월요일 02:00/03:00)', () =>
   assert.deepEqual(dueCategories(at('2026-12-07T03:05:00Z')), ['sunday']); // 일 22:05 EST
   assert.deepEqual(dueCategories(at('2026-10-05T03:05:00Z')), []);
 });
-await t('오늘의 말씀: 매일 07:00 (여름/겨울) — 다음 날 분량', () => {
-  assert.deepEqual(dueCategories(at('2026-10-09T11:02:00Z')), ['daily']);
-  assert.deepEqual(dueCategories(at('2026-12-09T12:02:00Z')), ['daily']);
+await t('오늘의 말씀: 매일 06:00 (여름/겨울) — 다음 날 분량', () => {
+  assert.deepEqual(dueCategories(at('2026-10-09T10:02:00Z')), ['daily']);
+  assert.deepEqual(dueCategories(at('2026-12-09T11:02:00Z')), ['daily']);
+  assert.deepEqual(dueCategories(at('2026-10-09T11:20:00Z')), ['dawn_video']); // 07:20 EDT
   assert.deepEqual(dueCategories(at('2026-10-09T13:02:00Z')), []); // 09:02 EDT
   assert.deepEqual(dueCategories(at('2026-10-09T08:02:00Z')), []); // 옛 04:00
 });
@@ -354,16 +355,19 @@ await t('청년부는 예약 규칙 없음 · 직접 실행은 항상 실행', (
   assert.ok(!RULES.some((r) => r.category === 'youth'));
   assert.deepEqual(decide('workflow_dispatch', at('2026-10-09T03:00:00Z')), { run: true, categories: '' });
   assert.equal(shouldRun('schedule', at('2026-10-09T03:00:00Z')), false);
-  assert.deepEqual(decide('schedule', at('2026-10-09T11:00:00Z')), { run: true, categories: 'daily' });
+  assert.deepEqual(decide('schedule', at('2026-10-09T10:00:00Z')), { run: true, categories: 'daily' });
 });
 
 await t('예약: 울린 cron 의 "정해진 시각"으로 판단 (늦게 시작해도 헷갈리지 않음)', () => {
-  assert.deepEqual(scheduledCategories('0 11 * * *', at('2026-10-09T11:25:00Z')), ['daily']); // 07:00 EDT 예약이 25분 늦게 시작
-  assert.deepEqual(scheduledCategories('20 11 * * *', at('2026-10-09T11:31:00Z')), ['dawn_video']); // 07:20
+  assert.deepEqual(scheduledCategories('0 10 * * *', at('2026-10-09T10:25:00Z')), ['daily']); // 06:00 EDT 예약이 25분 늦게 시작
+  assert.deepEqual(scheduledCategories('15 11 * * *', at('2026-10-09T12:05:00Z')), ['dawn_video']); // 07:15 예약이 50분 늦게 시작
+  assert.deepEqual(scheduledCategories('15 12 * * *', at('2026-12-09T12:20:00Z')), ['dawn_video']); // 겨울 07:15
+  assert.deepEqual(scheduledCategories('0 10 * * *', at('2026-10-09T19:40:00Z')), ['daily']); // 몇 시간 늦어도 정해진 시각으로
   assert.deepEqual(scheduledCategories('0 12 * * *', at('2026-10-09T12:05:00Z')), ['dawn_video']); // 여름 08:00 다시 확인
   assert.deepEqual(scheduledCategories('0 13 * * *', at('2026-12-09T13:10:00Z')), ['dawn_video']); // 겨울 08:00
   assert.deepEqual(scheduledCategories('20 12 * * *', at('2026-10-09T12:25:00Z')), []); // 여름 08:20 — 해당 없음
-  assert.deepEqual(scheduledCategories('0 12 * * *', at('2026-12-09T12:05:00Z')), ['daily']); // 겨울 07:00
+  assert.deepEqual(scheduledCategories('0 11 * * *', at('2026-12-09T11:05:00Z')), ['daily']); // 겨울 06:00
+  assert.deepEqual(scheduledCategories('0 11 * * *', at('2026-10-09T11:05:00Z')), []); // 여름 07:00 — 해당 없음
   assert.equal(scheduledCategories('', at('2026-10-09T12:25:00Z')), null);
   assert.deepEqual(decide('schedule', at('2026-10-12T02:10:00Z'), '0 2 * * 1'), { run: true, categories: 'sunday' });
 });

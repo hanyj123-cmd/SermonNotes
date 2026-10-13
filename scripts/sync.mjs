@@ -407,7 +407,7 @@ async function main() {
   console.log(`🗂  이번 실행의 구분: ${categories.join(', ') || '(재생목록 확인 없음)'} (+ 사용자 영상·다시 정리 표시한 것)`);
   // 앱의 관리 화면에서 고른 설정(Settings 탭)이 있으면 그것을, 없으면 환경변수·기본값을 씁니다.
   const settings = await readSettings(sheets, spreadsheetId);
-  // 새벽기도 영상만 연결하는 짧은 실행 (07:20 · 08:00 예약, 관리 화면 "수동 업데이트 실행")
+  // 새벽기도 영상만 연결하는 짧은 실행 (07:15 · 08:00 예약, 관리 화면 "수동 업데이트 실행")
   const onlyTokens = String(process.env.ONLY_CATEGORIES || '').toLowerCase().split(/[\s,]+/).filter(Boolean);
   if (onlyTokens.length && onlyTokens.every((t) => t === 'dawn_video')) {
     await syncDawn(sheets, spreadsheetId, youtubeKey, settings, { force: String(process.env.DAILY_FORCE || '').toLowerCase() === 'true' });

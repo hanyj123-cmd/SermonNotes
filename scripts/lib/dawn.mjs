@@ -2,7 +2,7 @@
 //   · AI 정리 없이 영상 링크만 연결합니다 (Daily 탭의 dawn_json 열).
 //   · 재생목록 주소는 관리 화면에서 바꿀 수 있습니다 (Settings 탭의 dawn_playlist). 없으면 기본 재생목록.
 //   · 관리 화면에서 직접 넣은 영상(manual)은 자동 연결이 덮어쓰지 않습니다.
-//   · 예약: 매일 07:20, 그때 오늘 영상이 없으면 08:00 에 다시 (scripts/gate.mjs). 오늘 영상이 이미 있으면 재생목록을 다시 읽지 않습니다.
+//   · 예약: 매일 07:15, 그때 오늘 영상이 없으면 08:00 에 다시 (scripts/gate.mjs). 오늘 영상이 이미 있으면 재생목록을 다시 읽지 않습니다.
 import { extractPlaylistId, classifyVideo } from './youtube.mjs';
 import { torontoDate, DAILY_TIME_ZONE } from './daily.mjs';
 
