@@ -1,4 +1,4 @@
-// 영상 한 편을 처리합니다: 설교 내용 확보 → Gemini로 4개 모드 정리 → 시트에 결과(또는 실패 사유) 기록
+// 영상 한 편을 처리합니다: 설교 내용 확보 → Claude로 4개 모드 정리 → 시트에 결과(또는 실패 사유) 기록
 // 시트·API 호출은 모두 바깥에서 받아 쓰므로, 테스트에서 가짜로 바꿔 끼울 수 있습니다.
 //
 // 모드별로 따로 저장합니다: result_json(설교리뷰+공통 정보) · mode_qt · mode_study · mode_group · bible_json
@@ -48,7 +48,7 @@ export function knownInfo(row) {
 
 /**
  * @param row   Sermons 탭의 한 행
- * @param deps  { ai, update(patch), enrichSongs(songs), fetchBible(passages), supadataKey, geminiVideo, obtain, now, log }
+ * @param deps  { ai, update(patch), enrichSongs(songs), fetchBible(passages), supadataKey, obtain, now, log }
  * @returns     'done' | 'error' | 'no_transcript'
  */
 export async function processRow(row, deps) {
@@ -58,7 +58,6 @@ export async function processRow(row, deps) {
     enrichSongs = null, // (songs[]) => 찬양 영상 붙이기 (실패해도 정리는 유지)
     fetchBible = null, // (passages) => 성경 본문 블록 | null
     supadataKey = '',
-    geminiVideo = true,
     obtain = defaultObtain,
     now = () => new Date().toISOString(),
     log = { info: console.log, warn: console.warn, error: console.error },
@@ -73,7 +72,7 @@ export async function processRow(row, deps) {
     resume = readExisting(row);
     for (const m of picked) delete resume[m];
   }
-  const material = await obtain(row, { supadataKey, geminiVideo, log: (m) => log.warn(`   ${m}`) });
+  const material = await obtain(row, { supadataKey, log: (m) => log.warn(`   ${m}`) });
 
   if (material.kind === 'none') {
     await update({
@@ -84,27 +83,10 @@ export async function processRow(row, deps) {
     return 'no_transcript';
   }
 
-  let transcript = material.kind === 'text' ? material.text : '';
-  let source = material.source;
+  const transcript = material.text;
+  const source = material.source;
   const info = knownInfo(row);
-
-  try {
-    if (material.kind === 'video') {
-      log.info('   자막이 없어 영상을 Gemini가 직접 듣고 글로 옮깁니다 (몇 분 걸릴 수 있습니다)…');
-      transcript = await ai.transcribeVideo({ title: row.title, videoUrl: `https://www.youtube.com/watch?v=${row.video_id}` });
-      source = material.source || 'Gemini 영상 직접 분석';
-    } else {
-      log.info(`   ${material.source} ${transcript.length.toLocaleString()}자`);
-    }
-  } catch (e) {
-    log.error(`   ❌ 실패: ${e.message}`);
-    await update({
-      status: 'error',
-      note: `영상 직접 분석 실패 (${material.problems.join(' / ').slice(0, 120)}) — ${String(e.message).slice(0, 300)} — status를 redo로 바꾸면 다시 시도합니다. 계속 안 되면 transcript_manual 칸에 자막을 붙여넣으세요.`,
-      updated_at: now(),
-    });
-    return 'error';
-  }
+  log.info(`   ${source} ${transcript.length.toLocaleString()}자`);
 
   // 1) 모드별로 만들기 (이미 있는 모드는 건너뜀)
   const results = { review: resume.review, qt: resume.qt, study: resume.study, group: resume.group };

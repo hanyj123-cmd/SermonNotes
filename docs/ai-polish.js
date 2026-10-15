@@ -1,6 +1,6 @@
 // AI 문장 다듬기 — 앱의 모든 기록 칸(textarea.note-input: 묵상 · 나눔 · 소그룹 · 개인 메모 · 형광펜 메모) 아래에
 // [AI 문장 다듬기] 버튼을 붙입니다. 누르면 맞춤법 · 띄어쓰기 · 문맥을 다듬은 제안을 보여 주고, [적용하기]로 그 칸에 바로 넣습니다.
-// 서버: Apps Script 의 notes_polish (Gemini). 로그인한 가족만 쓸 수 있습니다.
+// 서버: Apps Script 의 notes_polish (Claude). 로그인한 가족만 쓸 수 있습니다.
 // 이 파일은 app.js(h, auth, notesCall, toast, NOTES_ENABLED) · content.js(icon) 를 씁니다.
 
 const POLISH_SEL = 'textarea.note-input';

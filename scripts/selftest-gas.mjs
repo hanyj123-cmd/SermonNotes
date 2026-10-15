@@ -69,7 +69,7 @@ function makeEnv(props) {
           const r = ghHandler(url, opts);
           return { getResponseCode: () => r.code, getContentText: () => JSON.stringify(r.body || {}) };
         }
-        if (String(url).startsWith('https://generativelanguage.googleapis.com/')) {
+        if (String(url).startsWith('https://api.anthropic.com/')) {
           aiCalls.push({ url, opts });
           const r = aiHandler(url, opts);
           return { getResponseCode: () => r.code, getContentText: () => JSON.stringify(r.body || {}) };
@@ -328,15 +328,18 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
 // ---------- 설정(AI 모델) / 영상 선택 관리 ----------
 {
   const e = makeEnv({ ADMIN_PASSWORD: 'pw' });
-  check('설정: 비밀번호 없으면 거부', e.post({ action: 'settings_get' }).ok === false && e.post({ action: 'settings_set', gemini_model: 'x-model' }).ok === false);
+  check('설정: 비밀번호 없으면 거부', e.post({ action: 'settings_get' }).ok === false && e.post({ action: 'settings_set', ai_model: 'claude-x' }).ok === false);
   let r = e.post({ action: 'settings_get', password: 'pw' });
-  check('설정: 처음에는 비어 있음 (Settings 탭 자동 생성)', r.ok && r.settings.gemini_model === '' && !!e.sheets.get('Settings'), JSON.stringify(r));
-  r = e.post({ action: 'settings_set', password: 'pw', gemini_model: 'gemini-3.8-flash' });
-  check('설정: 모델 저장', r.ok && e.post({ action: 'settings_get', password: 'pw' }).settings.gemini_model === 'gemini-3.8-flash');
-  e.post({ action: 'settings_set', password: 'pw', gemini_model: 'gemini-3.1-pro-preview' });
+  check('설정: 처음에는 비어 있음 (Settings 탭 자동 생성) · 기본 모델 안내', r.ok && r.settings.ai_model === '' && r.settings.ai_model_default === 'claude-sonnet-5-5' && !!e.sheets.get('Settings'), JSON.stringify(r));
+  r = e.post({ action: 'settings_set', password: 'pw', ai_model: 'claude-opus-5-5', ai_effort: 'high' });
+  const got = e.post({ action: 'settings_get', password: 'pw' }).settings;
+  check('설정: 모델 · 생각 깊이 저장', r.ok && got.ai_model === 'claude-opus-5-5' && got.ai_effort === 'high', JSON.stringify(got));
+  e.post({ action: 'settings_set', password: 'pw', ai_model: 'claude-sonnet-5-5' });
   const rows = e.sheets.get('Settings').rows;
-  check('설정: 같은 항목은 줄이 늘지 않고 덮어씀 (헤더 + 1줄)', rows.length === 2 && rows[1][1] === 'gemini-3.1-pro-preview', JSON.stringify(rows));
-  check('설정: 이상한 모델 이름 거부', e.post({ action: 'settings_set', password: 'pw', gemini_model: 'bad model; rm -rf' }).ok === false && e.post({ action: 'settings_get', password: 'pw' }).settings.gemini_model === 'gemini-3.1-pro-preview');
+  check('설정: 같은 항목은 줄이 늘지 않고 덮어씀 (헤더 + 2줄)', rows.length === 3 && rows[1][1] === 'claude-sonnet-5-5', JSON.stringify(rows));
+  check('설정: Claude 가 아닌 모델 · 이상한 이름 · 이상한 깊이 거부', e.post({ action: 'settings_set', password: 'pw', ai_model: 'gemini-3.8-flash' }).ok === false && e.post({ action: 'settings_set', password: 'pw', ai_model: 'bad model; rm -rf' }).ok === false && e.post({ action: 'settings_set', password: 'pw', ai_effort: 'max' }).ok === false && e.post({ action: 'settings_get', password: 'pw' }).settings.ai_model === 'claude-sonnet-5-5');
+  rows[1][1] = 'gemini-3.8-flash'; // 예전에 저장된 Gemini 값은 무시 → 기본 모델
+  check('설정: 예전 Gemini 값은 비어 있는 것으로 취급', e.post({ action: 'settings_get', password: 'pw' }).settings.ai_model === '');
   // 영상 관리
   check('영상 목록: Sermons 탭이 없으면 안내', /지금 동기화/.test(e.post({ action: 'videos_list', password: 'pw' }).error || ''));
   const sh = e.ss.insertSheet('Sermons');
@@ -869,15 +872,15 @@ check('다른 배포의 세션은 거절', otherLogin.ok && post({ action: 'note
 // ---------- AI 문장 다듬기 ----------
 {
   const noKey = makeEnv({ GOOGLE_CLIENT_ID: CID, ALLOWED_EMAILS: 'a@x.com' });
-  check('AI 다듬기: 키가 없으면 안내', /GEMINI_API_KEY/.test(noKey.post({ id_token: A, action: 'notes_polish', text: '안녕' }).error || ''));
-  const g = makeEnv({ GOOGLE_CLIENT_ID: CID, ALLOWED_EMAILS: 'a@x.com', GEMINI_API_KEY: 'k' });
+  check('AI 다듬기: 키가 없으면 안내', /ANTHROPIC_API_KEY/.test(noKey.post({ id_token: A, action: 'notes_polish', text: '안녕' }).error || ''));
+  const g = makeEnv({ GOOGLE_CLIENT_ID: CID, ALLOWED_EMAILS: 'a@x.com', ANTHROPIC_API_KEY: 'k' });
   g.setAi((url, opts) => {
     const body = JSON.parse(opts.payload);
-    const text = body.contents[0].parts[0].text;
-    return { code: 200, body: { candidates: [{ content: { parts: [{ text: JSON.stringify({ text: text.includes('오늘') ? '오늘 하나님께 감사드립니다.' : 'x', changes: ['띄어쓰기를 고쳤습니다'] }) }] } }] } };
+    const text = body.messages[0].content;
+    return { code: 200, body: { content: [{ type: 'thinking', thinking: '...' }, { type: 'text', text: JSON.stringify({ text: text.includes('오늘') ? '오늘 하나님께 감사드립니다.' : 'x', changes: ['띄어쓰기를 고쳤습니다'] }) }], stop_reason: 'end_turn' } };
   });
   let r = g.post({ id_token: A, action: 'notes_polish', text: '오늘하나님께 감사 드립니다', context: '묵상 질문 1' });
-  check('AI 다듬기: 다듬은 글 + 고친 점', r.ok && r.text === '오늘 하나님께 감사드립니다.' && r.changes[0] === '띄어쓰기를 고쳤습니다' && /gemini-3\.8-flash/.test(g.aiCalls[0].url), JSON.stringify(r));
+  check('AI 다듬기: 다듬은 글 + 고친 점', r.ok && r.text === '오늘 하나님께 감사드립니다.' && r.changes[0] === '띄어쓰기를 고쳤습니다' && g.aiCalls[0].url === 'https://api.anthropic.com/v1/messages' && JSON.parse(g.aiCalls[0].opts.payload).model === 'claude-sonnet-5-5' && g.aiCalls[0].opts.headers['x-api-key'] === 'k', JSON.stringify(r));
   check('AI 다듬기: 로그인 필요', !g.post({ action: 'notes_polish', text: '안녕' }).ok);
   check('AI 다듬기: 빈 글 · 너무 긴 글은 거절', !g.post({ id_token: A, action: 'notes_polish', text: ' ' }).ok && !g.post({ id_token: A, action: 'notes_polish', text: '가'.repeat(4001) }).ok);
   g.setAi(() => ({ code: 429, body: {} }));

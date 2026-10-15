@@ -4,9 +4,9 @@
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { normalizeReview, normalizeQt, normalizeStudy, normalizeGroup } from './lib/gemini.mjs';
+import { normalizeReview, normalizeQt, normalizeStudy, normalizeGroup } from './lib/ai.mjs';
 import { exportJson, exportDaily, exportProverbs } from './sync.mjs';
-import { normalizeDailyQt, normalizeDailyStudy, normalizeDailyQuiz, normalizeProverbWord, normalizeProverbGroup, normalizeProverbStudy } from './lib/gemini.mjs';
+import { normalizeDailyQt, normalizeDailyStudy, normalizeDailyQuiz, normalizeProverbWord, normalizeProverbGroup, normalizeProverbStudy } from './lib/ai.mjs';
 import { readingRefs } from './lib/daily.mjs';
 import { parseScripture } from './lib/title.mjs';
 import { BIBLE_SOURCES, bibleSignature } from './lib/bible-web.mjs';

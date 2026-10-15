@@ -2,7 +2,7 @@
 // 메인 파이프라인
 //   1) Google Sheets의 Playlists 탭에서 재생목록 읽기
 //   2) YouTube에서 새 영상 찾아 Sermons 탭에 추가 (status = pending)
-//   3) pending / redo 영상의 자막을 가져와 Gemini로 4가지 모드(설교리뷰·QT 묵상·성경공부·소그룹 나눔)로 정리 → Sermons 탭에 저장
+//   3) pending / redo 영상의 자막을 가져와 Claude로 4가지 모드(설교리뷰·QT 묵상·성경공부·소그룹 나눔)로 정리 → Sermons 탭에 저장
 //   4) 성경 본문 4역본(웹사이트에서 읽음) 붙이기
 //   5) 결과를 docs/data/ 로 내보내기: sermons.json(목록) + s/<영상ID>.json(설교별 상세)
 //
@@ -47,7 +47,7 @@ import { attachBibleAudio, buildPrayerMusic, musicIsStale } from './lib/media.mj
 import { fetchBibleBlock, bibleIsCurrent } from './lib/bible-web.mjs';
 import { processRow, CELL_LIMIT } from './lib/process.mjs';
 import { MODES, MODE_LABELS } from './lib/prompt.mjs';
-import { createGemini, DEFAULT_MODEL } from './lib/gemini.mjs';
+import { createClaude, DEFAULT_MODEL, DEFAULT_EFFORT, isClaudeModel } from './lib/ai.mjs';
 import { parseTitle, parseAnyTitle, parseScripture, bookOf, tidyTitle, normalizePreacher, displayTitle } from './lib/title.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -414,16 +414,14 @@ async function main() {
     await exportDaily(await readDaily(sheets, spreadsheetId));
     return;
   }
-  const modelName = /^[\w.-]{3,60}$/.test(settings.gemini_model || '') ? settings.gemini_model : process.env.GEMINI_MODEL || DEFAULT_MODEL;
-  console.log(`🤖 Gemini 모델: ${modelName}`);
-  const ai = createGemini(need('GEMINI_API_KEY'), modelName);
+  const modelName = [settings.ai_model, process.env.CLAUDE_MODEL].find(isClaudeModel) || DEFAULT_MODEL;
+  const effort = String(settings.ai_effort || process.env.CLAUDE_EFFORT || DEFAULT_EFFORT).trim().toLowerCase();
+  const ai = createClaude(need('ANTHROPIC_API_KEY'), modelName, { effort });
+  console.log(`🤖 Claude 모델: ${ai.model} (effort: ${ai.effort})`);
   const maxPerRun = Math.max(1, parseInt(process.env.MAX_NEW_PER_RUN || '5', 10) || 5);
-  // 자막이 없는 영상 처리 방식 (선택): Supadata 키가 있으면 먼저 쓰고, 그래도 안 되면 Gemini가 영상을 직접 듣습니다.
+  // 자막이 없는 영상: Supadata 키가 있으면 Supadata 가 음성을 인식해 글로 옮깁니다. 없으면 no_transcript 로 표시합니다.
   const supadataKey = process.env.SUPADATA_API_KEY || '';
-  const geminiVideo = String(process.env.GEMINI_VIDEO || '').trim().toLowerCase() !== 'off';
-  console.log(
-    `자막이 없는 영상: ${supadataKey ? 'Supadata → ' : ''}${geminiVideo ? 'Gemini 영상 직접 분석' : '건너뜀(no_transcript 표시)'}`,
-  );
+  console.log(`자막이 없는 영상: ${supadataKey ? 'Supadata 음성 인식' : '건너뜀(no_transcript 표시 — SUPADATA_API_KEY 를 넣으면 음성 인식)'}`);
 
   // 1) 재생목록 → 새 영상 등록
   const playlists = (await readPlaylists(sheets, spreadsheetId)).filter((pl) => categories.includes(pl.category));
@@ -513,7 +511,6 @@ async function main() {
       ai,
       update: (patch) => updateSermonRow(sheets, spreadsheetId, row.rowNumber, patch),
       supadataKey,
-      geminiVideo,
       redoModes: sermonRedoModes, // 관리 화면에서 고른 부분만 다시 정리 (비면 전부)
       enrichSongs: null, // 찬양은 CCM 한 곡만, 영상은 화면에서 YouTube 검색 링크로 엽니다 (검색 할당량 아끼기)
       fetchBible: async (passages) => {

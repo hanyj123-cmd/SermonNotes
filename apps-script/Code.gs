@@ -11,6 +11,7 @@
 //   GITHUB_TOKEN      (선택) 앱에서 "지금 동기화"를 누를 때 쓰는 GitHub 토큰. 이 저장소의 Actions 읽기/쓰기 권한만 주세요.
 //   GITHUB_REPO       (선택) 예: hanyj123-cmd/SermonNotes
 //   GITHUB_REF        (선택) 실행할 브랜치. 비워 두면 main
+//   ANTHROPIC_API_KEY (선택) 앱의 "AI 문장 다듬기"에 쓰는 Claude API 키 (GitHub 의 ANTHROPIC_API_KEY 와 같은 키를 써도 됩니다)
 // Settings 탭(AI 모델)과 Sermons 탭(영상 선택 관리 · 사용자 영상)은 이 코드가 직접 읽고 씁니다. 별도 설정은 필요 없습니다.
 
 const SHEET_NAME = 'Playlists';
@@ -716,11 +717,13 @@ function syncRun(body) {
   return { ok: true, max_new: n, categories: categories, export_only: exportOnly && !oldWorkflow, sermon_modes: smodes, workflow_old: oldWorkflow };
 }
 
-/* ---------- 설정 (AI 모델) — Settings 탭 ---------- */
+/* ---------- 설정 (AI 모델 · 생각 깊이) — Settings 탭 ---------- */
 
 const SETTINGS_SHEET = 'Settings';
 const SETTINGS_HEADERS = ['key', 'value'];
-const MODEL_PATTERN = /^[\w.-]{3,60}$/;
+const MODEL_PATTERN = /^claude-[\w.-]{3,60}$/; // Claude 모델만 (예전 Gemini 설정은 무시하고 기본값을 씁니다)
+const AI_DEFAULT_MODEL = 'claude-sonnet-5-5';
+const AI_EFFORTS = ['low', 'medium', 'high'];
 
 function getSettingsSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -761,14 +764,19 @@ function writeSetting(key, value) {
 const DAWN_DEFAULT_PLAYLIST = 'https://youtube.com/playlist?list=PLexqr1dnrjPzF_IXx_pR1YRKUx13rX7CT&si=sZADQZD6sK25peYz';
 function settingsGet() {
   const m = readSettingsMap();
-  return { ok: true, settings: { gemini_model: m.gemini_model || '', dawn_playlist: m.dawn_playlist || DAWN_DEFAULT_PLAYLIST, dawn_playlist_default: DAWN_DEFAULT_PLAYLIST } };
+  return { ok: true, settings: { ai_model: MODEL_PATTERN.test(m.ai_model || '') ? m.ai_model : '', ai_model_default: AI_DEFAULT_MODEL, ai_effort: AI_EFFORTS.indexOf(m.ai_effort) >= 0 ? m.ai_effort : '', dawn_playlist: m.dawn_playlist || DAWN_DEFAULT_PLAYLIST, dawn_playlist_default: DAWN_DEFAULT_PLAYLIST } };
 }
 
 function settingsSet(body) {
-  if (body.gemini_model !== undefined) {
-    const model = String(body.gemini_model || '').trim();
-    if (model && !MODEL_PATTERN.test(model)) return { ok: false, error: '모델 이름이 올바르지 않습니다. 예: gemini-3.8-flash' };
-    writeSetting('gemini_model', model);
+  if (body.ai_model !== undefined) {
+    const model = String(body.ai_model || '').trim();
+    if (model && !MODEL_PATTERN.test(model)) return { ok: false, error: '모델 이름이 올바르지 않습니다. 예: claude-sonnet-5-5' };
+    writeSetting('ai_model', model);
+  }
+  if (body.ai_effort !== undefined) {
+    const effort = String(body.ai_effort || '').trim().toLowerCase();
+    if (effort && AI_EFFORTS.indexOf(effort) < 0) return { ok: false, error: '생각 깊이는 low · medium · high 중 하나입니다.' };
+    writeSetting('ai_effort', effort);
   }
   if (body.dawn_playlist !== undefined) {
     // 새벽기도 영상 재생목록: 주소 또는 재생목록 ID (비우면 기본 재생목록)
@@ -1479,7 +1487,7 @@ function gameProfile(st, body) {
   }
 }
 
-/* 빈칸 정답 비교: 띄어쓰기 · 문장부호 무시 (scripts/lib/gemini.mjs 의 blankKey 와 같은 규칙) */
+/* 빈칸 정답 비교: 띄어쓰기 · 문장부호 무시 (scripts/lib/ai.mjs 의 blankKey 와 같은 규칙) */
 function gameBlankKey(s) {
   return String(s || '')
     .normalize('NFC')
@@ -1581,10 +1589,9 @@ function latestRunSafe() {
   }
 }
 /* ---------- AI 문장 다듬기 (앱의 모든 기록 칸) ---------- */
-// 스크립트 속성 GEMINI_API_KEY 가 있어야 합니다. 모델은 관리 화면의 AI 모델(Settings 탭 gemini_model)을 씁니다.
+// 스크립트 속성 ANTHROPIC_API_KEY 가 있어야 합니다. 모델은 관리 화면의 AI 모델(Settings 탭 ai_model)을 씁니다.
 const POLISH_MAX_CHARS = 4000;
 const POLISH_PER_HOUR = 60;
-const POLISH_DEFAULT_MODEL = 'gemini-3.8-flash';
 const POLISH_SYSTEM = [
   '당신은 교회 성도의 묵상 노트·나눔 글·기도문을 다듬어 주는 한국어 글쓰기 도우미입니다.',
   '규칙:',
@@ -1599,30 +1606,35 @@ function aiPolish(user, body) {
   const text = String(body.text || '').trim();
   if (!text) return { ok: false, error: '다듬을 글을 먼저 적어 주세요.' };
   if (text.length > POLISH_MAX_CHARS) return { ok: false, error: '글이 너무 깁니다 (' + POLISH_MAX_CHARS + '자까지).' };
-  const key = prop('GEMINI_API_KEY');
-  if (!key) return { ok: false, error: 'AI 문장 다듬기를 쓰려면 Apps Script 스크립트 속성에 GEMINI_API_KEY 를 넣어 주세요.' };
+  const key = prop('ANTHROPIC_API_KEY');
+  if (!key) return { ok: false, error: 'AI 문장 다듬기를 쓰려면 Apps Script 스크립트 속성에 ANTHROPIC_API_KEY 를 넣어 주세요.' };
   const cache = CacheService.getScriptCache();
   const ck = 'polish:' + sha256(user.email || user.sub || '').slice(0, 16) + ':' + Utilities.formatDate(new Date(), 'America/Toronto', 'yyyyMMddHH');
   const used = Number(cache.get(ck) || 0);
   if (used >= POLISH_PER_HOUR) return { ok: false, error: '잠시 뒤에 다시 시도해 주세요 (한 시간에 ' + POLISH_PER_HOUR + '번까지).' };
   cache.put(ck, String(used + 1), 3600);
   const settings = readSettingsMap();
-  const model = MODEL_PATTERN.test(settings.gemini_model || '') ? settings.gemini_model : POLISH_DEFAULT_MODEL;
+  const model = MODEL_PATTERN.test(settings.ai_model || '') ? settings.ai_model : AI_DEFAULT_MODEL;
   const where = String(body.context || '').slice(0, 80);
   const payload = {
-    systemInstruction: { parts: [{ text: POLISH_SYSTEM }] },
-    contents: [{ role: 'user', parts: [{ text: (where ? '[어디에 쓰는 글] ' + where + '\n\n' : '') + '[다듬을 글]\n' + text }] }],
-    generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens: 8192 },
+    model: model,
+    max_tokens: 16000,
+    system: POLISH_SYSTEM,
+    messages: [{ role: 'user', content: (where ? '[어디에 쓰는 글] ' + where + '\n\n' : '') + '[다듬을 글]\n' + text }],
+    output_config: { effort: 'low' }, // 짧은 글 다듬기는 깊게 생각할 필요가 없어 빠르고 저렴하게
   };
-  const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key), {
+  const res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
     method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true,
+    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
   });
-  if (res.getResponseCode() !== 200) return { ok: false, error: 'AI 응답 오류 (' + res.getResponseCode() + '). 잠시 뒤 다시 시도해 주세요.' };
+  const code = res.getResponseCode();
+  if (code === 401) return { ok: false, error: 'Claude API 키가 올바르지 않습니다. 스크립트 속성 ANTHROPIC_API_KEY 를 확인해 주세요.' };
+  if (code !== 200 && /credit balance/i.test(res.getContentText() || '')) return { ok: false, error: 'Claude API 크레딧이 모두 소진되었어요. 다음 달 크레딧이 들어오면 다시 쓸 수 있어요.' };
+  if (code !== 200) return { ok: false, error: 'AI 응답 오류 (' + code + '). 잠시 뒤 다시 시도해 주세요.' };
   let out = null;
   try {
     const data = JSON.parse(res.getContentText());
-    const parts = (((data.candidates || [])[0] || {}).content || {}).parts || [];
-    const raw = parts.map(function (p) { return p.text || ''; }).join('');
+    const raw = (data.content || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text || ''; }).join('');
     out = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
   } catch (err) {
     out = null;

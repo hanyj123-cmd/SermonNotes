@@ -1,16 +1,18 @@
 // 관리 화면 추가 기능: AI 모델 선택 · 영상 선택 관리
 // (app.js 보다 먼저 불러옵니다. 함수는 관리 화면이 열릴 때 app.js 의 도구(h, adminPost 등)를 가져다 씁니다.)
 
-// 모델 이름은 Gemini API 공식 모델 문서(ai.google.dev/gemini-api/docs/models)에서 확인한 것입니다.
-const GEMINI_MODELS = [
-  { id: 'gemini-3.8-flash', hint: '기본 · 빠르고 균형이 좋음' },
-  { id: 'gemini-3.7-flash', hint: '이전 버전' },
-  { id: 'gemini-3.6-flash', hint: '이전 버전' },
-  { id: 'gemini-3.5-flash', hint: '이전 버전' },
-  { id: 'gemini-3.5-flash-lite', hint: '가장 가볍고 저렴 · 품질은 낮을 수 있음' },
-  { id: 'gemini-3.1-flash-lite', hint: '가볍고 저렴' },
-  { id: 'gemini-3.1-pro-preview', hint: '가장 정교함 · 미리보기 · 느리고 비쌀 수 있음' },
-  { id: 'gemini-3-flash-preview', hint: '미리보기' },
+// 모델 이름은 Claude 공식 모델 문서(platform.claude.com/docs/en/models/overview)에서 확인한 것입니다. 가격은 100만 토큰당 입력/출력.
+const CLAUDE_MODELS = [
+  { id: 'claude-sonnet-5-5', hint: '기본 · 품질과 비용의 균형 ($2/$10)' },
+  { id: 'claude-opus-5-5', hint: '더 정교함 · 비용 약 2배 ($4/$20)' },
+  { id: 'claude-haiku-5-5', hint: '가장 빠르고 저렴 · 품질은 낮을 수 있음' },
+  { id: 'claude-fable-5-1', hint: '가장 정교함 · 비용 약 5배 ($10/$50)' },
+];
+const EFFORT_OPTIONS = [
+  ['', '기본 (medium)'],
+  ['low', 'low — 빠르고 저렴'],
+  ['medium', 'medium — 균형'],
+  ['high', 'high — 깊게 생각 · 사용량 많음'],
 ];
 const CUSTOM_MODEL = '__custom__';
 const MAX_PER_RUN = 10; // 선택한 영상을 한 번에 정리하는 최대 편수 (한 번 실행은 최대 120분)
@@ -65,10 +67,11 @@ function renderModelSection(password, onPasswordRejected) {
   const select = h(
     'select',
     { class: 'search admin-model', 'aria-label': 'AI 모델' },
-    GEMINI_MODELS.map((m) => h('option', { value: m.id, text: `${m.id} — ${m.hint}` })),
+    CLAUDE_MODELS.map((m) => h('option', { value: m.id, text: `${m.id} — ${m.hint}` })),
     h('option', { value: CUSTOM_MODEL, text: '직접 입력…' }),
   );
-  const custom = h('input', { class: 'search', placeholder: '예: gemini-3.8-flash', 'aria-label': '모델 이름 직접 입력', hidden: true });
+  const effortSel = h('select', { class: 'search', 'aria-label': '생각 깊이' }, EFFORT_OPTIONS.map(([v, t]) => h('option', { value: v, text: `생각 깊이: ${t}` })));
+  const custom = h('input', { class: 'search', placeholder: '예: claude-sonnet-5-5', 'aria-label': '모델 이름 직접 입력', hidden: true });
   custom.hidden = true;
   const save = h('button', { class: 'btn primary', type: 'button' }, '저장');
   const sync = () => {
@@ -78,12 +81,13 @@ function renderModelSection(password, onPasswordRejected) {
   save.addEventListener('click', async () => {
     const model = select.value === CUSTOM_MODEL ? custom.value.trim() : select.value;
     if (!model) return (info.textContent = '모델 이름을 입력해 주세요.');
+    if (!/^claude-/.test(model)) return (info.textContent = 'Claude 모델 이름은 claude- 로 시작합니다.');
     info.textContent = '저장 중…';
     try {
-      const r = await adminPost({ action: 'settings_set', password, gemini_model: model });
+      const r = await adminPost({ action: 'settings_set', password, ai_model: model, ai_effort: effortSel.value });
       if (onPasswordRejected(r)) return;
       if (!r.ok) throw new Error(r.error || '저장하지 못했습니다.');
-      info.textContent = `저장했습니다. 다음 동기화부터 ${model} 모델을 씁니다.`;
+      info.textContent = `저장했습니다. 다음 동기화부터 ${model} (생각 깊이 ${effortSel.value || 'medium'})을 씁니다.`;
     } catch (e) {
       info.textContent = `오류: ${e.message || e}`;
     }
@@ -92,11 +96,12 @@ function renderModelSection(password, onPasswordRejected) {
   adminPost({ action: 'settings_get', password })
     .then((r) => {
       if (onPasswordRejected(r) || !r.ok) return;
-      const cur = r.settings.gemini_model;
+      const cur = r.settings.ai_model;
+      effortSel.value = r.settings.ai_effort || '';
       if (!cur) {
-        select.value = GEMINI_MODELS[0].id;
-        info.textContent = `지금은 기본 모델(${GEMINI_MODELS[0].id})을 씁니다.`;
-      } else if (GEMINI_MODELS.some((m) => m.id === cur)) {
+        select.value = CLAUDE_MODELS[0].id;
+        info.textContent = `지금은 기본 모델(${CLAUDE_MODELS[0].id})을 씁니다.`;
+      } else if (CLAUDE_MODELS.some((m) => m.id === cur)) {
         select.value = cur;
         info.textContent = `지금 쓰는 모델: ${cur}`;
       } else {
@@ -110,9 +115,10 @@ function renderModelSection(password, onPasswordRejected) {
   return h(
     'section',
     { class: 'point admin-model-box' },
-    h('h2', { text: 'AI 모델' }),
-    h('p', { class: 'meta', text: '설교 정리를 만드는 Gemini 모델입니다. 정교한 모델일수록 느리고 사용량이 많을 수 있습니다. 자동 정리와 "지금 동기화" 모두에 적용됩니다.' }),
+    h('h2', { text: 'AI 모델 (Claude)' }),
+    h('p', { class: 'meta', text: '설교 정리 · 오늘의 말씀 · 잠언 묵상 · AI 문장 다듬기에 쓰는 Claude 모델입니다. 정교한 모델이나 깊은 생각일수록 느리고 크레딧을 많이 씁니다. 자동 정리와 "지금 동기화" 모두에 적용됩니다.' }),
     h('div', { class: 'admin-fields admin-fields-2' }, select, save),
+    effortSel,
     custom,
     info,
   );

@@ -15,7 +15,7 @@ export const SERMON_HEADERS = [
   'url',
   'status', // pending | done | error | no_transcript | skip | redo
   'transcript_manual', // 자막 수집이 안 될 때 여기에 직접 붙여넣기
-  'result_json', // Gemini가 만든 결과 (JSON)
+  'result_json', // Claude가 만든 결과 (JSON)
   'updated_at',
   'note',
   'preacher', // 설교자 (영상 제목에서 읽거나, 사용자 영상은 직접 입력)

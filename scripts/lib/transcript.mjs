@@ -2,7 +2,7 @@
 //   1) 시트의 transcript_manual 칸에 직접 붙여넣은 자막
 //   2) YouTube 자막 (무료)
 //   3) Supadata — SUPADATA_API_KEY 를 등록했을 때만 (자막이 없으면 AI로 음성 인식, 유료 크레딧)
-//   4) Gemini가 영상을 직접 듣고 정리 — 기본 켜짐, GEMINI_VIDEO=off 로 끌 수 있음
+//   모두 안 되면 no_transcript 로 표시합니다. (Claude 는 유튜브 영상을 직접 들을 수 없습니다)
 import { fetchTranscript } from './youtube.mjs';
 
 const SUPADATA_URL = 'https://api.supadata.ai/v1/transcript';
@@ -74,13 +74,11 @@ export async function fetchSupadata(videoId, apiKey, opts = {}) {
 /**
  * 한 영상의 설교 내용을 확보합니다.
  *   { kind: 'text',  text, source }     자막 텍스트를 얻음
- *   { kind: 'video', source, problems } 자막은 못 얻었고, 영상 직접 분석으로 진행
  *   { kind: 'none',  problems }         모두 실패
  */
 export async function obtainMaterial(row, opts = {}) {
   const {
     supadataKey = '',
-    geminiVideo = true,
     fetchCaptions = fetchTranscript,
     supadata = fetchSupadata,
     log = () => {},
@@ -106,6 +104,6 @@ export async function obtainMaterial(row, opts = {}) {
     }
   }
 
-  if (geminiVideo) return { kind: 'video', source: 'Gemini 영상 직접 분석', problems };
+  else problems.push('Supadata: SUPADATA_API_KEY 가 없어 음성 인식을 건너뜀');
   return { kind: 'none', problems };
 }

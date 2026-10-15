@@ -7,7 +7,7 @@ import fs from 'node:fs/promises';
 import { parseTitle, parseScripture, preacherName, bookOf, tidyTitle, normalizePreacher, displayTitle } from './lib/title.mjs';
 import { koReference, parseNumberedLines, parseNumberedFlow, parseBskorea, parseBibleGateway, fetchBibleBlock, bibleIsCurrent, bibleSignature, bskoreaUrl, bibleGatewayUrl, BIBLE_SOURCES } from './lib/bible-web.mjs';
 import { normalizePassages, toUsfm } from './lib/bible-books.mjs';
-import { extractJson, normalizeReview, normalizeQt, normalizeStudy, normalizeGroup, readResponseText, blankKey, normalizeDailyQt, normalizeDailyStudy, normalizeDailyQuiz } from './lib/gemini.mjs';
+import { extractJson, normalizeReview, normalizeQt, normalizeStudy, normalizeGroup, readResponseText, blankKey, normalizeDailyQt, normalizeDailyStudy, normalizeDailyQuiz } from './lib/ai.mjs';
 import { mixQuiz, optionsOrderFree } from './lib/quizmix.mjs';
 import { QUIZ_COUNTS, QUIZ_LEVEL_COUNTS, systemPromptForDaily, buildDailyMessage } from './lib/prompt.mjs';
 import { MODES, systemPromptFor, buildUserMessage } from './lib/prompt.mjs';
@@ -22,7 +22,7 @@ import { fitCommentary, DAILY_CELL_LIMIT } from './lib/daily.mjs';
 import { dawnDateOf, findDawnUpdates, dawnPlaylistId } from './lib/dawn.mjs';
 import { scheduledCategories } from './gate.mjs';
 import { buildProverbChapter, proverbExport, proverbChaptersToBuild } from './lib/proverbs.mjs';
-import { normalizeProverbGroup, normalizeProverbWord } from './lib/gemini.mjs';
+import { normalizeProverbGroup, normalizeProverbWord } from './lib/ai.mjs';
 import { systemPromptForProverb } from './lib/prompt.mjs';
 import { parseYnResponse, readingRefs, passagesText, dailyId, fetchDailyReading, YN_BIBLE_API, torontoDate, scoreReadingTitle, buildDailyDay, dailyExport, findReadingVideos } from './lib/daily.mjs';
 import { durationSeconds, musicIsStale, attachSongVideos, attachBibleAudio, scoreAudioTitle } from './lib/media.mjs';
@@ -142,7 +142,7 @@ await t('성경 4역본 모두 실패하면 null', async () => {
   assert.equal(block, null);
 });
 
-/* ===== Gemini 결과 검사 ===== */
+/* ===== AI 결과 검사 ===== */
 const rawReview = () => ({
   title: '제목', scripture: ['창세기 12:1-9'], preacher: '홍길동 목사', theme: '주제', summary_short: '한 줄',
   passages: [{ book: 'GEN', chapter: 12, verse_from: 1, verse_to: 9 }],
@@ -277,10 +277,11 @@ await t('소그룹 나눔: 질문+모범답안, 글자만 온 질문도 받음, 
   assert.equal(g.sharing_guide.steps[0].minutes, 10);
   assert.throws(() => normalizeGroup({ ...rawGroup(), sharing_guide: { steps: [] } }), /가이드/);
 });
-await t('Gemini 응답: 빈 응답·차단·잘림 설명', () => {
-  assert.throws(() => readResponseText({ text: '', promptFeedback: { blockReason: 'SAFETY' } }), /차단/);
-  assert.throws(() => readResponseText({ text: '{}', candidates: [{ finishReason: 'MAX_TOKENS' }] }), /잘렸/);
-  assert.equal(readResponseText({ text: '{"a":1}', candidates: [{ finishReason: 'STOP' }] }), '{"a":1}');
+await t('Claude 응답: 빈 응답·거절·잘림 설명, 생각(thinking) 블록은 빼고 글만', () => {
+  assert.throws(() => readResponseText({ content: [], stop_reason: 'refusal' }), /거절/);
+  assert.throws(() => readResponseText({ content: [{ type: 'text', text: '{}' }], stop_reason: 'max_tokens' }), /잘렸/);
+  assert.throws(() => readResponseText({ content: [{ type: 'thinking', thinking: '...' }], stop_reason: 'end_turn' }), /빈 응답/);
+  assert.equal(readResponseText({ content: [{ type: 'thinking', thinking: '음' }, { type: 'text', text: '{"a":' }, { type: 'text', text: '1}' }], stop_reason: 'end_turn' }), '{"a":1}');
 });
 await t('프롬프트: 모드마다 따로 있고, 개혁주의 관점·분량 규칙 포함', () => {
   assert.deepEqual(MODES, ['review', 'qt', 'study', 'group']);
@@ -625,9 +626,6 @@ function fakeAi({ failModes = [], calls = [] } = {}) {
       calls.push(mode);
       if (failModes.includes(mode)) throw new Error('가짜 실패');
       return { review: normalizeReview(rawReview()), qt: normalizeQt(rawQt()), study: normalizeStudy(rawStudy()), group: normalizeGroup(rawGroup()) }[mode];
-    },
-    async transcribeVideo() {
-      return '가짜 자막 '.repeat(100);
     },
   };
 }

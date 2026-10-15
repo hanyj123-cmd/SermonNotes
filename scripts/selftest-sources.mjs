@@ -1,9 +1,7 @@
-// 자막이 없는 영상 처리(Supadata · Gemini 영상 분석)와 영상 한 편 처리 흐름 점검. 외부 서비스 없이 실행: npm test
+// 자막 확보(YouTube 자막 · Supadata)와 Claude 호출 점검. 외부 서비스 없이 실행: npm test
 import assert from 'node:assert/strict';
 import { fetchSupadata, obtainMaterial } from './lib/transcript.mjs';
-import { createGemini } from './lib/gemini.mjs';
-import { buildVideoMessage } from './lib/prompt.mjs';
-import { processRow, CELL_LIMIT } from './lib/process.mjs';
+import { createClaude, DEFAULT_MODEL, isClaudeModel } from './lib/ai.mjs';
 
 let passed = 0;
 const t = async (name, fn) => {
@@ -111,7 +109,7 @@ await t('확보 순서: 직접 붙여넣은 자막이 최우선 (다른 곳은 �
   assert.equal(caps.n + sd.n, 0);
 });
 
-await t('확보 순서: YouTube 자막이 있으면 Supadata/Gemini는 쓰지 않음', async () => {
+await t('확보 순서: YouTube 자막이 있으면 Supadata는 쓰지 않음', async () => {
   const sd = spy(() => ({ text: 'y' }));
   const m = await obtainMaterial(row, { fetchCaptions: async () => ({ text: LONG, error: '' }), supadata: sd, supadataKey: 'K' });
   assert.equal(m.source, 'YouTube 자막');
@@ -125,15 +123,16 @@ await t('확보 순서: YouTube 자막 실패 → Supadata 키가 있으면 Supa
   assert.equal(sd.n, 1);
 });
 
-await t('확보 순서: Supadata 키가 없으면 호출하지 않고 바로 Gemini 영상 분석', async () => {
+await t('확보 순서: Supadata 키가 없으면 호출하지 않고 none (사유 기록)', async () => {
   const sd = spy(() => ({ text: LONG }));
   const m = await obtainMaterial(row, { fetchCaptions: async () => ({ text: '', error: 'disabled' }), supadata: sd, supadataKey: '' });
-  assert.equal(m.kind, 'video');
+  assert.equal(m.kind, 'none');
   assert.equal(sd.n, 0);
   assert.match(m.problems.join(' '), /YouTube 자막: disabled/);
+  assert.match(m.problems.join(' '), /SUPADATA_API_KEY/);
 });
 
-await t('확보 순서: Supadata도 실패하면 Gemini 영상 분석 (실패 사유는 모두 기록)', async () => {
+await t('확보 순서: Supadata도 실패하면 none (실패 사유는 모두 기록)', async () => {
   const m = await obtainMaterial(row, {
     fetchCaptions: async () => ({ text: '', error: 'disabled' }),
     supadata: async () => {
@@ -141,162 +140,83 @@ await t('확보 순서: Supadata도 실패하면 Gemini 영상 분석 (실패 �
     },
     supadataKey: 'K',
   });
-  assert.equal(m.kind, 'video');
+  assert.equal(m.kind, 'none');
   assert.equal(m.problems.length, 2);
   assert.match(m.problems[1], /Supadata: 크레딧이 부족합니다/);
 });
 
-await t('확보 순서: 영상 분석을 끄면(GEMINI_VIDEO=off) none', async () => {
-  const m = await obtainMaterial(row, { fetchCaptions: async () => ({ text: '', error: 'disabled' }), geminiVideo: false });
-  assert.equal(m.kind, 'none');
-  assert.equal(m.problems.length, 1);
-});
-
-// ---------- Gemini ----------
-const GOOD = { outline: [{ heading: '대지', content: '내용' }], applications: [{ title: '적용', detail: '상세' }], small_group: { observation: ['질문'] } };
-const okResponse = { text: JSON.stringify(GOOD), candidates: [{ finishReason: 'STOP' }] };
+// ---------- Claude ----------
+const REVIEW = { title: 't', summary_short: '한 줄', review: { outline: [{ heading: '대지', paragraphs: ['내용'] }], summary: 's' } };
+const msg = (text, stop = 'end_turn') => ({ content: [{ type: 'thinking', thinking: '…' }, { type: 'text', text }], stop_reason: stop });
 function fakeClient(handler) {
   const requests = [];
   return {
     requests,
-    models: {
-      generateContent: async (req) => {
+    messages: {
+      stream: (req) => {
         requests.push(req);
-        return handler(requests.length, req);
+        const n = requests.length;
+        return { finalMessage: async () => handler(n, req) };
       },
     },
   };
 }
+const info = { date: '2026-10-11', title: 'T', scripture: '', preacher: '' };
 
-await t('Gemini 영상 분석: 영상 주소·저해상도·긴 대기시간으로 요청', async () => {
-  const client = fakeClient(() => okResponse);
-  const g = createGemini('k', 'test-model', { client, sleep: noSleep });
-  const r = await g.summarizeVideo({ category: 'sunday', title: '제목', publishedAt: '2026-10-04', videoUrl: 'https://www.youtube.com/watch?v=VID12345678' });
-  assert.equal(r.outline[0].heading, '대지');
-  const req = client.requests[0];
-  assert.equal(req.model, 'test-model');
-  const parts = req.contents[0].parts;
-  assert.equal(req.contents[0].role, 'user');
-  assert.equal(parts[0].fileData.fileUri, 'https://www.youtube.com/watch?v=VID12345678');
-  assert.match(parts[1].text, /영상의 음성을 직접 듣고/);
-  assert.match(parts[1].text, /주일예배/);
-  assert.equal(req.config.mediaResolution, 'MEDIA_RESOLUTION_LOW');
-  assert.ok(req.config.httpOptions.timeout >= 10 * 60 * 1000);
-  assert.equal(req.config.responseMimeType, 'application/json');
-  assert.match(req.config.systemInstruction, /웨스트민스터/);
+await t('Claude: 기본 모델 · 모델 이름 검사 (예전 Gemini 설정은 무시)', () => {
+  assert.equal(DEFAULT_MODEL, 'claude-sonnet-5-5');
+  assert.ok(isClaudeModel('claude-opus-5-5'));
+  assert.ok(!isClaudeModel('gemini-3.8-flash'));
+  assert.ok(!isClaudeModel(''));
 });
 
-await t('Gemini 자막 정리: 기존 방식(텍스트 입력)은 그대로', async () => {
-  const client = fakeClient(() => okResponse);
-  const g = createGemini('k', 'm', { client, sleep: noSleep });
-  await g.summarize({ category: 'dawn', title: 'T', publishedAt: '2026-10-01', transcript: LONG });
+await t('Claude: 요청 형식 (모델 · 시스템 지침 · 자막 · effort · 넉넉한 길이)', async () => {
+  const client = fakeClient(() => msg(JSON.stringify(REVIEW)));
+  const ai = createClaude('k', 'claude-opus-5-5', { client, sleep: noSleep, effort: 'high' });
+  const r = await ai.generateMode('review', { category: 'sunday', title: 'T', publishedAt: '2026-10-11', transcript: LONG, info });
+  assert.equal(r.review.outline[0].heading, '대지');
   const req = client.requests[0];
-  assert.equal(typeof req.contents, 'string');
-  assert.match(req.contents, /\[자막 시작\]/);
-  assert.equal(req.config.mediaResolution, undefined);
+  assert.equal(req.model, 'claude-opus-5-5');
+  assert.deepEqual(req.output_config, { effort: 'high' });
+  assert.ok(req.max_tokens >= 32000);
+  assert.match(req.system, /JSON/);
+  assert.equal(req.messages[0].role, 'user');
+  assert.match(req.messages[0].content, /하나님은 우리를/);
+  assert.equal(req.temperature, undefined);
 });
 
-await t('Gemini: 한도 초과(429)는 기다렸다가 재시도, 성공하면 결과 반환', async () => {
+await t('Claude: 이상한 effort 는 medium 으로', () => {
+  assert.equal(createClaude('k', DEFAULT_MODEL, { client: fakeClient(() => ({})), effort: 'max' }).effort, 'medium');
+});
+
+await t('Claude: 과부하(529)·한도(429)는 기다렸다가 재시도', async () => {
   const waits = [];
   const client = fakeClient((n) => {
-    if (n === 1) throw Object.assign(new Error('rate limit'), { status: 429 });
-    return okResponse;
+    if (n === 1) throw Object.assign(new Error('overloaded'), { status: 529 });
+    return msg(JSON.stringify(REVIEW));
   });
-  const g = createGemini('k', 'm', { client, sleep: async (ms) => waits.push(ms) });
-  const r = await quiet(() => g.summarizeVideo({ category: 'dawn', title: 'T', videoUrl: 'u' }));
+  const ai = createClaude('k', DEFAULT_MODEL, { client, sleep: async (ms) => waits.push(ms) });
+  await quiet(() => ai.generateMode('review', { category: 'sunday', title: 'T', transcript: LONG, info }));
   assert.equal(client.requests.length, 2);
   assert.deepEqual(waits, [8000]);
-  assert.ok(r.outline.length);
 });
 
-await t('Gemini: 깨진 JSON이어도 재시도하고, 계속 실패하면 3번 뒤 오류', async () => {
-  const client = fakeClient(() => ({ text: '이건 JSON이 아님', candidates: [{ finishReason: 'STOP' }] }));
-  const g = createGemini('k', 'm', { client, sleep: noSleep });
-  await assert.rejects(quiet(() => g.summarizeVideo({ category: 'dawn', title: 'T', videoUrl: 'u' })), /JSON/);
+await t('Claude: 깨진 JSON·잘린 답은 3번까지 다시, 키 오류·크레딧 소진은 바로 중단', async () => {
+  let client = fakeClient(() => msg('JSON 아님'));
+  await assert.rejects(quiet(() => createClaude('k', DEFAULT_MODEL, { client, sleep: noSleep }).generateMode('review', { category: 'sunday', title: 'T', transcript: LONG, info })), /JSON/);
   assert.equal(client.requests.length, 3);
-});
-
-await t('영상용 요청 문구: 설교만 정리 · 추측 금지 · 구분/제목 포함', () => {
-  const m = buildVideoMessage({ category: 'wednesday', title: '기도의 자리', publishedAt: '2026-10-07' });
-  assert.match(m, /설교 부분만/);
-  assert.match(m, /추측하지/);
-  assert.match(m, /수요예배/);
-  assert.match(m, /기도의 자리/);
-});
-
-// ---------- 영상 한 편 처리 흐름 ----------
-function harness({ material, ai }) {
-  const updates = [];
-  const logs = [];
-  const deps = {
-    ai,
-    update: async (patch) => updates.push(patch),
-    obtain: async () => material,
-    now: () => 'NOW',
-    log: { info: (m) => logs.push(m), warn: (m) => logs.push(m), error: (m) => logs.push(m) },
-  };
-  return { updates, logs, deps };
-}
-const fakeAi = (over = {}) => ({
-  model: 'gemini-test',
-  summarize: async () => GOOD,
-  summarizeVideo: async () => GOOD,
-  ...over,
-});
-const baseRow = () => ({ video_id: 'VID12345678', category: 'sunday', title: '제목', published_at: '2026-10-04', rowNumber: 7 });
-
-await t('처리: 자막 텍스트 → done, 출처·모델을 note에 기록', async () => {
-  const calls = [];
-  const h = harness({ material: { kind: 'text', text: LONG, source: 'YouTube 자막' }, ai: fakeAi({ summarize: async (a) => (calls.push(a), GOOD) }) });
-  const r = baseRow();
-  assert.equal(await processRow(r, h.deps), 'done');
-  assert.equal(calls[0].transcript, LONG);
-  assert.equal(h.updates[0].status, 'done');
-  assert.equal(h.updates[0].note, 'YouTube 자막 · gemini-test');
-  assert.deepEqual(JSON.parse(h.updates[0].result_json).outline[0].heading, '대지');
-  assert.equal(r.status, 'done');
-});
-
-await t('처리: 자막 없음 → 영상 직접 분석(summarizeVideo)에 영상 주소 전달', async () => {
-  const calls = [];
-  const h = harness({ material: { kind: 'video', source: 'Gemini 영상 직접 분석', problems: ['YouTube 자막: disabled'] }, ai: fakeAi({ summarizeVideo: async (a) => (calls.push(a), GOOD) }) });
-  assert.equal(await processRow(baseRow(), h.deps), 'done');
-  assert.equal(calls[0].videoUrl, 'https://www.youtube.com/watch?v=VID12345678');
-  assert.equal(calls[0].category, 'sunday');
-  assert.equal(h.updates[0].note, 'Gemini 영상 직접 분석 · gemini-test');
-});
-
-await t('처리: 모두 실패 → no_transcript + 사유 + 해결 안내', async () => {
-  const h = harness({ material: { kind: 'none', problems: ['YouTube 자막: disabled'] }, ai: fakeAi() });
-  assert.equal(await processRow(baseRow(), h.deps), 'no_transcript');
-  assert.equal(h.updates[0].status, 'no_transcript');
-  assert.match(h.updates[0].note, /disabled/);
-  assert.match(h.updates[0].note, /transcript_manual/);
-});
-
-await t('처리: 영상 분석 실패 → error, 영상 분석이었음을 note에 표시', async () => {
-  const h = harness({
-    material: { kind: 'video', source: 'Gemini 영상 직접 분석', problems: ['YouTube 자막: disabled'] },
-    ai: fakeAi({
-      summarizeVideo: async () => {
-        throw new Error('Video is too long');
-      },
-    }),
+  client = fakeClient(() => msg('{"a":', 'max_tokens'));
+  await assert.rejects(quiet(() => createClaude('k', DEFAULT_MODEL, { client, sleep: noSleep }).generateDaily('qt', { date: '2026-10-16', refs: 'r', text: 't' })), /잘렸/);
+  client = fakeClient(() => {
+    throw Object.assign(new Error('invalid x-api-key'), { status: 401 });
   });
-  assert.equal(await processRow(baseRow(), h.deps), 'error');
-  assert.equal(h.updates[0].status, 'error');
-  assert.match(h.updates[0].note, /영상 직접 분석 실패/);
-  assert.match(h.updates[0].note, /Video is too long/);
-  assert.match(h.updates[0].note, /redo/);
-});
-
-await t('처리: 결과가 시트 셀 한도를 넘으면 error (시트에 저장하지 않음)', async () => {
-  const huge = { ...GOOD, outline: [{ heading: 'a', content: 'x'.repeat(CELL_LIMIT) }] };
-  const h = harness({ material: { kind: 'text', text: LONG, source: 'YouTube 자막' }, ai: fakeAi({ summarize: async () => huge }) });
-  assert.equal(await processRow(baseRow(), h.deps), 'error');
-  assert.equal(h.updates.length, 1);
-  assert.equal(h.updates[0].result_json, undefined);
-  assert.match(h.updates[0].note, /너무 깁니다/);
+  await assert.rejects(quiet(() => createClaude('k', DEFAULT_MODEL, { client, sleep: noSleep }).generateProverb('word', { chapter: 3, text: 't' })), /api-key/);
+  assert.equal(client.requests.length, 1);
+  client = fakeClient(() => {
+    throw Object.assign(new Error('Your credit balance is too low to access the Anthropic API.'), { status: 400 });
+  });
+  await assert.rejects(quiet(() => createClaude('k', DEFAULT_MODEL, { client, sleep: noSleep }).generateDaily('quiz', { date: '2026-10-16', refs: 'r', text: 't' })), /credit/);
+  assert.equal(client.requests.length, 1);
 });
 
 console.log(`\n${passed}개 테스트 통과`);

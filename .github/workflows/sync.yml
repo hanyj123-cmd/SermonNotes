@@ -95,17 +95,17 @@ jobs:
         if: github.event.inputs.bible_check == 'true'
         run: node scripts/bible-check.mjs
 
-      - name: 재생목록 확인 → 자막 수집 → Gemini 정리 → Sheets 저장 → JSON 내보내기
+      - name: 재생목록 확인 → 자막 수집 → Claude 정리 → Sheets 저장 → JSON 내보내기
         if: github.event.inputs.bible_check != 'true'
         env:
           ONLY_CATEGORIES: ${{ github.event.inputs.categories || needs.gate.outputs.categories }}
           SHEET_ID: ${{ secrets.SHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
+          CLAUDE_EFFORT: ${{ vars.CLAUDE_EFFORT }}
           SUPADATA_API_KEY: ${{ secrets.SUPADATA_API_KEY }}
-          GEMINI_VIDEO: ${{ vars.GEMINI_VIDEO }}
           AUTO_WITHIN_DAYS: ${{ vars.AUTO_WITHIN_DAYS }}
           RETRY_DAYS: ${{ vars.RETRY_DAYS }}
           MAX_NEW_PER_RUN: ${{ github.event.inputs.max_new || vars.MAX_NEW_PER_RUN || '5' }}

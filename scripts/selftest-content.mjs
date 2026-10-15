@@ -1,6 +1,6 @@
 // 새 양식(결과 v2), 성경 3역본, 찬양 영상·기도 배경음악, 선택 정리 흐름 점검: npm test
 import assert from 'node:assert/strict';
-import { normalizeResult } from './lib/gemini.mjs';
+import { normalizeResult } from './lib/ai.mjs';
 import { normalizePassages, toUsfm } from './lib/bible-books.mjs';
 import { SYSTEM_PROMPT, buildUserMessage, dotDate, APPLICATION_COUNT, MEDITATION_COUNT } from './lib/prompt.mjs';
 import { fetchBibleBlock, attachBible, listBibles, parseBibleVersions, cleanVerseText, needsBible } from './lib/bible.mjs';

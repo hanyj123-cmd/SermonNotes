@@ -1,15 +1,20 @@
-// Gemini API 호출 + 결과 검증 (설교 한 편을 4가지 모드로 따로 정리)
-import { GoogleGenAI } from '@google/genai';
-import { MODES, systemPromptFor, buildUserMessage, buildTranscribeMessage, DAILY_MODES, systemPromptForDaily, buildDailyMessage, PROVERB_MODES, systemPromptForProverb, buildProverbMessage } from './prompt.mjs';
+// Claude API 호출 + 결과 검증 (설교 한 편을 4가지 모드로 따로 정리)
+import Anthropic from '@anthropic-ai/sdk';
+import { MODES, systemPromptFor, buildUserMessage, DAILY_MODES, systemPromptForDaily, buildDailyMessage, PROVERB_MODES, systemPromptForProverb, buildProverbMessage } from './prompt.mjs';
 import { normalizePassages } from './bible-books.mjs';
 import { mixQuiz } from './quizmix.mjs';
 
-export const DEFAULT_MODEL = 'gemini-3.8-flash';
+export const DEFAULT_MODEL = 'claude-sonnet-5-5';
+export const DEFAULT_EFFORT = 'medium';
+export const EFFORTS = ['low', 'medium', 'high'];
+/** 관리 화면·환경변수에서 고른 모델 이름이 Claude 모델일 때만 씁니다 (예전 Gemini 설정은 무시) */
+export const isClaudeModel = (m) => /^claude-[\w.-]{3,60}$/.test(String(m || '').trim());
 const MAX_TRANSCRIPT_CHARS = 150_000;
 const MAX_ATTEMPTS = 3;
 // 새로 만든 퀴즈가 최소한 이만큼은 있어야 저장합니다 (정해진 개수보다 조금 여유를 둡니다)
 const QUIZ_MIN = { multiple_choice: 17, fill_blank: 4, word_answer: 4 };
-const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504, 529]);
+const MAX_TOKENS = 64_000; // 생각(thinking) + 답 전체 한도. 긴 성경공부·퀴즈도 넉넉하게
 
 export function extractJson(text) {
   const start = text.indexOf('{');
@@ -317,39 +322,46 @@ export const normalizeMode = (mode, raw) => NORMALIZERS[mode](raw);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** 응답에서 텍스트를 꺼내고, 비어 있으면 이유를 설명하는 오류를 던집니다. */
-export function readResponseText(response) {
-  const cand = response?.candidates?.[0];
-  const text = response?.text ?? '';
-  if (!text.trim()) {
-    const block = response?.promptFeedback?.blockReason;
-    if (block) throw new Error(`요청이 차단되었습니다 (${block})`);
-    throw new Error(`빈 응답입니다 (finishReason: ${cand?.finishReason || '알 수 없음'})`);
-  }
-  if (cand?.finishReason === 'MAX_TOKENS') throw new Error('응답이 길이 제한으로 잘렸습니다');
+/** Claude 응답에서 텍스트를 꺼내고, 비어 있거나 잘렸으면 이유를 설명하는 오류를 던집니다. */
+export function readResponseText(message) {
+  const text = (message?.content || []).filter((b) => b?.type === 'text').map((b) => b.text || '').join('');
+  const stop = message?.stop_reason;
+  if (stop === 'refusal') throw new Error('요청이 거절되었습니다 (refusal)');
+  if (stop === 'max_tokens') throw new Error('응답이 길이 제한으로 잘렸습니다');
+  if (!text.trim()) throw new Error(`빈 응답입니다 (stop_reason: ${stop || '알 수 없음'})`);
   return text;
 }
 
+const JSON_ONLY = '\n\n출력 형식: 설명이나 코드 블록(```) 없이, 위에서 정한 JSON 객체 하나만 출력합니다.';
+
 // options.client / options.sleep 은 테스트에서 가짜로 바꿔 끼우기 위한 것입니다.
-export function createGemini(apiKey, model = DEFAULT_MODEL, options = {}) {
-  const ai = options.client || new GoogleGenAI({ apiKey });
+export function createClaude(apiKey, model = DEFAULT_MODEL, options = {}) {
+  const effort = EFFORTS.includes(options.effort) ? options.effort : DEFAULT_EFFORT;
+  const client = options.client || new Anthropic({ apiKey, maxRetries: 2, timeout: 20 * 60 * 1000 });
   const wait = options.sleep || sleep;
 
-  async function call(config, contents, parse) {
+  async function call(system, userText, parse) {
     let lastError;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        const response = await ai.models.generateContent({
-          model,
-          contents,
-          config: { maxOutputTokens: 65_536, temperature: 0.4, ...config }, // 사고(thinking) 토큰이 포함될 수 있어 넉넉하게
-        });
-        return parse(readResponseText(response));
+        // 긴 답은 스트리밍으로 받아야 시간 제한에 걸리지 않습니다
+        const message = await client.messages
+          .stream({
+            model,
+            max_tokens: MAX_TOKENS,
+            system: system + JSON_ONLY,
+            messages: [{ role: 'user', content: userText }],
+            output_config: { effort },
+          })
+          .finalMessage();
+        return parse(readResponseText(message));
       } catch (e) {
         lastError = e;
         console.warn(`   ↻ 시도 ${attempt}/${MAX_ATTEMPTS} 실패: ${String(e?.message || e).slice(0, 160)}`);
+        if (e?.status === 401 || e?.status === 403) break; // 키 문제는 다시 해도 소용없음
+        if (/credit balance/i.test(String(e?.message || ''))) break; // 크레딧 소진
         if (attempt === MAX_ATTEMPTS) break;
-        // 일시적 오류(429/5xx)는 잠시 기다렸다 재시도, 그 외는 바로 재시도
+        // 일시적 오류(429/5xx/529 과부하)는 잠시 기다렸다 재시도, 그 외(깨진 JSON 등)는 바로 재시도
         await wait(RETRYABLE_STATUS.has(e?.status) ? 8000 * attempt : 1000);
       }
     }
@@ -358,44 +370,24 @@ export function createGemini(apiKey, model = DEFAULT_MODEL, options = {}) {
 
   return {
     model,
+    effort,
 
     /** 설교 한 편의 한 모드(review | qt | study | group)를 만듭니다. */
     generateMode(mode, { category, title, publishedAt, transcript, info }) {
       if (!MODES.includes(mode)) throw new Error(`알 수 없는 모드: ${mode}`);
       const clipped = transcript.length > MAX_TRANSCRIPT_CHARS ? transcript.slice(0, MAX_TRANSCRIPT_CHARS) : transcript;
-      return call(
-        { systemInstruction: systemPromptFor(mode), responseMimeType: 'application/json' },
-        buildUserMessage(mode, { category, title, publishedAt, transcript: clipped, info }),
-        (text) => normalizeMode(mode, extractJson(text)),
-      );
+      return call(systemPromptFor(mode), buildUserMessage(mode, { category, title, publishedAt, transcript: clipped, info }), (text) => normalizeMode(mode, extractJson(text)));
     },
 
     /** 오늘의 말씀 한 모드(qt | study | group | quiz)를 만듭니다. text = 그날 본문 전문 */
     generateDaily(mode, { date, refs, text }) {
       if (!DAILY_MODES.includes(mode)) throw new Error(`알 수 없는 말씀 읽기 모드: ${mode}`);
-      return call({ systemInstruction: systemPromptForDaily(mode), responseMimeType: 'application/json' }, buildDailyMessage({ date, refs, text }), (t) => normalizeDailyMode(mode, extractJson(t)));
+      return call(systemPromptForDaily(mode), buildDailyMessage({ date, refs, text }), (t) => normalizeDailyMode(mode, extractJson(t)));
     },
 
     generateProverb(mode, { chapter, text }) {
       if (!PROVERB_MODES.includes(mode)) throw new Error(`알 수 없는 잠언 모드: ${mode}`);
-      return call({ systemInstruction: systemPromptForProverb(mode), responseMimeType: 'application/json' }, buildProverbMessage({ chapter, text }), (t) => normalizeProverbMode(mode, extractJson(t)));
-    },
-
-    /**
-     * 자막이 없는 영상: 유튜브 영상(공개 영상만)을 Gemini가 직접 듣고 글로 옮깁니다.
-     * 화면 영상은 중요하지 않으므로 해상도를 낮춰 토큰(=사용량)을 줄입니다.
-     */
-    transcribeVideo({ title, videoUrl }) {
-      const contents = [{ role: 'user', parts: [{ fileData: { fileUri: videoUrl } }, { text: buildTranscribeMessage({ title }) }] }];
-      return call(
-        { mediaResolution: 'MEDIA_RESOLUTION_LOW', httpOptions: { timeout: 15 * 60 * 1000 } },
-        contents,
-        (text) => {
-          const t = text.replace(/\s+\n/g, '\n').trim();
-          if (t.length < 200) throw new Error('영상에서 옮긴 글이 너무 짧습니다');
-          return t;
-        },
-      );
+      return call(systemPromptForProverb(mode), buildProverbMessage({ chapter, text }), (t) => normalizeProverbMode(mode, extractJson(t)));
     },
   };
 }

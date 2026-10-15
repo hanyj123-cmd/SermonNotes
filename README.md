@@ -1,6 +1,6 @@
 # 말씀결 (sermon-notes) — v9
 
-교회 유튜브 설교 영상의 자막을 Gemini AI가 **4가지 방식**으로 정리해 주는 웹앱입니다. 개혁주의(대한예수교장로회 합동·통합) 신학 기준으로 쓰도록 프롬프트가 설계되어 있습니다 (`scripts/lib/prompt.mjs`).
+교회 유튜브 설교 영상의 자막을 Claude AI가 **4가지 방식**으로 정리해 주는 웹앱입니다. 개혁주의(대한예수교장로회 합동·통합) 신학 기준으로 쓰도록 프롬프트가 설계되어 있습니다 (`scripts/lib/prompt.mjs`).
 
 | 모드 | 내용 |
 |---|---|
@@ -56,7 +56,7 @@
 ## AI 문장 다듬기
 
 - 앱의 모든 기록 칸(오늘의 말씀 · 설교 · 잠언 묵상의 묵상/나눔 칸, 형광펜 메모) 아래에 **AI 문장 다듬기** 버튼이 있습니다. 맞춤법 · 띄어쓰기 · 문맥을 다듬은 제안을 보여 주고, 고쳐 쓴 뒤 **적용하기**를 누르면 그 칸에 바로 들어가 저장됩니다.
-- Apps Script **스크립트 속성에 `GEMINI_API_KEY`** 를 넣어야 동작합니다(GitHub 비밀값과 같은 키). 모델은 관리 화면의 AI 모델을 따릅니다. 로그인한 가족만, 한 사람당 한 시간에 60번까지.
+- Apps Script **스크립트 속성에 `ANTHROPIC_API_KEY`** 를 넣어야 동작합니다(GitHub 비밀값과 같은 키를 써도 됩니다). 모델은 관리 화면의 AI 모델을 따릅니다. 로그인한 가족만, 한 사람당 한 시간에 60번까지.
 
 ## 새벽기도 영상 연결 (오늘의 말씀)
 
@@ -87,7 +87,7 @@
 Google Sheet (Playlists · Sermons · Notes · Settings 탭)
         │
         ▼  GitHub Actions (예약 / 수동)
-  YouTube 새 영상 확인 → 자막 수집 → Gemini(4모드 각각) → 성경 4역본(웹사이트에서 읽기) → 찬양·배경음악 영상 찾기
+  YouTube 새 영상 확인 → 자막 수집 → Claude(4모드 각각) → 성경 4역본(웹사이트에서 읽기) → 찬양·배경음악 영상 찾기
         │
         ▼
 docs/data/sermons.json (목록) + docs/data/s/<영상ID>.json (설교별 상세) 커밋 → GitHub Pages
@@ -102,8 +102,8 @@ Apps Script 웹앱 (관리 · 구글 로그인 · 개인 노트 · 사용자 영
 | GitHub 계정 | 코드·웹사이트 호스팅 |
 | Google 서비스 계정 키(JSON) | 시트 읽기/쓰기 |
 | YouTube Data API 키 | 재생목록 · 영상 정보 · 찬양/배경음악 검색 |
-| Gemini API 키 | 설교 정리 ([Google AI Studio](https://aistudio.google.com/apikey)) |
-| (선택) Supadata API 키 | 자막이 안 받아질 때 대체 수단 (유료 크레딧). 없으면 Gemini가 영상을 직접 듣고 옮깁니다 |
+| Claude API 키 | 설교 정리 · 오늘의 말씀 · 잠언 · 문장 다듬기 ([Claude Console](https://platform.claude.com/settings/keys)) |
+| (선택) Supadata API 키 | 자막이 없는 영상을 음성 인식으로 글로 옮김 (유료 크레딧). 없으면 그 영상은 `no_transcript` 로 표시됩니다 (Claude 는 유튜브 영상을 직접 들을 수 없습니다) |
 
 성경 본문에는 **API 키가 필요 없습니다** (아래 참고).
 
@@ -111,7 +111,7 @@ Apps Script 웹앱 (관리 · 구글 로그인 · 개인 노트 · 사용자 영
 
 1. **Google Sheet** 만들기 — 첫 탭 이름 `Playlists`, 1행 `category · playlist_url · max_videos`. `category` 는 `주일예배 / 새벽기도 / 수요예배 / 청년부예배` (또는 `sunday / dawn / wednesday / youth`). 나머지 탭(Sermons · Notes · Settings)은 자동으로 만들어집니다. 주소창의 `/d/`**`여기`**`/edit` 가 `SHEET_ID`.
 2. **Google Cloud**: Google Sheets API + YouTube Data API v3 사용 설정 → API 키(= `YOUTUBE_API_KEY`) → 서비스 계정 만들고 JSON 키 내려받기(= `GOOGLE_SERVICE_ACCOUNT_JSON`) → 서비스 계정 이메일을 시트 **편집자**로 공유.
-3. **GitHub**: 새 저장소에 이 폴더를 올리고(`.env` 제외), Settings → Secrets and variables → Actions 에 `SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `YOUTUBE_API_KEY`, `GEMINI_API_KEY` (선택: `SUPADATA_API_KEY`) 등록. 선택 Variables: `GEMINI_MODEL`, `MAX_NEW_PER_RUN`(5), `RETRY_DAYS`(7), `AUTO_WITHIN_DAYS`(14), `GEMINI_VIDEO`(off 로 두면 영상 직접 분석 끔).
+3. **GitHub**: 새 저장소에 이 폴더를 올리고(`.env` 제외), Settings → Secrets and variables → Actions 에 `SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `YOUTUBE_API_KEY`, `ANTHROPIC_API_KEY` (선택: `SUPADATA_API_KEY`) 등록. 선택 Variables: `CLAUDE_MODEL`(claude-sonnet-5-5), `CLAUDE_EFFORT`(medium), `MAX_NEW_PER_RUN`(5), `RETRY_DAYS`(7), `AUTO_WITHIN_DAYS`(14). 관리 화면에서 고른 모델·생각 깊이가 있으면 그것이 우선입니다.
 4. **Pages**: Settings → Pages → Deploy from a branch → `main` / `/docs`.
 5. **Apps Script**: 시트의 확장 프로그램 → Apps Script 에 `apps-script/Code.gs` 를 붙여넣고, 스크립트 속성에 `ADMIN_PASSWORD`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`(가족 구글 계정, 쉼표로), `GITHUB_TOKEN`·`GITHUB_REPO`(앱에서 "지금 동기화"를 쓰려면) 입력 → 배포 → 웹 앱 주소를 `docs/config.js` 의 `ADMIN_API_URL` 에.
    - **이미 배포한 적이 있다면**: 코드를 바꿔 붙인 뒤 **배포 관리 → 편집 → 새 버전**으로 다시 배포하세요(주소는 그대로). `Notes` 탭에 `fields_json` 칸은 자동으로 추가됩니다.
@@ -163,7 +163,7 @@ Apps Script 웹앱 (관리 · 구글 로그인 · 개인 노트 · 사용자 영
 
 - **자막 수집이 막힐 수 있습니다** (GitHub 서버 IP). `transcript_manual` 에 직접 붙여넣거나, 내 컴퓨터에서 `.env.example` 을 `.env` 로 채운 뒤 `npm install && node --env-file=.env scripts/sync.mjs`.
 - **공개 범위**: 무료 GitHub Pages는 공개 저장소가 필요해서 생성된 정리와 성경 본문이 인터넷에 공개됩니다. 가족용으로만 쓰고 성경 본문 저작권이 걱정되면 비공개 저장소 + 접근 제한 호스팅을 고려하세요. 개인 노트·사용자 영상 소유자 이메일은 공개 데이터에 들어가지 않습니다 (Apps Script 시트에만 있음).
-- **Gemini 사용량**: 영상 한 편에 모드 4번 호출합니다. 한도에 걸리면 자동 재시도 후 `error` 로 표시됩니다.
+- **Claude 사용량**: 영상 한 편에 모드 4번, 오늘의 말씀 하루에 4번, 잠언 한 장에 5번 호출합니다. 과부하·한도에 걸리면 자동 재시도 후 `error` 로 표시됩니다. 크레딧이 떨어지면 바로 멈추고 다음 실행 때 빠진 것만 다시 만듭니다.
 - **AI 정리의 한계**: 자막 오인식·요약 누락이 있을 수 있어 설교별 안내문(caveats)이 데이터에 들어갑니다.
 - 한 번에 한 실행만 돌도록 되어 있어, 동시에 여러 번 누르면 순서대로 기다립니다.
 
@@ -193,7 +193,7 @@ scripts/
   sync.mjs gate.mjs bible-check.mjs make-sample.mjs
   lib/prompt.mjs       신학 기준 · 모드별 프롬프트  ← 가장 자주 고치게 될 파일
   lib/process.mjs      영상 한 편 처리 (4모드 · 부분 재시도)
-  lib/{title,bible-web,bible-books,gemini,media,queue,sheets,youtube,transcript}.mjs
+  lib/{title,bible-web,bible-books,ai,media,queue,sheets,youtube,transcript}.mjs
   selftest.mjs selftest-gas.mjs   npm test
 .github/workflows/sync.yml
 ```
