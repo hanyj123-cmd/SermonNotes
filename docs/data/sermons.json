@@ -1,6 +1,6 @@
 {
- "updated": "2026-10-14T14:58:17.815Z",
- "count": 50,
+ "updated": "2026-10-15T11:35:21.427Z",
+ "count": 55,
  "sermons": [
   {
    "id": "dsmuCh4crJo",
@@ -459,6 +459,24 @@
    "complete": true
   },
   {
+   "id": "APtSnMQljbc",
+   "category": "dawn",
+   "title": "새벽기도 - 새벽기도회  (사무엘하 10장) -윤정환 목사",
+   "date": "2026-09-14",
+   "url": "https://www.youtube.com/watch?v=APtSnMQljbc",
+   "preacher": "윤정환 목사",
+   "scripture": "사무엘하 10:9-14",
+   "book": "사무엘하",
+   "bookIdx": 10,
+   "summary_short": "우리는 인생의 다음 결과를 미리 알 수 없지만, 선하신 하나님을 신뢰하며 오늘 내게 주어진 책임을 성실히 다하고 결과를 주님께 온전히 맡겨야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "group"
+   ],
+   "complete": false
+  },
+  {
    "id": "QZzM-ZWyU4s",
    "category": "user",
    "title": "다음세대(02) - 붙드심",
@@ -488,6 +506,81 @@
    "book": "요한계시록",
    "bookIdx": 66,
    "summary_short": "오랜 신앙의 연륜과 수고 속에서 잃어버리기 쉬운 예수 그리스도를 향한 처음 사랑과 감격을 회개함으로 되살려야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "R2LsG2StThs",
+   "category": "dawn",
+   "title": "새벽기도 - 사무엘하 7장",
+   "date": "2026-09-12",
+   "url": "https://www.youtube.com/watch?v=R2LsG2StThs",
+   "preacher": "전대혁 목사",
+   "scripture": "사무엘하 7장",
+   "book": "사무엘하",
+   "bookIdx": 10,
+   "summary_short": "다윗은 오랜 고난 끝에 왕이 되어 자신의 삶을 돌아보며 전적인 하나님의 은혜에 감사하고, 하나님은 그런 다윗에게 영원한 왕위를 약속하십니다.",
+   "modes": [
+    "review",
+    "qt",
+    "group"
+   ],
+   "complete": false
+  },
+  {
+   "id": "lUJGLBHtqk4",
+   "category": "dawn",
+   "title": "새벽기도 - 사무엘하 6장",
+   "date": "2026-09-11",
+   "url": "https://www.youtube.com/watch?v=lUJGLBHtqk4",
+   "preacher": "강산 목사",
+   "scripture": "사무엘하 6장",
+   "book": "사무엘하",
+   "bookIdx": 10,
+   "summary_short": "우리의 실수와 실패를 거울 삼아 내 뜻을 이루려는 교만을 내려놓고, 오직 하나님 앞에 서서 그분의 은혜를 기뻐하며 순종하는 삶을 살아야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "IyNlQeR-d_Y",
+   "category": "dawn",
+   "title": "새벽기도 - 사무엘하 4,5장",
+   "date": "2026-09-10",
+   "url": "https://www.youtube.com/watch?v=IyNlQeR-d_Y",
+   "preacher": "김승헌 목사",
+   "scripture": "사무엘하 4,5장",
+   "book": "사무엘하",
+   "bookIdx": 10,
+   "summary_short": "우리의 인생은 단번에 주어지는 결과가 아니라, 하나님 앞에서 성실함과 기도로 쌓아가는 누적의 시간 속에서 세워집니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "DkCAVXhwoDo",
+   "category": "dawn",
+   "title": "새벽기도 - 사무엘하3장",
+   "date": "2026-09-09",
+   "url": "https://www.youtube.com/watch?v=DkCAVXhwoDo",
+   "preacher": "최형종 목사",
+   "scripture": "사무엘하3장",
+   "book": "사무엘하",
+   "bookIdx": 10,
+   "summary_short": "사울의 죽음 이후 찾아온 갈등과 위기 속에서도, 다윗은 혈기가 아닌 하나님의 뜻에 따른 샬롬(평안)과 화해의 길을 선택합니다.",
    "modes": [
     "review",
     "qt",
