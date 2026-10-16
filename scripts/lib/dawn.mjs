@@ -70,11 +70,15 @@ export async function channelUploadsId(playlistId, apiKey, fetchImpl = fetch) {
 }
 
 /** 아직 볼 수 없는 영상(예정된 라이브, 방송 중, 처리 중)은 뺍니다 */
-export async function readyOnly(videos, apiKey, fetchImpl = fetch) {
+export async function readyOnly(videos, apiKey, fetchImpl = fetch, log = () => {}) {
   if (!videos.length) return videos;
   const data = await api('videos', { part: 'snippet,status,contentDetails', id: videos.map((v) => v.video_id).join(',') }, apiKey, fetchImpl);
   const byId = new Map((data.items || []).map((it) => [it.id, it]));
-  return videos.filter((v) => classifyVideo(byId.get(v.video_id)).ready);
+  return videos.filter((v) => {
+    const st = classifyVideo(byId.get(v.video_id));
+    if (!st.ready) log(`   건너뜀 ${v.video_id} (${dawnDateOf(v.title, v.published)}): ${st.reason}`);
+    return st.ready;
+  });
 }
 
 /**
@@ -108,7 +112,7 @@ export async function findDawnUpdates({ rows, playlistId, apiKey, dates, force =
   const match = async (videos) => {
     const left = todo.filter((d) => !done.has(d));
     const cands = videos.filter((v) => left.includes(dawnDateOf(v.title, v.published))).slice(0, 40);
-    const ready = await readyOnly(cands, apiKey, fetchImpl);
+    const ready = await readyOnly(cands, apiKey, fetchImpl, log);
     for (const d of left) {
       const v = ready.find((x) => dawnDateOf(x.title, x.published) === d); // 그 날 가장 나중에 올라온 영상
       if (!v) continue;
