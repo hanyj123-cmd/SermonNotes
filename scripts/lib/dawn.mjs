@@ -124,8 +124,10 @@ export async function findDawnUpdates({ rows, playlistId, apiKey, dates, force =
   if (todo.some((d) => !done.has(d))) {
     try {
       const uploads = await channelUploadsId(playlistId, apiKey, fetchImpl);
+      if (!uploads) log('   채널 업로드 목록을 알 수 없습니다 (재생목록의 채널 정보 없음)');
       if (uploads) {
         const recent = (await fetchDawnVideos(uploads, apiKey, { fetchImpl, maxPages: 1 })).filter((v) => /새벽/.test(v.title));
+        log(`   채널 업로드(${uploads}) 새벽기도 최근: ${recent.slice(0, 3).map((v) => `${dawnDateOf(v.title, v.published)} ${v.title.slice(0, 40)}`).join(' | ') || '없음'}`);
         const before = updates.length;
         await match(recent);
         fromChannel = updates.length - before;

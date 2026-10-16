@@ -183,7 +183,13 @@ export async function exportDaily(rows, { dataDir = DATA_DIR, quiet = false } = 
     index.push({ date: d.date, refs: d.refs, complete: d.complete, ...(d.complete ? {} : { note: String(row.note || '').slice(0, 300) }) });
   }
   index.sort((a, b) => b.date.localeCompare(a.date));
-  await fs.writeFile(path.join(dir, 'index.json'), JSON.stringify({ updated: now(), days: index }, null, 1) + '\n', 'utf8');
+  let dawnCheck;
+  try {
+    dawnCheck = DAWN_LOG.length ? { at: now(), log: DAWN_LOG.slice(-8) } : JSON.parse(await fs.readFile(path.join(dir, 'index.json'), 'utf8')).dawn_check;
+  } catch {
+    dawnCheck = undefined;
+  }
+  await fs.writeFile(path.join(dir, 'index.json'), JSON.stringify({ updated: now(), days: index, ...(dawnCheck ? { dawn_check: dawnCheck } : {}) }, null, 1) + '\n', 'utf8');
   if (!quiet) console.log(`📖 오늘의 말씀 ${index.length}일치를 docs/data/daily/ 에 내보냈습니다.`);
   return index.length;
 }
@@ -241,12 +247,15 @@ async function syncDaily(sheets, spreadsheetId, ai, youtubeKey) {
   }
 }
 
+// 마지막 새벽기도 확인 결과 (daily/index.json 의 dawn_check 로 남겨 점검에 씁니다)
+const DAWN_LOG = [];
+
 /** 새벽기도 영상을 날짜별로 연결합니다 (Daily 탭 dawn_json). 관리자가 직접 넣은 영상은 그대로 둡니다. */
 async function syncDawn(sheets, spreadsheetId, youtubeKey, settings, { force = false } = {}) {
   await ensureTab(sheets, spreadsheetId, DAILY_TAB, DAILY_HEADERS);
   const rows = await readDaily(sheets, spreadsheetId);
   const byDate = new Map(rows.map((r) => [r.date, r]));
-  const updates = await findDawnUpdates({ rows, playlistId: dawnPlaylistId(settings.dawn_playlist), apiKey: youtubeKey, force, log: (m) => console.log(m) });
+  const updates = await findDawnUpdates({ rows, playlistId: dawnPlaylistId(settings.dawn_playlist), apiKey: youtubeKey, force, log: (m) => (console.log(m), DAWN_LOG.push(String(m).slice(0, 300))) });
   for (const u of updates) {
     const found = byDate.get(u.date);
     const dawn_json = JSON.stringify(u.dawn);
