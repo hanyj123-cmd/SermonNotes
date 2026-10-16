@@ -179,7 +179,8 @@ export async function exportDaily(rows, { dataDir = DATA_DIR, quiet = false } = 
     if (!row.refs && !row.dawn_json) continue; // 본문이 아직 없어도 새벽기도 영상만 있으면 내보냅니다
     const d = dailyExport(row);
     await fs.writeFile(path.join(dir, `${row.date}.json`), JSON.stringify(d) + '\n', 'utf8');
-    index.push({ date: d.date, refs: d.refs, complete: d.complete });
+    // 빠진 부분이 있으면 실패 이유(note)를 같이 남깁니다 — 관리·점검용 (로그를 못 볼 때도 원인을 알 수 있게)
+    index.push({ date: d.date, refs: d.refs, complete: d.complete, ...(d.complete ? {} : { note: String(row.note || '').slice(0, 300) }) });
   }
   index.sort((a, b) => b.date.localeCompare(a.date));
   await fs.writeFile(path.join(dir, 'index.json'), JSON.stringify({ updated: now(), days: index }, null, 1) + '\n', 'utf8');
