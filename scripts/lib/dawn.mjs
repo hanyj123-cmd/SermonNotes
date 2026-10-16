@@ -2,6 +2,7 @@
 //   · AI 정리 없이 영상 링크만 연결합니다 (Daily 탭의 dawn_json 열).
 //   · 재생목록 주소는 관리 화면에서 바꿀 수 있습니다 (Settings 탭의 dawn_playlist). 없으면 기본 재생목록.
 //   · 관리 화면에서 직접 넣은 영상(manual)은 자동 연결이 덮어쓰지 않습니다.
+//   · 재생목록에 아직 없으면 채널 업로드(라이브 포함)에서 찾습니다. 교회가 재생목록에는 늦게 넣는 일이 많습니다.
 //   · 예약: 매일 07:15, 그때 오늘 영상이 없으면 08:00 에 다시 (scripts/gate.mjs). 오늘 영상이 이미 있으면 재생목록을 다시 읽지 않습니다.
 import { extractPlaylistId, classifyVideo } from './youtube.mjs';
 import { torontoDate, DAILY_TIME_ZONE } from './daily.mjs';
@@ -61,6 +62,13 @@ export async function fetchDawnVideos(playlistId, apiKey, { fetchImpl = fetch, m
   return out.sort((a, b) => String(b.published).localeCompare(String(a.published)));
 }
 
+/** 재생목록을 만든 채널의 "업로드" 목록 ID (UC… → UU…). 알 수 없으면 '' */
+export async function channelUploadsId(playlistId, apiKey, fetchImpl = fetch) {
+  const data = await api('playlists', { part: 'snippet', id: playlistId }, apiKey, fetchImpl);
+  const ch = String(data.items?.[0]?.snippet?.channelId || '');
+  return /^UC[\w-]{10,}$/.test(ch) ? `UU${ch.slice(2)}` : '';
+}
+
 /** 아직 볼 수 없는 영상(예정된 라이브, 방송 중, 처리 중)은 뺍니다 */
 export async function readyOnly(videos, apiKey, fetchImpl = fetch) {
   if (!videos.length) return videos;
@@ -95,16 +103,37 @@ export async function findDawnUpdates({ rows, playlistId, apiKey, dates, force =
     return [];
   }
   const all = await fetchDawnVideos(playlistId, apiKey, { fetchImpl });
-  const cands = all.filter((v) => todo.includes(dawnDateOf(v.title, v.published))).slice(0, 40);
-  const ready = await readyOnly(cands, apiKey, fetchImpl);
   const updates = [];
-  for (const d of todo) {
-    const v = ready.find((x) => dawnDateOf(x.title, x.published) === d); // 그 날 가장 나중에 올라온 영상
-    const cur = current(d);
-    if (!v) continue;
-    if (cur && cur.video_id === v.video_id) continue;
-    updates.push({ date: d, dawn: { video_id: v.video_id, title: v.title, published: v.published, manual: false, at: now.toISOString() } });
+  const done = new Set();
+  const match = async (videos) => {
+    const left = todo.filter((d) => !done.has(d));
+    const cands = videos.filter((v) => left.includes(dawnDateOf(v.title, v.published))).slice(0, 40);
+    const ready = await readyOnly(cands, apiKey, fetchImpl);
+    for (const d of left) {
+      const v = ready.find((x) => dawnDateOf(x.title, x.published) === d); // 그 날 가장 나중에 올라온 영상
+      if (!v) continue;
+      done.add(d);
+      const cur = current(d);
+      if (cur && cur.video_id === v.video_id) continue;
+      updates.push({ date: d, dawn: { video_id: v.video_id, title: v.title, published: v.published, manual: false, at: now.toISOString() } });
+    }
+  };
+  await match(all);
+  // 교회가 재생목록에는 하루 늦게 넣는 일이 많아서, 못 찾은 날은 채널의 "업로드"(라이브 포함, 바로 올라옴)에서 새벽기도 영상을 찾습니다
+  let fromChannel = 0;
+  if (todo.some((d) => !done.has(d))) {
+    try {
+      const uploads = await channelUploadsId(playlistId, apiKey, fetchImpl);
+      if (uploads) {
+        const recent = (await fetchDawnVideos(uploads, apiKey, { fetchImpl, maxPages: 1 })).filter((v) => /새벽/.test(v.title));
+        const before = updates.length;
+        await match(recent);
+        fromChannel = updates.length - before;
+      }
+    } catch (e) {
+      log(`   채널 업로드 확인 실패: ${String(e.message || e).slice(0, 160)}`);
+    }
   }
-  log(`🙏 새벽기도 영상: 재생목록 ${all.length}편 확인 → ${updates.length}일 연결 (${updates.map((u) => u.date).join(', ') || '새로 연결할 영상 없음'})`);
+  log(`🙏 새벽기도 영상: 재생목록 ${all.length}편 확인${fromChannel ? ` + 채널 업로드에서 ${fromChannel}일` : ''} → ${updates.length}일 연결 (${updates.map((u) => u.date).join(', ') || '새로 연결할 영상 없음'})`);
   return updates;
 }

@@ -567,6 +567,29 @@ await t('새벽기도 영상: 날짜별 1:1 연결 · 예정된 라이브 제외
   assert.equal(none.length, 0);
   assert.equal(calls, 0); // 08:00 다시 확인: 오늘 영상이 이미 있으면 재생목록을 읽지 않음
 });
+await t('새벽기도 영상: 재생목록에 아직 없으면 채널 업로드(라이브 포함)에서 찾음', async () => {
+  const seen = [];
+  const item = (id, title, pub) => ({ snippet: { title }, contentDetails: { videoId: id, videoPublishedAt: pub }, status: { privacyStatus: 'public' } });
+  const fetchImpl = async (url) => {
+    const u = new URL(url);
+    const ep = u.pathname.split('/').pop();
+    seen.push(ep + ':' + (u.searchParams.get('playlistId') || u.searchParams.get('id') || ''));
+    let body;
+    if (ep === 'playlists') body = { items: [{ snippet: { channelId: 'UCabcdefghijklmnop' } }] };
+    else if (ep === 'playlistItems' && u.searchParams.get('playlistId') === 'UUabcdefghijklmnop')
+      body = { items: [item('vidToday001', '[2026.10.16] 새벽기도회 (열왕기상 19장) - 김목사 목사', '2026-10-16T10:40:00Z'), item('vidSunday01', '[2026.10.11] 주일예배', '2026-10-11T15:00:00Z')] };
+    else if (ep === 'playlistItems') body = { items: [item('vidOld00001', '[2026.10.15] 새벽기도회', '2026-10-15T10:40:00Z')] };
+    else body = { items: u.searchParams.get('id').split(',').map((id) => ({ id, snippet: { liveBroadcastContent: 'none' }, status: { privacyStatus: 'public', uploadStatus: 'processed' }, contentDetails: { duration: 'PT40M' } })) };
+    return { ok: true, json: async () => body };
+  };
+  const ups = await findDawnUpdates({ rows: [], playlistId: 'PLx', apiKey: 'k', dates: ['2026-10-16', '2026-10-15'], fetchImpl });
+  assert.deepEqual(ups.map((u) => [u.date, u.dawn.video_id]), [['2026-10-15', 'vidOld00001'], ['2026-10-16', 'vidToday001']]);
+  assert.ok(seen.includes('playlistItems:UUabcdefghijklmnop'));
+  // 재생목록에서 다 찾으면 채널은 보지 않음
+  seen.length = 0;
+  await findDawnUpdates({ rows: [], playlistId: 'PLx', apiKey: 'k', dates: ['2026-10-15'], fetchImpl });
+  assert.ok(!seen.some((x) => x.startsWith('playlists')));
+});
 await t('새벽기도 영상: 오늘의 말씀을 다시 만들어도 연결은 남고, 내보내기에 들어감', async () => {
   const fetchReading = async () => parseYnResponse(ynSample);
   const prev = { date: '2026-10-08', dawn_json: JSON.stringify({ video_id: 'dawnVID1234', title: '새벽기도', manual: true }) };

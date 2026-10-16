@@ -332,6 +332,24 @@ export function readResponseText(message) {
   return text;
 }
 
+/** 정답이 (혼자) 가장 긴 보기인 객관식인지 — normalizeQuiz 의 검사와 같은 기준 */
+export function correctIsLongest(q) {
+  const options = asArray(q?.options);
+  const idx = Number(q?.answer_index);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= options.length) return false;
+  const len = options.map((o) => o.length);
+  return len[idx] === Math.max(...len) && len.filter((n) => n === len[idx]).length === 1;
+}
+const LONGEST_TARGET = 0.3; // 다듬은 뒤 이 비율 이하가 목표 (저장 기준은 65%)
+const FIX_OPTIONS_SYSTEM = `당신은 성경 퀴즈의 객관식 보기를 다듬는 편집자입니다. 받은 문제들은 정답 보기가 가장 길어서 정답이 티가 납니다.
+규칙:
+1. 정답 보기(answer_index 자리)는 한 글자도 바꾸지 않고 같은 자리에 그대로 둡니다.
+2. 오답 보기만 다시 씁니다. 정답과 같은 정도의 수식어·이유·근거를 붙여 정답과 비슷하거나 더 길게 씁니다.
+3. 받은 문제의 절반 정도는 모든 오답을 정답보다 확실히 길게 써서 정답이 가장 짧은 보기가 되게 하고, 나머지는 오답 중 적어도 하나가 정답보다 확실히 길게 합니다.
+4. 오답은 여전히 본문과 맞지 않는 분명히 틀린 내용이어야 하고, 정답과 뜻이 겹치면 안 됩니다. 그럴듯하지만 틀린 오답이 좋습니다.
+5. 보기 개수는 그대로 둡니다.
+출력: {"items": [{"i": 받은 번호, "options": ["보기1", "보기2", "보기3", "보기4"]}]}`;
+
 const JSON_ONLY = '\n\n출력 형식: 설명이나 코드 블록(```) 없이, 위에서 정한 JSON 객체 하나만 출력합니다.';
 
 // options.client / options.sleep 은 테스트에서 가짜로 바꿔 끼우기 위한 것입니다.
@@ -354,7 +372,7 @@ export function createClaude(apiKey, model = DEFAULT_MODEL, options = {}) {
             output_config: { effort },
           })
           .finalMessage();
-        return parse(readResponseText(message));
+        return await parse(readResponseText(message));
       } catch (e) {
         lastError = e;
         console.warn(`   ↻ 시도 ${attempt}/${MAX_ATTEMPTS} 실패: ${String(e?.message || e).slice(0, 160)}`);
@@ -368,6 +386,32 @@ export function createClaude(apiKey, model = DEFAULT_MODEL, options = {}) {
     throw lastError;
   }
 
+  /** 객관식 정답이 가장 긴 보기인 문제가 많으면, 그 문제들의 오답 보기만 Claude 에게 다시 쓰게 합니다 (정답 글은 그대로) */
+  async function balanceOptions(raw) {
+    const quiz = raw && typeof raw.quiz === 'object' ? raw.quiz : raw;
+    const mc = Array.isArray(quiz?.multiple_choice) ? quiz.multiple_choice : [];
+    const bad = mc.map((q, i) => ({ q, i })).filter(({ q }) => correctIsLongest(q));
+    if (mc.length < 8 || bad.length <= Math.floor(mc.length * LONGEST_TARGET)) return raw;
+    console.log(`   ⚖️  객관식 ${mc.length}문제 중 ${bad.length}문제가 정답이 가장 긴 보기라 오답 보기를 다시 씁니다…`);
+    try {
+      const items = bad.map(({ q, i }) => ({ i, question: asString(q.question), options: asArray(q.options), answer_index: Number(q.answer_index) }));
+      const out = await call(FIX_OPTIONS_SYSTEM, JSON.stringify({ items }, null, 1), (t) => extractJson(t));
+      for (const it of Array.isArray(out?.items) ? out.items : []) {
+        const q = mc[Number(it?.i)];
+        if (!q) continue;
+        const opts = asArray(it.options);
+        const idx = Number(q.answer_index);
+        const old = asArray(q.options);
+        if (opts.length !== old.length || opts[idx] !== old[idx]) continue; // 정답이 바뀌었으면 쓰지 않음
+        q.options = opts;
+      }
+      console.log(`   ⚖️  다시 쓴 뒤: ${mc.filter(correctIsLongest).length}/${mc.length}`);
+    } catch (e) {
+      console.warn(`   ⚖️  보기 다시 쓰기 실패: ${String(e?.message || e).slice(0, 160)}`);
+    }
+    return raw;
+  }
+
   return {
     model,
     effort,
@@ -376,18 +420,18 @@ export function createClaude(apiKey, model = DEFAULT_MODEL, options = {}) {
     generateMode(mode, { category, title, publishedAt, transcript, info }) {
       if (!MODES.includes(mode)) throw new Error(`알 수 없는 모드: ${mode}`);
       const clipped = transcript.length > MAX_TRANSCRIPT_CHARS ? transcript.slice(0, MAX_TRANSCRIPT_CHARS) : transcript;
-      return call(systemPromptFor(mode), buildUserMessage(mode, { category, title, publishedAt, transcript: clipped, info }), (text) => normalizeMode(mode, extractJson(text)));
+      return call(systemPromptFor(mode), buildUserMessage(mode, { category, title, publishedAt, transcript: clipped, info }), async (text) => normalizeMode(mode, mode === 'study' ? await balanceOptions(extractJson(text)) : extractJson(text)));
     },
 
     /** 오늘의 말씀 한 모드(qt | study | group | quiz)를 만듭니다. text = 그날 본문 전문 */
     generateDaily(mode, { date, refs, text }) {
       if (!DAILY_MODES.includes(mode)) throw new Error(`알 수 없는 말씀 읽기 모드: ${mode}`);
-      return call(systemPromptForDaily(mode), buildDailyMessage({ date, refs, text }), (t) => normalizeDailyMode(mode, extractJson(t)));
+      return call(systemPromptForDaily(mode), buildDailyMessage({ date, refs, text }), async (t) => normalizeDailyMode(mode, mode === 'quiz' ? await balanceOptions(extractJson(t)) : extractJson(t)));
     },
 
     generateProverb(mode, { chapter, text }) {
       if (!PROVERB_MODES.includes(mode)) throw new Error(`알 수 없는 잠언 모드: ${mode}`);
-      return call(systemPromptForProverb(mode), buildProverbMessage({ chapter, text }), (t) => normalizeProverbMode(mode, extractJson(t)));
+      return call(systemPromptForProverb(mode), buildProverbMessage({ chapter, text }), async (t) => normalizeProverbMode(mode, mode === 'quiz' ? await balanceOptions(extractJson(t)) : extractJson(t)));
     },
   };
 }

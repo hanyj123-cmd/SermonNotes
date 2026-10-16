@@ -219,4 +219,33 @@ await t('Claude: 깨진 JSON·잘린 답은 3번까지 다시, 키 오류·크�
   assert.equal(client.requests.length, 1);
 });
 
+await t('Claude 퀴즈: 정답이 가장 긴 보기인 문제가 많으면 오답 보기만 다시 써서 저장 (정답 글은 그대로)', async () => {
+  const mcq = (i) => ({ question: `문제${i}`, options: ['짧음', `정답 ${i} 길고 자세한 설명이 붙은 보기`, '오답', '틀림'], answer_index: 1, level: '중간', explanation: '근거' });
+  const sw = (i) => ({ question: `빈칸${i}`, answer: '믿음', accept: [], level: '쉬움', explanation: 'e' });
+  const quiz = { multiple_choice: Array.from({ length: 20 }, (_, i) => mcq(i)), fill_blank: Array.from({ length: 5 }, (_, i) => sw(i)), word_answer: Array.from({ length: 5 }, (_, i) => sw(i)), short_answer: [] };
+  const client = fakeClient((n, req) => {
+    if (n === 1) return msg(JSON.stringify({ quiz }));
+    const items = JSON.parse(req.messages[0].content).items;
+    // 한 문제는 정답을 바꿔 버린 잘못된 답 → 쓰지 않아야 함
+    return msg(JSON.stringify({ items: items.map((it, k) => ({ i: it.i, options: k === 0 ? ['a', 'b', 'c', 'd'] : it.options.map((o, j) => (j === it.answer_index ? o : `${o} — 그럴듯하지만 본문과 다른 아주 긴 설명이 붙은 오답`)) })) }));
+  });
+  const ai = createClaude('k', DEFAULT_MODEL, { client, sleep: noSleep });
+  const r = await quiet(() => ai.generateDaily('quiz', { date: '2026-10-17', refs: 'r', text: 't' }));
+  assert.equal(client.requests.length, 2);
+  assert.match(client.requests[1].system, /정답 보기.*그대로/);
+  assert.equal(r.multiple_choice.length, 20);
+  const stillLongest = r.multiple_choice.filter((q) => { const l = q.options.map((o) => o.length); return l[q.answer_index] === Math.max(...l); }).length;
+  assert.equal(stillLongest, 1); // 정답을 바꾼 한 문제만 원래대로
+  for (const q of r.multiple_choice) assert.match(q.options[q.answer_index], /^정답 \d+ 길고/);
+});
+
+await t('Claude 퀴즈: 이미 고르게 섞여 있으면 다시 쓰지 않음', async () => {
+  const mcq = (i) => ({ question: `문제${i}`, options: ['짧음', i < 5 ? `정답 ${i} 아주 긴 보기 설명` : '정답', '조금 긴 오답 보기입니다', '틀림'], answer_index: 1, level: '중간', explanation: '근거' });
+  const sw = () => ({ question: 'q', answer: '믿음', accept: [], level: '쉬움', explanation: 'e' });
+  const quiz = { multiple_choice: Array.from({ length: 20 }, (_, i) => mcq(i)), fill_blank: Array.from({ length: 5 }, sw), word_answer: Array.from({ length: 5 }, sw), short_answer: [] };
+  const client = fakeClient(() => msg(JSON.stringify(quiz)));
+  await createClaude('k', DEFAULT_MODEL, { client, sleep: noSleep }).generateProverb('quiz', { chapter: 3, text: 't' });
+  assert.equal(client.requests.length, 1);
+});
+
 console.log(`\n${passed}개 테스트 통과`);
