@@ -585,6 +585,15 @@ await t('새벽기도 영상: 재생목록에 아직 없으면 채널 업로드(
   const ups = await findDawnUpdates({ rows: [], playlistId: 'PLx', apiKey: 'k', dates: ['2026-10-16', '2026-10-15'], fetchImpl });
   assert.deepEqual(ups.map((u) => [u.date, u.dawn.video_id]), [['2026-10-15', 'vidOld00001'], ['2026-10-16', 'vidToday001']]);
   assert.ok(seen.includes('playlistItems:UUabcdefghijklmnop'));
+  // 공개됐지만 '업로드 처리 중'으로 남은 영상: 재생 시간이 있으면 연결, 없으면(P0D) 건너뜀
+  const proc = (dur) => async (url) => {
+    const u = new URL(url);
+    const ep = u.pathname.split('/').pop();
+    const body = ep === 'playlistItems' ? { items: [item('vidProc0001', '[2026.10.16] 새벽기도회', '2026-10-16T11:00:00Z')] } : ep === 'playlists' ? { items: [] } : { items: [{ id: 'vidProc0001', snippet: { liveBroadcastContent: 'none' }, status: { privacyStatus: 'public', uploadStatus: 'uploaded' }, contentDetails: { duration: dur } }] };
+    return { ok: true, json: async () => body };
+  };
+  assert.equal((await findDawnUpdates({ rows: [], playlistId: 'PLx', apiKey: 'k', dates: ['2026-10-16'], fetchImpl: proc('PT41M2S') })).length, 1);
+  assert.equal((await findDawnUpdates({ rows: [], playlistId: 'PLx', apiKey: 'k', dates: ['2026-10-16'], fetchImpl: proc('P0D') })).length, 0);
   // 재생목록에서 다 찾으면 채널은 보지 않음
   seen.length = 0;
   await findDawnUpdates({ rows: [], playlistId: 'PLx', apiKey: 'k', dates: ['2026-10-15'], fetchImpl });

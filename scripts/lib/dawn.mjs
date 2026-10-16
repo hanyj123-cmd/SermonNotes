@@ -75,7 +75,11 @@ export async function readyOnly(videos, apiKey, fetchImpl = fetch, log = () => {
   const data = await api('videos', { part: 'snippet,status,contentDetails', id: videos.map((v) => v.video_id).join(',') }, apiKey, fetchImpl);
   const byId = new Map((data.items || []).map((it) => [it.id, it]));
   return videos.filter((v) => {
-    const st = classifyVideo(byId.get(v.video_id));
+    const it = byId.get(v.video_id);
+    let st = classifyVideo(it);
+    // 공개된 영상인데 YouTube 가 오래 "업로드 처리 중"(고화질 처리)으로 두는 일이 있습니다. 재생 시간이 있으면 볼 수 있으니 연결합니다.
+    const dur = String(it?.contentDetails?.duration || '');
+    if (!st.ready && it?.status?.uploadStatus === 'uploaded' && it?.status?.privacyStatus !== 'private' && !['upcoming', 'live'].includes(it?.snippet?.liveBroadcastContent) && dur && dur !== 'P0D') st = { ready: true, reason: '' };
     if (!st.ready) log(`   건너뜀 ${v.video_id} (${dawnDateOf(v.title, v.published)}): ${st.reason}`);
     return st.ready;
   });
