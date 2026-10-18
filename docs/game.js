@@ -945,7 +945,7 @@ async function renderQuest(id) {
       {},
       h('p', { class: 'gm-kicker', text: d.proverb ? '잠언 묵상' : d.daily ? `오늘의 말씀 · ${dateLabel(d.date)}` : `${catLabel(d.category)} · ${formatDate(d.date)}` }),
       h('h1', { text: d.title }),
-      h('p', { class: 'meta', text: `객관식 ${nMc}문제${nFb ? ` · 빈칸 ${nFb}문제` : ''}${nWa ? ` · 단답식 ${nWa}문제` : ''} — 종류가 섞여 나와요 (빈칸·단답식은 직접 입력, 글자 수 힌트가 있고 띄어쓰기는 상관없어요)` }),
+      h('p', { class: 'meta', text: `객관식 ${nMc}문제${nFb ? ` · 빈칸 ${nFb}문제` : ''}${nWa ? ` · 단답식 ${nWa}문제` : ''}${nFb + nWa ? ` — 종류가 섞여 나와요 (${nFb && nWa ? '빈칸·단답식' : nFb ? '빈칸' : '단답식'}은 직접 입력, 글자 수가 보이고 띄어쓰기는 상관없어요)` : ''}${(quiz.multiple_choice || []).concat(quiz.word_answer || [], quiz.fill_blank || []).some((q) => q && q.hint) ? ' · 막히면 💡 힌트를 볼 수 있어요' : ''}` }),
       h('p', { class: 'gm-rules' }, icon('flame'), ' 빨리 맞힐수록, 연속으로 맞힐수록 점수가 올라가요. 가족 순위에는 ', h('b', { text: '처음 푼 한 번' }), '의 점수가 올라가니 신중하게 도전하세요!'),
       h('div', { class: 'gm-qboard-slot' }),
       practice ? h('p', { class: 'gm-practice', text: why }) : h('p', { class: 'gm-stake' }, icon('star'), `모두 맞히면 최대 ${maxXp} XP · 달란트 ×${st.mult} (연속 ${st.streak}일)`),
@@ -959,6 +959,7 @@ async function renderQuest(id) {
     const answers = { mc: new Array(nMc).fill(null), fb: new Array(nFb).fill(''), wa: new Array(nWa).fill('') };
     const correct = [];
     const ms = []; // 문제마다 걸린 시간 (속도 보너스 · 순위용)
+    const hintsUsed = []; // 힌트를 본 문제 (결과 화면에 표시)
     const kinds = items.map((it) => it.kind);
     const liveScore = () => {
       const k = correct.length;
@@ -1096,6 +1097,17 @@ async function renderQuest(id) {
         card.append(sentence, h('div', { class: 'gm-blank-row' }, input, check), h('p', { class: 'meta', text: `${isWa ? '짧은 낱말로 답해 주세요' : '핵심 단어 하나를 적어 주세요'}${blankHint(it.q.answer) ? ` ${blankHint(it.q.answer)}` : ''}. 띄어쓰기는 상관없어요.` }));
         setTimeout(() => input.focus({ preventScroll: true }), 80);
       }
+      // 힌트: 막히면 본문 어디를 다시 보면 되는지 알려 줍니다 (정답은 말하지 않아요)
+      if (it.q.hint) {
+        const hintBox = h('div', { class: 'gm-hint' });
+        const hintBtn = h('button', { class: 'btn small gm-hint-btn', type: 'button' }, '💡 힌트 보기');
+        hintBtn.addEventListener('click', () => {
+          hintsUsed[i] = true;
+          hintBox.replaceChildren(h('p', { class: 'gm-hint-text' }, h('b', { text: '💡 힌트 ' }), inlineMd(it.q.hint)));
+        });
+        hintBox.append(hintBtn);
+        card.append(hintBox);
+      }
       card.append(feedback);
       stage.replaceChildren(card);
       window.scrollTo({ top: 0 });
@@ -1121,7 +1133,7 @@ async function renderQuest(id) {
         } else err = r.error || '저장하지 못했습니다.';
       }
       if (!alive) return;
-      renderResult({ d, items, correct, answers, right, total: items.length, server, events, err, bestCombo, shell, score: (server && server.score) || localScore });
+      renderResult({ d, items, correct, answers, hintsUsed, right, total: items.length, server, events, err, bestCombo, shell, score: (server && server.score) || localScore });
     };
     showQ();
   }
@@ -1235,7 +1247,7 @@ function mixQuestKinds(canon) {
   return out;
 }
 
-function renderResult({ d, items, correct, answers, right, total, server, events, err, bestCombo, shell, score }) {
+function renderResult({ d, items, correct, answers, hintsUsed = [], right, total, server, events, err, bestCombo, shell, score }) {
   const pct = right / total;
   const grade = pct === 1 ? '만점! 말씀을 꼭 붙드셨네요' : pct >= 0.8 ? '훌륭해요!' : pct >= 0.5 ? '잘했어요! 오늘의 도장 조건 달성' : '조금 아쉬워요. 설교를 다시 보고 도전해 보세요';
   const ring = svgNode(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="150" height="150" aria-hidden="true"><circle cx="60" cy="60" r="50" fill="none" stroke="#efe9da" stroke-width="9"/><circle cx="60" cy="60" r="50" fill="none" stroke="${pct >= 0.5 ? '#c9a14a' : '#b9a98a'}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${(314 * pct).toFixed(1)} 314" transform="rotate(-90 60 60)" class="gm-ring"/></svg>`);
@@ -1289,9 +1301,21 @@ function renderResult({ d, items, correct, answers, right, total, server, events
         h(
           'ol',
           {},
-          wrong.map(({ it }) => {
+          wrong.map(({ it, k }) => {
             const q = it.q;
-            return h('li', {}, h('p', { class: 'gm-review-q' }, inlineMd(q.question)), h('p', {}, '정답: ', h('b', { text: it.kind === 'mc' ? q.options[q.answer_index] : q.answer })), q.explanation ? h('p', { class: 'meta md' }, inlineMd(q.explanation)) : null);
+            // 내가 고른(적은) 답과 정답을 나란히 보여 줍니다
+            const mine = it.kind === 'mc' ? answers.mc[it.ki] : answers[it.kind][it.ki];
+            const mineText = it.kind === 'mc' ? (mine == null || mine < 0 || !q.options[mine] ? '(답하지 않음)' : `${mine + 1}. ${q.options[mine]}`) : String(mine || '').trim() || '(답하지 않음)';
+            const rightText = it.kind === 'mc' ? `${q.answer_index + 1}. ${q.options[q.answer_index]}` : q.answer + (q.accept && q.accept.length ? ` (${q.accept.join(', ')}도 정답)` : '');
+            return h(
+              'li',
+              {},
+              h('p', { class: 'gm-review-q' }, inlineMd(q.question)),
+              h('p', { class: 'gm-review-mine' }, '내 답: ', h('s', { text: mineText })),
+              h('p', { class: 'gm-review-right' }, '정답: ', h('b', { text: rightText })),
+              hintsUsed[k] ? h('p', { class: 'meta', text: '💡 힌트를 보고 푼 문제예요' }) : null,
+              q.explanation ? h('p', { class: 'meta md' }, inlineMd(q.explanation)) : null,
+            );
           }),
         ),
       )

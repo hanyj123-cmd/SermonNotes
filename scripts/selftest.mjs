@@ -258,8 +258,8 @@ await t('객관식: 정답이 거의 매번 가장 긴 보기면 다시 만들�
   assert.doesNotThrow(() => normalizeStudy(raw));
 });
 await t('퀴즈 프롬프트: 순서는 앱이 섞고, 정답이 가장 긴 보기가 되지 않게 안내', () => {
-  for (const p of [systemPromptFor('study'), systemPromptForDaily('quiz')]) {
-    assert.match(p, /가장 긴 문제는 6개 이하/);
+  for (const [p, n] of [[systemPromptFor('study'), 6], [systemPromptForDaily('quiz'), 4]]) {
+    assert.match(p, new RegExp(`가장 긴 문제는 ${n}개 이하`));
     assert.match(p, /앱이 .*섞/);
     assert.doesNotMatch(p, /쉬운 것에서 어려운 것/);
   }
@@ -469,7 +469,7 @@ await t('오늘의 말씀 하루치: 4가지 생성 · 영상 · 일부 실패�
   assert.equal(row.status, 'error');
   assert.equal(row.refs, '열왕기상 11장 · 마가복음 10장');
   assert.match(row.note, /group/);
-  assert.equal(JSON.parse(row.quiz_json).multiple_choice.length, 20);
+  assert.equal(JSON.parse(row.quiz_json).multiple_choice.length, 15); // 오늘의 말씀은 객관식 15 + 단답식 5
   const ai2 = dailyAi();
   const row2 = await buildDailyDay('2026-10-08', row, { ai: ai2, fetchReading: async () => { throw new Error('다시 가져오면 안 됨'); }, now: () => 'T' });
   assert.deepEqual(ai2.calls, ['group']);
@@ -618,11 +618,14 @@ await t('오늘의 말씀 내보내기: 날짜별 파일 + 목록(최신순)', a
   assert.equal(one.passages[0].book, '열왕기상');
   await fs.rm(dir, { recursive: true, force: true });
 });
-await t('오늘의 말씀 프롬프트: 본문에서만 출제 · 객관식 20 · 쉬움/중간/어려움 · CCM 한 곡', () => {
+await t('오늘의 말씀 프롬프트: 읽은 내용 확인 수준 · 객관식 15 + 단답식 5 · 힌트 · 주석 문제 금지 · CCM 한 곡', () => {
   const q = systemPromptForDaily('quiz');
-  assert.match(q, /반드시 아래에 주어진 오늘의 성경 본문 내용에서만/);
-  assert.match(q, /쉬움 5개, 중간 8개, 어려움 7개/);
-  assert.match(q, /객관식 20개 · 빈칸 5개 · 단답식 5개 · 주관식 5개/);
+  assert.match(q, /모든 문제의 답은 오늘 본문에 직접 쓰여 있어야/);
+  assert.match(q, /주석·신학 해설/);
+  assert.match(q, /쉬움 6개, 중간 6개, 어려움 3개/);
+  assert.match(q, /객관식 15개 · 단답식 5개, 모두 20문제/);
+  assert.match(q, /"hint"/);
+  assert.doesNotMatch(q, /fill_blank|short_answer/);
   for (const m of ['qt', 'study', 'group']) assert.match(systemPromptForDaily(m), /CCM을 정확히 1곡/);
   assert.match(systemPromptFor('qt'), /CCM을 정확히 1곡/); // 설교도 CCM 한 곡
   assert.match(systemPromptForDaily('qt'), /summaries/);

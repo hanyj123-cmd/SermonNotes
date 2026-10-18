@@ -233,10 +233,24 @@ await t('Claude 퀴즈: 정답이 가장 긴 보기인 문제가 많으면 오�
   const r = await quiet(() => ai.generateDaily('quiz', { date: '2026-10-17', refs: 'r', text: 't' }));
   assert.equal(client.requests.length, 2);
   assert.match(client.requests[1].system, /정답 보기.*그대로/);
-  assert.equal(r.multiple_choice.length, 20);
+  assert.equal(r.multiple_choice.length, 15); // 오늘의 말씀은 15문제까지
+  assert.equal(client.requests.length, 2);
   const stillLongest = r.multiple_choice.filter((q) => { const l = q.options.map((o) => o.length); return l[q.answer_index] === Math.max(...l); }).length;
-  assert.equal(stillLongest, 1); // 정답을 바꾼 한 문제만 원래대로
+  assert.ok(stillLongest <= 1, String(stillLongest)); // 정답을 바꾼 한 문제만 원래대로 (섞여서 잘렸을 수 있음)
   for (const q of r.multiple_choice) assert.match(q.options[q.answer_index], /^정답 \d+ 길고/);
+});
+
+await t('오늘의 말씀 퀴즈: 힌트를 저장하고 객관식 15 + 단답식 5 로 자름 (빈칸은 없음)', async () => {
+  const mcq = (i) => ({ question: `문제${i}`, options: ['짧음', '정답', '조금 긴 오답 보기입니다', '틀림'], answer_index: 1, level: '쉬움', hint: `${i}절을 다시 읽어 보세요`, explanation: '근거' });
+  const wa = (i) => ({ question: `질문${i}`, answer: '믿음', accept: [], level: '쉬움', hint: '힌트', explanation: 'e' });
+  const quiz = { multiple_choice: Array.from({ length: 18 }, (_, i) => mcq(i)), word_answer: Array.from({ length: 6 }, (_, i) => wa(i)) };
+  const r = await createClaude('k', DEFAULT_MODEL, { client: fakeClient(() => msg(JSON.stringify({ quiz }))), sleep: noSleep }).generateDaily('quiz', { date: '2026-10-19', refs: 'r', text: 't' });
+  assert.equal(r.multiple_choice.length, 15);
+  assert.equal(r.word_answer.length, 5);
+  assert.equal(r.fill_blank.length, 0);
+  assert.match(r.multiple_choice[0].hint, /절을 다시 읽어/);
+  assert.equal(r.word_answer[0].hint, '힌트');
+  await assert.rejects(quiet(() => createClaude('k', DEFAULT_MODEL, { client: fakeClient(() => msg(JSON.stringify({ quiz: { multiple_choice: quiz.multiple_choice.slice(0, 10), word_answer: quiz.word_answer } }))), sleep: noSleep }).generateDaily('quiz', { date: '2026-10-19', refs: 'r', text: 't' })), /부족/);
 });
 
 await t('Claude 퀴즈: 이미 고르게 섞여 있으면 다시 쓰지 않음', async () => {

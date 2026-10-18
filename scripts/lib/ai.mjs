@@ -124,18 +124,18 @@ export function normalizeQt(raw) {
 }
 
 /** 퀴즈 정리 (성경공부 · 오늘의 말씀 공통): 정답 번호가 잘못된 객관식, 정답이 빈 빈칸은 걸러 냅니다 */
-export function normalizeQuiz(q = {}) {
+export function normalizeQuiz(q = {}, max = { mc: 20, fb: 5, wa: 5, sa: 5 }) {
   const mc = (Array.isArray(q.multiple_choice) ? q.multiple_choice : [])
     .map((x) => {
       const options = asArray(x?.options).slice(0, 5);
       const idx = Number(x?.answer_index);
       const level = LEVEL_OF(x?.level);
-      return { question: asString(x?.question), options, answer_index: Number.isInteger(idx) ? idx : -1, level, explanation: asString(x?.explanation) };
+      return { question: asString(x?.question), options, answer_index: Number.isInteger(idx) ? idx : -1, level, ...(asString(x?.hint) ? { hint: clip(x.hint, 300) } : {}), explanation: asString(x?.explanation) };
     })
     .filter((x) => x.question && x.options.length >= 2 && x.answer_index >= 0 && x.answer_index < x.options.length);
   const shortWord = (list) =>
     (Array.isArray(list) ? list : [])
-      .map((x) => ({ question: asString(x?.question), answer: clip(x?.answer, 40), accept: asArray(x?.accept).map((a) => a.slice(0, 40)).filter((a) => blankKey(a)).slice(0, 6), level: LEVEL_OF(x?.level), explanation: asString(x?.explanation) }))
+      .map((x) => ({ question: asString(x?.question), answer: clip(x?.answer, 40), accept: asArray(x?.accept).map((a) => a.slice(0, 40)).filter((a) => blankKey(a)).slice(0, 6), level: LEVEL_OF(x?.level), ...(asString(x?.hint) ? { hint: clip(x.hint, 300) } : {}), explanation: asString(x?.explanation) }))
       .filter((x) => x.question && blankKey(x.answer));
   const fb = shortWord(q.fill_blank);
   const wa = shortWord(q.word_answer);
@@ -151,7 +151,7 @@ export function normalizeQuiz(q = {}) {
     need(longest / mc.length <= 0.65, `객관식 정답이 가장 긴 보기인 문제가 너무 많습니다 (${longest}/${mc.length})`);
   }
   const mixed = mixQuiz(mc, fb, wa);
-  return { multiple_choice: mixed.mc.slice(0, 20), fill_blank: mixed.fb.slice(0, 5), word_answer: mixed.wa.slice(0, 5), short_answer: sa.slice(0, 5) };
+  return { multiple_choice: mixed.mc.slice(0, max.mc), fill_blank: mixed.fb.slice(0, max.fb), word_answer: mixed.wa.slice(0, max.wa), short_answer: sa.slice(0, max.sa) };
 }
 
 export function normalizeStudy(raw, { requireQuiz = true } = {}) {
@@ -253,9 +253,12 @@ export function normalizeDailyStudy(raw) {
     .slice(0, 4);
   return out;
 }
+/** 오늘의 말씀 · 잠언 퀴즈: 객관식 15 + 단답식 5 (읽은 내용 확인용, 문제마다 힌트) */
+const DAILY_QUIZ_MAX = { mc: 15, fb: 0, wa: 5, sa: 0 };
+const DAILY_QUIZ_MIN = { multiple_choice: 13, word_answer: 4 };
 export function normalizeDailyQuiz(raw) {
-  const quiz = normalizeQuiz(raw.quiz || raw);
-  need(quiz.multiple_choice.length >= QUIZ_MIN.multiple_choice && quiz.fill_blank.length >= QUIZ_MIN.fill_blank && quiz.word_answer.length >= QUIZ_MIN.word_answer, `퀴즈가 부족합니다 (객관식 ${quiz.multiple_choice.length}, 빈칸 ${quiz.fill_blank.length}, 단답식 ${quiz.word_answer.length})`);
+  const quiz = normalizeQuiz(raw.quiz || raw, DAILY_QUIZ_MAX);
+  need(quiz.multiple_choice.length >= DAILY_QUIZ_MIN.multiple_choice && quiz.word_answer.length >= DAILY_QUIZ_MIN.word_answer, `퀴즈가 부족합니다 (객관식 ${quiz.multiple_choice.length}, 단답식 ${quiz.word_answer.length})`);
   return quiz;
 }
 const DAILY_NORMALIZERS = { qt: normalizeDailyQt, study: normalizeDailyStudy, group: normalizeGroup, quiz: normalizeDailyQuiz };

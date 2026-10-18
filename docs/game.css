@@ -352,6 +352,13 @@
 .gm-review ol { padding-left: 20px; margin: 8px 0 0; display: grid; gap: 14px; }
 .gm-review-q { font-weight: 700; margin: 0 0 2px; }
 .gm-review p { margin: 0 0 2px; }
+.gm-review-mine { color: var(--gm-red); }
+.gm-review-mine s { text-decoration-thickness: 1px; }
+.gm-review-right b { color: var(--gm-green); }
+/* 힌트 */
+.gm-hint { margin-top: 12px; }
+.gm-hint-btn { background: #fff8e6; border-color: #e8d49a; }
+.gm-hint-text { margin: 0; padding: 10px 14px; border-radius: 12px; background: #fff8e6; border: 1px solid #e8d49a; line-height: 1.6; }
 .gm-result-actions { justify-content: center; margin-top: 10px; }
 
 /* 꽃가루 (금박 조각) */
