@@ -14,7 +14,7 @@ const MAX_ATTEMPTS = 3;
 // 새로 만든 퀴즈가 최소한 이만큼은 있어야 저장합니다 (정해진 개수보다 조금 여유를 둡니다)
 const QUIZ_MIN = { multiple_choice: 17, fill_blank: 4, word_answer: 4 };
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504, 529]);
-const MAX_TOKENS = 64_000; // 생각(thinking) + 답 전체 한도. 긴 성경공부·퀴즈도 넉넉하게
+const MAX_TOKENS = 128_000; // 생각(thinking) + 답 전체 한도 (모델 최대). 본문이 여러 곳인 날의 긴 성경공부도 잘리지 않게
 
 export function extractJson(text) {
   const start = text.indexOf('{');
