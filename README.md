@@ -103,6 +103,7 @@ Apps Script 웹앱 (관리 · 구글 로그인 · 개인 노트 · 사용자 영
 | Google 서비스 계정 키(JSON) | 시트 읽기/쓰기 |
 | YouTube Data API 키 | 재생목록 · 영상 정보 · 찬양/배경음악 검색 |
 | Claude API 키 | 설교 정리 · 오늘의 말씀 · 잠언 · 문장 다듬기 ([Claude Console](https://platform.claude.com/settings/keys)) |
+| (선택) Gemini API 키 | 자막이 없는 설교 영상을 Gemini 가 직접 듣고 글로 받아 적습니다 (공개 영상만). 받아쓰기까지만 Gemini 이고, 설교 정리는 그대로 Claude 가 합니다. 순서는 직접 붙여넣은 자막 → YouTube 자막 → Gemini → Supadata. Secrets 에 `GEMINI_API_KEY`, (선택) Variables 에 `GEMINI_MODEL`(기본 gemini-3.8-flash) |
 | (선택) Supadata API 키 | 자막이 없는 영상을 음성 인식으로 글로 옮김 (유료 크레딧). 없으면 그 영상은 `no_transcript` 로 표시됩니다 (Claude 는 유튜브 영상을 직접 들을 수 없습니다) |
 
 성경 본문에는 **API 키가 필요 없습니다** (아래 참고).
@@ -111,7 +112,7 @@ Apps Script 웹앱 (관리 · 구글 로그인 · 개인 노트 · 사용자 영
 
 1. **Google Sheet** 만들기 — 첫 탭 이름 `Playlists`, 1행 `category · playlist_url · max_videos`. `category` 는 `주일예배 / 새벽기도 / 수요예배 / 청년부예배` (또는 `sunday / dawn / wednesday / youth`). 나머지 탭(Sermons · Notes · Settings)은 자동으로 만들어집니다. 주소창의 `/d/`**`여기`**`/edit` 가 `SHEET_ID`.
 2. **Google Cloud**: Google Sheets API + YouTube Data API v3 사용 설정 → API 키(= `YOUTUBE_API_KEY`) → 서비스 계정 만들고 JSON 키 내려받기(= `GOOGLE_SERVICE_ACCOUNT_JSON`) → 서비스 계정 이메일을 시트 **편집자**로 공유.
-3. **GitHub**: 새 저장소에 이 폴더를 올리고(`.env` 제외), Settings → Secrets and variables → Actions 에 `SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `YOUTUBE_API_KEY`, `ANTHROPIC_API_KEY` (선택: `SUPADATA_API_KEY`) 등록. 선택 Variables: `CLAUDE_MODEL`(claude-sonnet-5-5), `CLAUDE_EFFORT`(medium), `MAX_NEW_PER_RUN`(5), `RETRY_DAYS`(7), `AUTO_WITHIN_DAYS`(14). 관리 화면에서 고른 모델·생각 깊이가 있으면 그것이 우선입니다.
+3. **GitHub**: 새 저장소에 이 폴더를 올리고(`.env` 제외), Settings → Secrets and variables → Actions 에 `SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `YOUTUBE_API_KEY`, `ANTHROPIC_API_KEY` (선택: `GEMINI_API_KEY`, `SUPADATA_API_KEY`) 등록. 선택 Variables: `CLAUDE_MODEL`(claude-sonnet-5-5), `CLAUDE_EFFORT`(medium), `MAX_NEW_PER_RUN`(5), `RETRY_DAYS`(7), `AUTO_WITHIN_DAYS`(14). 관리 화면에서 고른 모델·생각 깊이가 있으면 그것이 우선입니다.
 4. **Pages**: Settings → Pages → Deploy from a branch → `main` / `/docs`.
 5. **Apps Script**: 시트의 확장 프로그램 → Apps Script 에 `apps-script/Code.gs` 를 붙여넣고, 스크립트 속성에 `ADMIN_PASSWORD`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`(가족 구글 계정, 쉼표로), `GITHUB_TOKEN`·`GITHUB_REPO`(앱에서 "지금 동기화"를 쓰려면) 입력 → 배포 → 웹 앱 주소를 `docs/config.js` 의 `ADMIN_API_URL` 에.
    - **이미 배포한 적이 있다면**: 코드를 바꿔 붙인 뒤 **배포 관리 → 편집 → 새 버전**으로 다시 배포하세요(주소는 그대로). `Notes` 탭에 `fields_json` 칸은 자동으로 추가됩니다.

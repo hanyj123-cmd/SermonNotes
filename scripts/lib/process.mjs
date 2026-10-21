@@ -48,7 +48,7 @@ export function knownInfo(row) {
 
 /**
  * @param row   Sermons 탭의 한 행
- * @param deps  { ai, update(patch), enrichSongs(songs), fetchBible(passages), supadataKey, obtain, now, log }
+ * @param deps  { ai, update(patch), enrichSongs(songs), fetchBible(passages), supadataKey, geminiKey, geminiModel, obtain, now, log }
  * @returns     'done' | 'error' | 'no_transcript'
  */
 export async function processRow(row, deps) {
@@ -58,6 +58,8 @@ export async function processRow(row, deps) {
     enrichSongs = null, // (songs[]) => 찬양 영상 붙이기 (실패해도 정리는 유지)
     fetchBible = null, // (passages) => 성경 본문 블록 | null
     supadataKey = '',
+    geminiKey = '',
+    geminiModel = '',
     obtain = defaultObtain,
     now = () => new Date().toISOString(),
     log = { info: console.log, warn: console.warn, error: console.error },
@@ -72,7 +74,7 @@ export async function processRow(row, deps) {
     resume = readExisting(row);
     for (const m of picked) delete resume[m];
   }
-  const material = await obtain(row, { supadataKey, log: (m) => log.warn(`   ${m}`) });
+  const material = await obtain(row, { supadataKey, geminiKey, ...(geminiModel ? { geminiModel } : {}), log: (m) => log.warn(`   ${m}`) });
 
   if (material.kind === 'none') {
     await update({

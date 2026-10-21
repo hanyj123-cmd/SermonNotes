@@ -429,9 +429,12 @@ async function main() {
   const ai = createClaude(need('ANTHROPIC_API_KEY'), modelName, { effort });
   console.log(`🤖 Claude 모델: ${ai.model} (effort: ${ai.effort})`);
   const maxPerRun = Math.max(1, parseInt(process.env.MAX_NEW_PER_RUN || '5', 10) || 5);
-  // 자막이 없는 영상: Supadata 키가 있으면 Supadata 가 음성을 인식해 글로 옮깁니다. 없으면 no_transcript 로 표시합니다.
+  // 자막이 없는 영상: GEMINI_API_KEY 가 있으면 Gemini 가 영상을 직접 듣고 받아 적고(정리는 Claude), 그다음 Supadata 키가 있으면 Supadata 가 음성을 인식합니다. 둘 다 없으면 no_transcript 로 표시합니다.
   const supadataKey = process.env.SUPADATA_API_KEY || '';
-  console.log(`자막이 없는 영상: ${supadataKey ? 'Supadata 음성 인식' : '건너뜀(no_transcript 표시 — SUPADATA_API_KEY 를 넣으면 음성 인식)'}`);
+  const geminiKey = process.env.GEMINI_API_KEY || '';
+  const geminiModel = String(process.env.GEMINI_MODEL || '').trim();
+  const asr = [geminiKey && 'Gemini 받아쓰기', supadataKey && 'Supadata 음성 인식'].filter(Boolean);
+  console.log(`자막이 없는 영상: ${asr.length ? asr.join(' → ') : '건너뜀(no_transcript 표시 — GEMINI_API_KEY 또는 SUPADATA_API_KEY 를 넣으면 음성 인식)'}`);
 
   // 1) 재생목록 → 새 영상 등록
   const playlists = (await readPlaylists(sheets, spreadsheetId)).filter((pl) => categories.includes(pl.category));
@@ -521,6 +524,8 @@ async function main() {
       ai,
       update: (patch) => updateSermonRow(sheets, spreadsheetId, row.rowNumber, patch),
       supadataKey,
+      geminiKey,
+      geminiModel,
       redoModes: sermonRedoModes, // 관리 화면에서 고른 부분만 다시 정리 (비면 전부)
       enrichSongs: null, // 찬양은 CCM 한 곡만, 영상은 화면에서 YouTube 검색 링크로 엽니다 (검색 할당량 아끼기)
       fetchBible: async (passages) => {

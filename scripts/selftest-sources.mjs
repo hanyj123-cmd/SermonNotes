@@ -1,6 +1,6 @@
 // 자막 확보(YouTube 자막 · Supadata)와 Claude 호출 점검. 외부 서비스 없이 실행: npm test
 import assert from 'node:assert/strict';
-import { fetchSupadata, obtainMaterial } from './lib/transcript.mjs';
+import { fetchSupadata, fetchGemini, obtainMaterial, GEMINI_DEFAULT_MODEL } from './lib/transcript.mjs';
 import { createClaude, DEFAULT_MODEL, isClaudeModel } from './lib/ai.mjs';
 
 let passed = 0;
@@ -143,6 +143,109 @@ await t('확보 순서: Supadata도 실패하면 none (실패 사유는 모두 �
   assert.equal(m.kind, 'none');
   assert.equal(m.problems.length, 2);
   assert.match(m.problems[1], /Supadata: 크레딧이 부족합니다/);
+});
+
+
+// ---------- Gemini 받아쓰기 ----------
+const gemRes = (status, json) => ({ status, ok: status >= 200 && status < 300, json: async () => json });
+const gemOk = (text, finishReason = 'STOP') => gemRes(200, { candidates: [{ content: { parts: [{ text }] }, finishReason }] });
+const gemFetch = (...responses) => {
+  const f = async (url, init) => {
+    f.calls.push({ url, init });
+    const r = responses[Math.min(f.calls.length - 1, responses.length - 1)];
+    if (r instanceof Error) throw r;
+    return r;
+  };
+  f.calls = [];
+  return f;
+};
+const noSleepG = async () => {};
+
+await t('Gemini: 유튜브 주소와 키를 보내고 받아쓴 글을 돌려줌', async () => {
+  const f = gemFetch(gemOk(LONG));
+  const r = await fetchGemini('VID12345678', 'GKEY', { fetchImpl: f, sleepImpl: noSleepG });
+  assert.equal(r.text, LONG.replace(/[ \t]+/g, ' ').trim());
+  assert.equal(r.truncated, false);
+  const { url, init } = f.calls[0];
+  assert.ok(url.includes(`/models/${GEMINI_DEFAULT_MODEL}:generateContent`));
+  assert.equal(init.headers['x-goog-api-key'], 'GKEY');
+  const body = JSON.parse(init.body);
+  assert.equal(body.contents[0].parts[1].file_data.file_uri, 'https://www.youtube.com/watch?v=VID12345678');
+});
+
+await t('Gemini: 모델 이름을 바꿀 수 있고, 길어서 잘리면 표시', async () => {
+  const f = gemFetch(gemOk(LONG, 'MAX_TOKENS'));
+  const r = await fetchGemini('VID12345678', 'K', { fetchImpl: f, sleepImpl: noSleepG, model: 'gemini-x-test' });
+  assert.ok(f.calls[0].url.includes('/models/gemini-x-test:'));
+  assert.equal(r.truncated, true);
+});
+
+await t('Gemini: 429/5xx 는 다시 시도해서 성공하면 받아들임', async () => {
+  const f = gemFetch(gemRes(429, { error: { message: 'quota' } }), gemRes(503, {}), gemOk(LONG));
+  const r = await fetchGemini('VID12345678', 'K', { fetchImpl: f, sleepImpl: noSleepG });
+  assert.equal(f.calls.length, 3);
+  assert.ok(r.text.length > 200);
+});
+
+await t('Gemini: 계속 실패하면 사유와 함께 오류, 400/403/404 는 바로 오류', async () => {
+  await assert.rejects(() => fetchGemini('V', 'K', { fetchImpl: gemFetch(gemRes(503, { error: { message: 'busy' } })), sleepImpl: noSleepG }), /503/);
+  const f = gemFetch(gemRes(400, { error: { message: 'video is private' } }));
+  await assert.rejects(() => fetchGemini('V', 'K', { fetchImpl: f, sleepImpl: noSleepG }), /거절|private/);
+  assert.equal(f.calls.length, 1);
+  await assert.rejects(() => fetchGemini('V', 'K', { fetchImpl: gemFetch(gemRes(404, {})), sleepImpl: noSleepG }), /모델 이름/);
+});
+
+await t('Gemini: 내용이 없거나 너무 짧으면 오류', async () => {
+  await assert.rejects(() => fetchGemini('V', 'K', { fetchImpl: gemFetch(gemRes(200, { candidates: [{ finishReason: 'SAFETY' }] })), sleepImpl: noSleepG }), /SAFETY/);
+  await assert.rejects(() => fetchGemini('V', 'K', { fetchImpl: gemFetch(gemOk('짧음')), sleepImpl: noSleepG }), /너무 짧/);
+});
+
+await t('확보 순서: YouTube 자막 실패 → Gemini 키가 있으면 Gemini (Supadata보다 먼저)', async () => {
+  const gm = spy(() => ({ text: LONG }));
+  const sd = spy(() => ({ text: 'y' }));
+  const m = await obtainMaterial(row, { fetchCaptions: async () => ({ text: '', error: 'disabled' }), gemini: gm, geminiKey: 'G', geminiModel: 'm1', supadata: sd, supadataKey: 'K' });
+  assert.deepEqual([m.kind, m.source], ['text', 'Gemini 받아쓰기']);
+  assert.equal(gm.n, 1);
+  assert.equal(sd.n, 0);
+});
+
+await t('확보 순서: YouTube 자막이 있으면 Gemini는 쓰지 않음', async () => {
+  const gm = spy(() => ({ text: LONG }));
+  const m = await obtainMaterial(row, { fetchCaptions: async () => ({ text: LONG, error: '' }), gemini: gm, geminiKey: 'G' });
+  assert.equal(m.source, 'YouTube 자막');
+  assert.equal(gm.n, 0);
+});
+
+await t('확보 순서: Gemini 실패 → Supadata로 넘어가고 사유는 모두 기록', async () => {
+  const sd = spy(() => ({ text: LONG }));
+  const m = await obtainMaterial(row, {
+    fetchCaptions: async () => ({ text: '', error: 'disabled' }),
+    gemini: async () => {
+      throw new Error('요청이 거절되었습니다');
+    },
+    geminiKey: 'G',
+    supadata: sd,
+    supadataKey: 'K',
+  });
+  assert.equal(m.source, 'Supadata 자막');
+  const m2 = await obtainMaterial(row, {
+    fetchCaptions: async () => ({ text: '', error: 'disabled' }),
+    gemini: async () => {
+      throw new Error('요청이 거절되었습니다');
+    },
+    geminiKey: 'G',
+    supadataKey: '',
+  });
+  assert.equal(m2.kind, 'none');
+  assert.match(m2.problems.join(' '), /Gemini: 요청이 거절되었습니다/);
+});
+
+await t('확보 순서: Gemini·Supadata 키가 모두 없으면 호출 없이 none', async () => {
+  const gm = spy(() => ({ text: LONG }));
+  const m = await obtainMaterial(row, { fetchCaptions: async () => ({ text: '', error: 'disabled' }), gemini: gm, geminiKey: '', supadataKey: '' });
+  assert.equal(m.kind, 'none');
+  assert.equal(gm.n, 0);
+  assert.match(m.problems.join(' '), /GEMINI_API_KEY/);
 });
 
 // ---------- Claude ----------

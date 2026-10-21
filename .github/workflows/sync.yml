@@ -106,6 +106,8 @@ jobs:
           CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
           CLAUDE_EFFORT: ${{ vars.CLAUDE_EFFORT }}
           SUPADATA_API_KEY: ${{ secrets.SUPADATA_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
           AUTO_WITHIN_DAYS: ${{ vars.AUTO_WITHIN_DAYS }}
           RETRY_DAYS: ${{ vars.RETRY_DAYS }}
           MAX_NEW_PER_RUN: ${{ github.event.inputs.max_new || vars.MAX_NEW_PER_RUN || '5' }}
