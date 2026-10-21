@@ -128,12 +128,12 @@ function buildHandoutDoc(d, mode, opts) {
 
   const answerPages = []; // 정답·모범 답안 (옵션을 켠 경우 맨 뒤에 모음)
 
-  // 말씀 퀘스트를 풀기 전에는 퀴즈 문제를 유인물에도 싣지 않습니다 (미리 보기 방지)
+  // 말씀 퀘스트를 풀기 전에도 퀴즈 문제는 유인물에 싣지만, 정답·해설은 퀘스트를 푼 뒤에만 싣습니다
   const quizLockedFor = (quiz) => {
     const playable = ((quiz && quiz.multiple_choice) || []).length + ((quiz && quiz.fill_blank) || []).length + ((quiz && quiz.word_answer) || []).length;
     return !!playable && typeof questUnlocked === 'function' && !questUnlocked(d.quizId || d.id);
   };
-  const quizLockSec = () => sec('퀴즈', h('p', { class: 'ho-note', text: '퀴즈는 앱에서 "말씀 퀘스트"를 한 번 풀면 문제지로 나와요. 퀘스트를 먼저 풀고 다시 열어 주세요.' }));
+  const quizLockNote = () => h('p', { class: 'ho-note', text: '정답과 해설은 앱에서 "말씀 퀘스트"를 한 번 풀면 유인물에도 실려요.' });
 
   // 퀴즈 문제지 (잠언 묵상 등): 객관식 · 빈칸 · 단답식 · 주관식, 정답은 옵션을 켜면 맨 뒤에
   const quizSection = (quiz) => {
@@ -180,8 +180,7 @@ function buildHandoutDoc(d, mode, opts) {
     if (opts.lines) secs.push(sec('묵상 노트', lines(8)));
   } else if (mode === 'quiz') {
     const { qItems, ansItems, n } = quizSection(d.quiz || {});
-    if (quizLockedFor(d.quiz)) secs.push(quizLockSec());
-    else if (qItems.length) secs.push(sec(`퀴즈 ${n}문제`, qItems));
+    if (qItems.length) secs.push(sec(`퀴즈 ${n}문제`, quizLockedFor(d.quiz) ? [quizLockNote(), ...qItems] : qItems));
     if (!quizLockedFor(d.quiz) && opts.answers && ansItems.length) answerPages.push(secPlain('정답 및 해설', h('ol', { class: 'ho-answers' }, ansItems)));
   } else if (d.proverb && (mode === 'group' || mode === 'leader')) {
     // 잠언 소그룹: 부원용(질문지) / 인도자용 해설서
@@ -296,8 +295,7 @@ function buildHandoutDoc(d, mode, opts) {
       h('li', {}, h('strong', { text: `${no}. ` }), it.answer, it.explanation ? h('div', { class: 'ho-note', text: it.explanation }) : null),
     ]);
     const quizLocked = quizLockedFor(quiz);
-    if (quizLocked) secs.push(quizLockSec());
-    else if (qItems.length) secs.push(sec(`퀴즈 ${n}문제`, qItems));
+    if (qItems.length) secs.push(sec(`퀴즈 ${n}문제`, quizLocked ? [quizLockNote(), ...qItems] : qItems));
     secs.push(prayer('마치는 기도', st.closing_prayer));
     if (!quizLocked && opts.answers && ansItems.length) answerPages.push(secPlain('정답 및 해설', h('ol', { class: 'ho-answers' }, ansItems)));
   } else if (mode === 'group') {

@@ -672,7 +672,12 @@
 .gm-board-tab { border: 1px solid var(--gm-line-2); background: var(--gm-paper); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 0.9rem; cursor: pointer; color: var(--gm-ink); }
 .gm-board-tab[aria-selected='true'] { background: var(--gm-night); color: var(--gm-gold-light); border-color: var(--gm-night); }
 
-/* 퀴즈 목록 잠금 (말씀 퀘스트를 풀기 전) */
+/* 퀴즈 목록 잠금 (말씀 퀘스트를 풀기 전: 문제는 보이고 정답·해설만 잠김) */
+.qz-lock-slim { margin: 0 0 18px; padding: 12px 16px; }
+.qz-lock-slim .qz-lock-ico { width: 36px; height: 36px; }
+.qz-lock-slim .qz-lock-ico .ic, .qz-lock-slim .qz-lock-ico svg { width: 18px; height: 18px; }
+.qz-opt-static { cursor: default; }
+.qz-opt-static:hover { background: var(--bg); }
 .qz-lock { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center; padding: 18px 20px; border: 1px dashed var(--gold-line, #cdb97c); border-radius: 16px; background: linear-gradient(160deg, #fffaf0, #f8eed3); }
 .qz-lock-ico { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: #1b2346; color: #ecd492; }
 .qz-lock-ico .ic, .qz-lock-ico svg { width: 24px; height: 24px; }

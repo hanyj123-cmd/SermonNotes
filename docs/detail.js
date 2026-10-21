@@ -103,14 +103,19 @@ function renderQtMode(d, notes) {
 /* ---------- 성경공부 ---------- */
 const CIRCLED = ['①', '②', '③', '④', '⑤'];
 
-function renderQuiz(quiz) {
+// locked=true: 말씀 퀘스트를 풀기 전. 문제(와 객관식 보기)만 보여 주고 정답·해설·[답보기]는 없습니다.
+function renderQuiz(quiz, { locked = false, id = '' } = {}) {
   const all = []; // 전체 [답보기] 토글 모음
   let n = 0;
   const groupBlock = (title, desc, items, build) => {
     if (!items.length) return null;
-    return h('div', { class: 'qz-group' }, h('h3', { text: title }), h('p', { class: 'meta', text: desc }), h('ol', { class: 'qz-list' }, items.map((it) => build(it, ++n))));
+    return h('div', { class: 'qz-group' }, h('h3', { text: title }), h('p', { class: 'meta', text: locked ? '문제를 읽고 먼저 떠올려 보세요. 정답과 해설은 말씀 퀘스트를 푼 뒤에 열려요.' : desc }), h('ol', { class: 'qz-list' }, items.map((it) => build(it, ++n))));
   };
   const mc = groupBlock('객관식', '알맞은 답을 고른 뒤 [답보기]로 확인하세요.', quiz.multiple_choice || [], (it, no) => {
+    if (locked) {
+      const staticOpts = h('ol', { class: 'qz-opts', type: 'A' }, it.options.map((o, i) => h('li', {}, h('div', { class: 'qz-opt qz-opt-static' }, h('span', { class: 'qz-mark', text: CIRCLED[i] || String(i + 1) }), h('span', { text: o })))));
+      return h('li', { class: 'qz-item', value: no }, h('div', { class: 'qz-q' }, inlineMd(it.question)), staticOpts);
+    }
     const opts = h('ol', { class: 'qz-opts', type: 'A' }, it.options.map((o, i) => h('li', {}, h('button', { class: 'qz-opt', type: 'button', 'aria-pressed': 'false', 'data-i': String(i) }, h('span', { class: 'qz-mark', text: CIRCLED[i] || String(i + 1) }), h('span', { text: o })))));
     opts.addEventListener('click', (e) => {
       const b = e.target.closest('.qz-opt');
@@ -126,24 +131,37 @@ function renderQuiz(quiz) {
     return h('li', { class: 'qz-item', value: no }, h('div', { class: 'qz-q' }, inlineMd(it.question)), opts, h('div', { class: 'qz-act' }, btn), box);
   });
   const fb = groupBlock('빈칸 채우기', '빈칸에 들어갈 말을 떠올려 본 뒤 [답보기]로 확인하세요.', quiz.fill_blank || [], (it, no) => {
+    if (locked) return h('li', { class: 'qz-item', value: no }, h('div', { class: 'qz-q' }, inlineMd(blankQuestionText(it))));
     const ans = h('div', { class: 'reveal-body' }, h('p', {}, h('strong', { text: `정답  ${it.answer}` })), it.explanation ? h('p', { class: 'md' }, inlineMd(it.explanation)) : null);
     const { btn, box } = revealBox('답보기', ans);
     all.push({ btn, box });
     return h('li', { class: 'qz-item', value: no }, h('div', { class: 'qz-q' }, inlineMd(blankQuestionText(it))), h('div', { class: 'qz-act' }, btn), box);
   });
   const wa = groupBlock('단답식', '짧은 낱말로 답을 떠올려 본 뒤 [답보기]로 확인하세요.', quiz.word_answer || [], (it, no) => {
+    if (locked) return h('li', { class: 'qz-item', value: no }, h('div', { class: 'qz-q' }, inlineMd(blankQuestionText(it))));
     const ans = h('div', { class: 'reveal-body' }, h('p', {}, h('strong', { text: `정답  ${it.answer}` })), it.explanation ? h('p', { class: 'md' }, inlineMd(it.explanation)) : null);
     const { btn, box } = revealBox('답보기', ans);
     all.push({ btn, box });
     return h('li', { class: 'qz-item', value: no }, h('div', { class: 'qz-q' }, inlineMd(blankQuestionText(it))), h('div', { class: 'qz-act' }, btn), box);
   });
   const sa = groupBlock('주관식 (채점하지 않아요)', '내 말로 답을 정리해 본 뒤 [답보기]로 참고 답안을 확인하세요.', quiz.short_answer || [], (it, no) => {
+    if (locked) return h('li', { class: 'qz-item', value: no }, h('div', { class: 'qz-q' }, inlineMd(it.question)));
     const ans = h('div', { class: 'reveal-body' }, h('p', {}, h('strong', { text: '참고 답안' })), h('p', { class: 'md' }, inlineMd(it.answer)), it.explanation ? h('p', { class: 'md' }, inlineMd(it.explanation)) : null);
     const { btn, box } = revealBox('답보기', ans);
     all.push({ btn, box });
     return h('li', { class: 'qz-item', value: no }, h('div', { class: 'qz-q' }, inlineMd(it.question)), h('div', { class: 'qz-act' }, btn), box);
   });
   if (!n) return null;
+  if (locked) {
+    const banner = h(
+      'div',
+      { class: 'qz-lock qz-lock-slim' },
+      h('span', { class: 'qz-lock-ico', 'aria-hidden': 'true' }, typeof icon === 'function' ? icon('lock') : null),
+      h('div', { class: 'qz-lock-text' }, h('p', {}, h('strong', { text: '정답과 해설은 잠겨 있어요. ' }), '말씀 퀘스트를 한 번 풀고 나면 열려요.')),
+      h('a', { class: 'btn primary', href: `#/q/${encodeURIComponent(id)}` }, '퀘스트로 열기'),
+    );
+    return block('quiz', '퀴즈', h('div', { class: 'block-head' }, h('h2', { text: `퀴즈 ${n}문제` })), banner, mc, fb, wa, sa);
+  }
   const toggleAll = h('button', { class: 'btn small', type: 'button' }, '모든 답 한꺼번에 보기');
   let open = false;
   toggleAll.addEventListener('click', () => {
@@ -171,24 +189,13 @@ function renderQuizCta(d) {
 }
 
 /**
- * 퀴즈 문제·정답 목록은 "말씀 퀘스트"를 한 번 풀어 본 뒤에만 보여 줍니다 (미리 보고 시작하는 것 방지).
- * 퀘스트로 낼 수 있는 문제(객관식·빈칸)가 없으면 잠그지 않습니다.
+ * 퀴즈 문제는 처음부터 보여 주고, 정답·해설은 "말씀 퀘스트"를 한 번 풀어 본 뒤에만 보여 줍니다.
+ * 퀘스트로 낼 수 있는 문제(객관식·빈칸·단답식)가 없으면 잠그지 않습니다.
  */
 function renderQuizGate(id, quiz) {
   const playable = ((quiz && quiz.multiple_choice) || []).length + ((quiz && quiz.fill_blank) || []).length + ((quiz && quiz.word_answer) || []).length;
   if (!playable || typeof questUnlocked !== 'function' || questUnlocked(id)) return renderQuiz(quiz || {});
-  const total = playable + ((quiz.short_answer || []).length);
-  return block(
-    'quiz',
-    '퀴즈',
-    h(
-      'div',
-      { class: 'qz-lock' },
-      h('span', { class: 'qz-lock-ico', 'aria-hidden': 'true' }, typeof icon === 'function' ? icon('lock') : null),
-      h('div', { class: 'qz-lock-text' }, h('h2', { text: `퀴즈 ${total}문제` }), h('p', { text: '말씀 퀘스트를 한 번 풀면 문제와 해설이 열려요. 미리 보지 말고 먼저 도전해 보세요!' })),
-      h('a', { class: 'btn primary', href: `#/q/${encodeURIComponent(id)}` }, '퀘스트로 열기'),
-    ),
-  );
+  return renderQuiz(quiz || {}, { locked: true, id });
 }
 
 // 오늘의 말씀 성경공부: 책과 본문의 배경
