@@ -273,7 +273,13 @@ function setYtOpenPref(on) {
 }
 /** 재생 시작: 화면 위에 떠 있는 작은 창(float.js)에서 재생합니다. */
 function startPlayback(id, title, opts) {
-  openFloatPlayer(id, title, opts); // 항상 앱 안의 떠 있는 창에서 재생 (YouTube 앱은 창의 "YouTube" 버튼으로)
+  // "광고가 나오면 YouTube 앱으로 열기"를 켜 둔 기기: 이 앱의 창 대신 YouTube 앱(사이트)에서 재생해 프리미엄(광고 없음)이 적용되게 합니다
+  if (ytOpenPref() && /^[A-Za-z0-9_-]{11}$/.test(String(id || '')) && typeof openYoutubeApp === 'function') {
+    if (opts && opts.queue && opts.queue.length) toast('이어 듣기는 YouTube 앱에서 다음 영상을 직접 골라 주세요', 3200);
+    openYoutubeApp(id);
+    return;
+  }
+  openFloatPlayer(id, title, opts); // 기본은 앱 안의 떠 있는 창에서 재생 (YouTube 앱은 창의 "YouTube" 버튼으로)
 }
 
 /* ---------- 성경 본문: 4역본 전환 보기 ---------- */

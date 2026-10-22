@@ -517,6 +517,8 @@ span.mk-ul { text-decoration-line: underline; text-decoration-thickness: 2px; te
 
 /* 재생 창 조절 막대 (앞뒤 15초 · 배속 · 볼륨) */
 .fp-holder, .fp-body > div { width: 100%; height: 100%; }
+.fp-adrow { flex: none; display: flex; align-items: center; gap: 8px; padding: 7px 12px 9px; font-size: 0.74rem; line-height: 1.3; color: #c8d6ee; background: #0b1524; cursor: pointer; }
+.fp-adrow input { width: 16px; height: 16px; flex: none; accent-color: #8fcf5a; margin: 0; }
 .fp-controls { flex: none; padding: 6px 10px 10px; display: grid; gap: 4px; background: linear-gradient(#0f1b2d, #0b1524); }
 .fp-controls[hidden] { display: none; }
 .fp-row { display: flex; align-items: center; gap: 6px; min-width: 0; }

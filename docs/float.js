@@ -140,8 +140,11 @@ function buildFloat() {
     h('div', { class: 'fp-row' }, seek, timeEl),
     h('div', { class: 'fp-row' }, back15, playBtn, fwd15, speedBtn, h('span', { class: 'fp-volwrap' }, muteBtn, vol)),
   );
+  // 광고가 나올 때: 켜 두면 재생 버튼이 이 창 대신 YouTube 앱(프리미엄 로그인)으로 바로 열립니다
+  const adToggle = h('input', { class: 'yt-open-toggle', type: 'checkbox', id: 'fp-yt-open' });
+  const adRow = h('label', { class: 'fp-adrow', for: 'fp-yt-open', title: '프리미엄 광고 제거는 YouTube 앱·사이트에서 적용돼요' }, adToggle, h('span', { text: '광고가 나오면 체크 · 앞으로 YouTube 앱으로 열기' }));
   const grip = h('div', { class: 'fp-resize', title: '끌어서 크기 조절', 'aria-hidden': 'true' });
-  const el = h('div', { class: 'float-player', role: 'dialog', 'aria-label': '재생 창' }, bar, body, controls, grip);
+  const el = h('div', { class: 'float-player', role: 'dialog', 'aria-label': '재생 창' }, bar, body, controls, adRow, grip);
   el._st = st;
   el._els = { titleEl, link, body, controls };
   el._speed = 1;
@@ -195,6 +198,17 @@ function buildFloat() {
     grip.addEventListener('pointercancel', up);
   });
   closeBtn.addEventListener('click', closeFloatPlayer);
+  adToggle.checked = ytOpenPref();
+  adToggle.addEventListener('change', () => {
+    setYtOpenPref(adToggle.checked);
+    if (!adToggle.checked || !el._vid) return;
+    // 켠 순간 지금 보던 영상도 YouTube 앱(사이트)에서 이어서 엽니다
+    const id = el._vid;
+    const p = el._player;
+    if (p && p.pauseVideo) p.pauseVideo();
+    toast('이제 재생 버튼을 누르면 YouTube 앱으로 열려요', 2800);
+    openYoutubeApp(id);
+  });
   el.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeFloatPlayer();
   });
