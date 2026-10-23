@@ -11,10 +11,16 @@ const isIos = () => /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.
 const isMobile = () => isAndroid() || isIos();
 
 /** YouTube 앱이 있으면 앱으로, 없으면 YouTube 사이트로 엽니다 (프리미엄 광고 제거·백그라운드 재생은 앱/사이트에서 적용됩니다) */
-function openYoutubeApp(id) {
-  const web = ytWatch(id);
+function openYoutubeApp(id, playlistIds) {
+  // 여러 영상이면 YouTube 가 즉석 재생 목록(watch_videos, 최대 50개)으로 열어 줍니다
+  const many = Array.isArray(playlistIds) && playlistIds.length > 1;
+  const web = many ? `https://www.youtube.com/watch_videos?video_ids=${playlistIds.slice(0, 50).join(',')}` : ytWatch(id);
   if (isAndroid()) {
-    location.href = `intent://www.youtube.com/watch?v=${id}#Intent;scheme=https;package=com.google.android.youtube;S.browser_fallback_url=${encodeURIComponent(web)};end`;
+    location.href = `intent://${web.replace(/^https:\/\//, '')}#Intent;scheme=https;package=com.google.android.youtube;S.browser_fallback_url=${encodeURIComponent(web)};end`;
+    return;
+  }
+  if (isIos() && many) {
+    location.href = web; // 아이폰: 주소를 열면 YouTube 앱이 있을 때 앱이 이어받습니다
     return;
   }
   if (isIos()) {
@@ -143,10 +149,12 @@ function buildFloat() {
   // 광고가 나올 때: 켜 두면 재생 버튼이 이 창 대신 YouTube 앱(프리미엄 로그인)으로 바로 열립니다
   const adToggle = h('input', { class: 'yt-open-toggle', type: 'checkbox', id: 'fp-yt-open' });
   const adRow = h('label', { class: 'fp-adrow', for: 'fp-yt-open', title: '프리미엄 광고 제거는 YouTube 앱·사이트에서 적용돼요' }, adToggle, h('span', { text: '광고가 나오면 체크 · 앞으로 YouTube 앱으로 열기' }));
+  // 재생 목록 (전체 이어 듣기): 지금 재생 중인 영상이 표시되고, 누르면 그 영상으로 이동합니다
+  const listBox = h('details', { class: 'fp-list', open: true, hidden: true });
   const grip = h('div', { class: 'fp-resize', title: '끌어서 크기 조절', 'aria-hidden': 'true' });
-  const el = h('div', { class: 'float-player', role: 'dialog', 'aria-label': '재생 창' }, bar, body, controls, adRow, grip);
+  const el = h('div', { class: 'float-player', role: 'dialog', 'aria-label': '재생 창' }, bar, body, controls, listBox, adRow, grip);
   el._st = st;
-  el._els = { titleEl, link, body, controls };
+  el._els = { titleEl, link, body, controls, listBox };
   el._speed = 1;
 
   const persist = () => saveFloatState({ x: st.x, y: st.y, w: st.w, vol: Number(vol.value) });
@@ -350,7 +358,7 @@ function mountPlayer(id, title) {
             // 이어 듣기: 영상이 끝나면(0) 다음 영상을 같은 창에서 바로 재생
             if (e.data === 0 && floatEl === el && el._queue && el._queue.length) {
               const next = el._queue.shift();
-              openFloatPlayer(next.id, next.title, { queue: el._queue });
+              openFloatPlayer(next.id, next.title, { queue: el._queue, playlist: el._list });
               return;
             }
             el._paintPlay(e.data === 1 || e.data === 3);
@@ -371,19 +379,45 @@ function mountPlayer(id, title) {
 }
 
 /** 떠 있는 창에서 재생합니다. 이미 열려 있으면 영상만 바꿉니다. queue: 끝나면 이어서 틀 [{ id, title }] */
-function openFloatPlayer(id, title, { queue = [] } = {}) {
+function paintFloatList(el) {
+  const { listBox } = el._els;
+  const list = el._list || [];
+  listBox.hidden = list.length < 2;
+  if (listBox.hidden) return;
+  const idx = Math.max(0, list.findIndex((x) => x.id === el._vid));
+  listBox.replaceChildren(
+    h('summary', { class: 'fp-list-sum', text: `재생 목록 ${idx + 1} / ${list.length}` }),
+    h(
+      'ol',
+      { class: 'fp-list-ol' },
+      list.map((x, i) =>
+        h(
+          'li',
+          {},
+          h('button', { class: `fp-list-item${i === idx ? ' is-now' : ''}`, type: 'button', 'aria-current': i === idx ? 'true' : 'false', title: x.title, onclick: () => openFloatPlayer(x.id, x.title, { queue: list.slice(i + 1), playlist: list }) }, h('span', { class: 'fp-list-no', text: i === idx ? '▶' : String(i + 1) }), h('span', { class: 'fp-list-title', text: x.title })),
+        ),
+      ),
+    ),
+  );
+  fitFloat(el, el._st);
+}
+
+/** 떠 있는 창에서 재생합니다. 이미 열려 있으면 영상만 바꿉니다. queue: 끝나면 이어서 틀 [{ id, title }] · playlist: 화면에 보여 줄 전체 재생 목록 */
+function openFloatPlayer(id, title, { queue = [], playlist = null } = {}) {
   if (!ytId(id)) return;
   if (!floatEl) {
     floatEl = buildFloat();
     document.body.append(floatEl);
   }
   floatEl._queue = queue.filter((q) => ytId(q.id));
+  floatEl._list = playlist ? playlist.filter((q) => ytId(q.id)) : [];
   const { titleEl, link } = floatEl._els;
   floatEl._vid = id;
   titleEl.textContent = title || '재생 중';
   link.setAttribute('href', ytWatch(id));
   mountPlayer(id, title);
   floatEl.hidden = false;
+  paintFloatList(floatEl);
   fitFloat(floatEl, floatEl._st); // 화면에 붙인 뒤 실제 높이로 위치를 맞춥니다
 }
 

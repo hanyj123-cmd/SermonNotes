@@ -164,7 +164,7 @@ function playReadingVideos(groups, from = 0) {
   const list = groups.slice(from).map((g) => ({ id: g.video_id, title: `공동체 성경읽기 · ${groupLabel(g)}` }));
   if (!list.length) return;
   const [first, ...rest] = list;
-  startPlayback(first.id, first.title, { queue: rest });
+  startPlayback(first.id, first.title, { queue: rest, playlist: list });
 }
 
 /* ---------- 유튜브 강해·설교 찾기 ---------- */

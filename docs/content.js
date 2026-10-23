@@ -275,8 +275,10 @@ function setYtOpenPref(on) {
 function startPlayback(id, title, opts) {
   // "광고가 나오면 YouTube 앱으로 열기"를 켜 둔 기기: 이 앱의 창 대신 YouTube 앱(사이트)에서 재생해 프리미엄(광고 없음)이 적용되게 합니다
   if (ytOpenPref() && /^[A-Za-z0-9_-]{11}$/.test(String(id || '')) && typeof openYoutubeApp === 'function') {
-    if (opts && opts.queue && opts.queue.length) toast('이어 듣기는 YouTube 앱에서 다음 영상을 직접 골라 주세요', 3200);
-    openYoutubeApp(id);
+    const ids = opts && opts.playlist && opts.playlist.length > 1 ? opts.playlist.map((x) => x.id).filter((v) => /^[A-Za-z0-9_-]{11}$/.test(String(v || ''))) : null;
+    if (ids && ids.length > 1) toast('YouTube 앱에서 재생 목록으로 열어요', 2600);
+    else if (opts && opts.queue && opts.queue.length) toast('이어 듣기는 YouTube 앱에서 다음 영상을 직접 골라 주세요', 3200);
+    openYoutubeApp(id, ids);
     return;
   }
   openFloatPlayer(id, title, opts); // 기본은 앱 안의 떠 있는 창에서 재생 (YouTube 앱은 창의 "YouTube" 버튼으로)

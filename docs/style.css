@@ -517,6 +517,15 @@ span.mk-ul { text-decoration-line: underline; text-decoration-thickness: 2px; te
 
 /* 재생 창 조절 막대 (앞뒤 15초 · 배속 · 볼륨) */
 .fp-holder, .fp-body > div { width: 100%; height: 100%; }
+.fp-list { flex: none; background: #0f1b2d; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+.fp-list[hidden] { display: none; }
+.fp-list-sum { padding: 7px 12px; font-size: 0.78rem; font-weight: 700; color: #ecd492; cursor: pointer; }
+.fp-list-ol { list-style: none; margin: 0; padding: 0 6px 6px; max-height: 150px; overflow-y: auto; }
+.fp-list-item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 0; background: transparent; color: #dbe5f7; padding: 6px 8px; border-radius: 8px; font: inherit; font-size: 0.8rem; cursor: pointer; }
+.fp-list-item:hover, .fp-list-item:focus-visible { background: rgba(255, 255, 255, 0.12); outline: none; }
+.fp-list-item.is-now { background: rgba(143, 207, 90, 0.2); color: #fff; font-weight: 700; }
+.fp-list-no { flex: none; min-width: 1.4em; text-align: center; color: #8fcf5a; font-variant-numeric: tabular-nums; }
+.fp-list-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fp-adrow { flex: none; display: flex; align-items: center; gap: 8px; padding: 7px 12px 9px; font-size: 0.74rem; line-height: 1.3; color: #c8d6ee; background: #0b1524; cursor: pointer; }
 .fp-adrow input { width: 16px; height: 16px; flex: none; accent-color: #8fcf5a; margin: 0; }
 .fp-controls { flex: none; padding: 6px 10px 10px; display: grid; gap: 4px; background: linear-gradient(#0f1b2d, #0b1524); }
