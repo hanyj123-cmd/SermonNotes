@@ -1,6 +1,6 @@
 {
- "updated": "2026-10-25T14:09:50.277Z",
- "count": 56,
+ "updated": "2026-10-26T08:03:41.866Z",
+ "count": 57,
  "sermons": [
   {
    "id": "arTwU9lhOJQ",
@@ -1054,6 +1054,25 @@
    "book": "출애굽기",
    "bookIdx": 2,
    "summary_short": "하나님은 간음하지 말라는 계명을 통해 가정의 거룩한 울타리와 성의 선물을 지키게 하시며, 세속적 타락을 분별하고 정결한 삶을 살도록 우리를 부르십니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "h1-emKTycpw",
+   "category": "sunday",
+   "title": "주일예배 - 믿음으로 사람들은",
+   "date": "2026-04-12",
+   "url": "https://www.youtube.com/watch?v=h1-emKTycpw",
+   "preacher": "전대혁 목사",
+   "scripture": "히 11:32-38",
+   "book": "히브리서",
+   "bookIdx": 58,
+   "summary_short": "믿음의 삶은 하나님의 기적과 능력을 경험하는 풍성한 삶이자 죄와 싸우며 낮은 곳으로 나아가는 치열한 삶이며, 연약한 우리를 내어놓고 믿음을 주시는 주님을 날마다 의지할 때 비로소 우리의 삶이 됩니다.",
    "modes": [
     "review",
     "qt",
