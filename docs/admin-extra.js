@@ -1,4 +1,4 @@
-// 관리 화면 추가 기능: AI 모델 선택 · 영상 선택 관리
+// 관리 화면 추가 기능: AI 모델 선택(Claude · Gemini, 메뉴별) · 영상 선택 관리
 // (app.js 보다 먼저 불러옵니다. 함수는 관리 화면이 열릴 때 app.js 의 도구(h, adminPost 등)를 가져다 씁니다.)
 
 // 모델 이름은 Claude 공식 모델 문서(platform.claude.com/docs/en/models/overview)에서 확인한 것입니다. 가격은 100만 토큰당 입력/출력.
@@ -8,6 +8,22 @@ const CLAUDE_MODELS = [
   { id: 'claude-haiku-5-5', hint: '가장 빠르고 저렴 · 품질은 낮을 수 있음' },
   { id: 'claude-fable-5-1', hint: '가장 정교함 · 비용 약 5배 ($10/$50)' },
 ];
+// Gemini 모델 (ai.google.dev 모델 문서 기준). 설교 정리는 유튜브 영상을 직접 듣고 정리합니다.
+const GEMINI_MODELS = [
+  { id: 'gemini-3.8-flash', hint: '빠르고 저렴 · 유튜브 영상 직접 분석' },
+  { id: 'gemini-4-argon', hint: '더 정교함 · 영상 직접 분석' },
+];
+// 모델을 따로 고를 수 있는 메뉴: [키, 이름, 설명]. 설교 구분 5개는 영상을 직접 볼 수 있는 모델(Gemini)을 고를 수 있습니다.
+const MODEL_MENUS = [
+  ['sunday', '주일예배', 'video'],
+  ['wednesday', '수요예배', 'video'],
+  ['dawn', '새벽기도', 'video'],
+  ['youth', '청년부예배', 'video'],
+  ['user', '사용자 영상', 'video'],
+  ['daily', '오늘의 말씀', ''],
+  ['proverbs', '잠언 묵상', ''],
+  ['polish', 'AI 문장 다듬기', 'short'],
+];
 const EFFORT_OPTIONS = [
   ['', '기본 (medium)'],
   ['low', 'low — 빠르고 저렴'],
@@ -15,6 +31,7 @@ const EFFORT_OPTIONS = [
   ['high', 'high — 깊게 생각 · 사용량 많음'],
 ];
 const CUSTOM_MODEL = '__custom__';
+const SAME_AS_DEFAULT = '';
 const MAX_PER_RUN = 10; // 선택한 영상을 한 번에 정리하는 최대 편수 (한 번 실행은 최대 120분)
 const MAX_PER_RUN_PARTIAL = 30; // 일부만 새로 만들 때는 영상 한 편이 훨씬 빨라서 더 많이
 
@@ -61,65 +78,115 @@ function partChecks(parts, onChange = () => {}) {
   };
 }
 
-/* ---------- AI 모델 ---------- */
-function renderModelSection(password, onPasswordRejected) {
-  const info = h('p', { class: 'meta', role: 'status' });
-  const select = h(
-    'select',
-    { class: 'search admin-model', 'aria-label': 'AI 모델' },
-    CLAUDE_MODELS.map((m) => h('option', { value: m.id, text: `${m.id} — ${m.hint}` })),
+/* ---------- AI 모델 (Claude · Gemini, 메뉴별) ---------- */
+const MODEL_IDS = [...CLAUDE_MODELS, ...GEMINI_MODELS].map((m) => m.id);
+const isModelName = (m) => /^(claude-[\w.-]{3,60}|gemini-[\w.-]{2,60})$/.test(m);
+
+/** 모델 고르는 칸 한 개: 목록에서 고르거나 "직접 입력…". allowSame 이면 맨 위에 "기본과 같게" 가 있습니다. */
+function modelPicker(label, { allowSame }) {
+  const options = [
+    ...(allowSame ? [h('option', { value: SAME_AS_DEFAULT, text: '기본 모델과 같게' })] : []),
+    h('optgroup', { label: 'Claude' }, CLAUDE_MODELS.map((m) => h('option', { value: m.id, text: `${m.id} — ${m.hint}` }))),
+    h('optgroup', { label: 'Gemini' }, GEMINI_MODELS.map((m) => h('option', { value: m.id, text: `${m.id} — ${m.hint}` }))),
     h('option', { value: CUSTOM_MODEL, text: '직접 입력…' }),
-  );
-  const effortSel = h('select', { class: 'search', 'aria-label': '생각 깊이' }, EFFORT_OPTIONS.map(([v, t]) => h('option', { value: v, text: `생각 깊이: ${t}` })));
-  const custom = h('input', { class: 'search', placeholder: '예: claude-sonnet-5-5', 'aria-label': '모델 이름 직접 입력', hidden: true });
+  ];
+  const select = h('select', { class: 'search admin-model', 'aria-label': `${label} AI 모델` }, options);
+  const custom = h('input', { class: 'search', placeholder: '예: gemini-3.8-flash 또는 claude-sonnet-5-5', 'aria-label': `${label} 모델 이름 직접 입력`, hidden: true });
   custom.hidden = true;
-  const save = h('button', { class: 'btn primary', type: 'button' }, '저장');
   const sync = () => {
     custom.hidden = select.value !== CUSTOM_MODEL;
   };
   select.addEventListener('change', sync);
+  return {
+    select,
+    custom,
+    /** 저장할 모델 이름 ('' = 기본을 따름) */
+    value: () => (select.value === CUSTOM_MODEL ? custom.value.trim() : select.value),
+    /** 저장돼 있던 값을 칸에 보여 줍니다 */
+    set: (v) => {
+      const name = String(v || '');
+      if (!name) select.value = allowSame ? SAME_AS_DEFAULT : CLAUDE_MODELS[0].id;
+      else if (MODEL_IDS.includes(name)) select.value = name;
+      else {
+        select.value = CUSTOM_MODEL;
+        custom.value = name;
+      }
+      sync();
+    },
+  };
+}
+
+function effortPicker(label, { allowSame }) {
+  const opts = allowSame ? [['', '깊이: 기본과 같게'], ...EFFORT_OPTIONS.slice(1).map(([v, t]) => [v, `깊이: ${t}`])] : EFFORT_OPTIONS.map(([v, t]) => [v, `생각 깊이: ${t}`]);
+  return h('select', { class: 'search', 'aria-label': `${label} 생각 깊이` }, opts.map(([v, t]) => h('option', { value: v, text: t })));
+}
+
+function renderModelSection(password, onPasswordRejected) {
+  const info = h('p', { class: 'meta', role: 'status' });
+  // 기본 모델 (모든 메뉴에 적용되고, 아래에서 메뉴마다 따로 고르면 그 메뉴만 다르게)
+  const base = modelPicker('기본', { allowSame: false });
+  const baseEffort = effortPicker('기본', { allowSame: false });
+  // 메뉴별
+  const rows = MODEL_MENUS.map(([key, label, kind]) => {
+    const pick = modelPicker(label, { allowSame: true });
+    const effort = kind === 'short' ? null : effortPicker(label, { allowSame: true });
+    const note = kind === 'video' ? 'Gemini 를 고르면 유튜브 영상을 직접 듣고 정리해요' : kind === 'short' ? '짧은 글 다듬기라 생각 깊이는 항상 낮게 써요' : '';
+    const el = h('div', { class: 'admin-model-row' }, h('strong', { text: label }), h('div', { class: 'admin-fields admin-fields-2' }, pick.select, effort || h('span')), pick.custom, note ? h('p', { class: 'meta', text: note }) : null);
+    return { key, label, pick, effort, el };
+  });
+  const save = h('button', { class: 'btn primary', type: 'button' }, '저장');
+  const effortText = (v) => v || 'medium';
   save.addEventListener('click', async () => {
-    const model = select.value === CUSTOM_MODEL ? custom.value.trim() : select.value;
-    if (!model) return (info.textContent = '모델 이름을 입력해 주세요.');
-    if (!/^claude-/.test(model)) return (info.textContent = 'Claude 모델 이름은 claude- 로 시작합니다.');
+    const model = base.value();
+    if (!model) return (info.textContent = '기본 모델 이름을 입력해 주세요.');
+    if (!isModelName(model)) return (info.textContent = '모델 이름은 claude- 또는 gemini- 로 시작합니다.');
+    const menus = {};
+    for (const r of rows) {
+      const m = r.pick.value();
+      if (m && !isModelName(m)) return (info.textContent = `${r.label}: 모델 이름은 claude- 또는 gemini- 로 시작합니다.`);
+      menus[r.key] = { model: m, ...(r.effort ? { effort: r.effort.value } : {}) };
+    }
     info.textContent = '저장 중…';
     try {
-      const r = await adminPost({ action: 'settings_set', password, ai_model: model, ai_effort: effortSel.value });
+      const r = await adminPost({ action: 'settings_set', password, ai_model: model, ai_effort: baseEffort.value, menus });
       if (onPasswordRejected(r)) return;
       if (!r.ok) throw new Error(r.error || '저장하지 못했습니다.');
-      info.textContent = `저장했습니다. 다음 동기화부터 ${model} (생각 깊이 ${effortSel.value || 'medium'})을 씁니다.`;
+      const custom = rows.filter((x) => x.pick.value()).length;
+      info.textContent = `저장했습니다. 다음 동기화부터 기본 ${model} (생각 깊이 ${effortText(baseEffort.value)})${custom ? `, 따로 고른 메뉴 ${custom}개` : ''}를 씁니다.`;
     } catch (e) {
       info.textContent = `오류: ${e.message || e}`;
     }
   });
   // 저장된 값 불러오기
+  base.set('');
   adminPost({ action: 'settings_get', password })
     .then((r) => {
       if (onPasswordRejected(r) || !r.ok) return;
-      const cur = r.settings.ai_model;
-      effortSel.value = r.settings.ai_effort || '';
-      if (!cur) {
-        select.value = CLAUDE_MODELS[0].id;
-        info.textContent = `지금은 기본 모델(${CLAUDE_MODELS[0].id})을 씁니다.`;
-      } else if (CLAUDE_MODELS.some((m) => m.id === cur)) {
-        select.value = cur;
-        info.textContent = `지금 쓰는 모델: ${cur}`;
-      } else {
-        select.value = CUSTOM_MODEL;
-        custom.value = cur;
-        info.textContent = `지금 쓰는 모델: ${cur}`;
+      const s = r.settings;
+      base.set(s.ai_model);
+      baseEffort.value = s.ai_effort || '';
+      const menus = s.ai_menus || {};
+      for (const row of rows) {
+        const m = menus[row.key] || {};
+        row.pick.set(m.model);
+        if (row.effort) row.effort.value = m.effort || '';
       }
-      sync();
+      const custom = rows.filter((x) => x.pick.value()).length;
+      info.textContent = `지금 쓰는 기본 모델: ${s.ai_model || `${CLAUDE_MODELS[0].id} (기본)`}${custom ? ` · 따로 고른 메뉴 ${custom}개` : ''}`;
     })
     .catch(() => {});
   return h(
     'section',
     { class: 'point admin-model-box' },
-    h('h2', { text: 'AI 모델 (Claude)' }),
-    h('p', { class: 'meta', text: '설교 정리 · 오늘의 말씀 · 잠언 묵상 · AI 문장 다듬기에 쓰는 Claude 모델입니다. 정교한 모델이나 깊은 생각일수록 느리고 크레딧을 많이 씁니다. 자동 정리와 "지금 동기화" 모두에 적용됩니다.' }),
-    h('div', { class: 'admin-fields admin-fields-2' }, select, save),
-    effortSel,
-    custom,
+    h('h2', { text: 'AI 모델 (Claude · Gemini)' }),
+    h('p', { class: 'meta', text: '메뉴마다 다른 AI 모델을 고를 수 있어요. 따로 고르지 않은 메뉴는 아래 기본 모델을 따릅니다. 정교한 모델이나 깊은 생각일수록 느리고 크레딧을 많이 씁니다. 자동 정리와 "지금 동기화" 모두에 적용됩니다.' }),
+    h('p', { class: 'meta', text: 'Gemini 는 설교 영상(주일 · 수요 · 새벽기도 · 청년부 · 사용자 영상)을 유튜브에서 바로 듣고 정리합니다. 비공개 영상이라 열 수 없으면 자막이 있을 때만 자막으로 대신해요. GEMINI_API_KEY 가 필요합니다 (AI 문장 다듬기에 쓰려면 Apps Script 스크립트 속성에도 넣으세요).' }),
+    h('h3', { text: '기본 (모든 메뉴)' }),
+    h('div', { class: 'admin-fields admin-fields-2' }, base.select, baseEffort),
+    base.custom,
+    h('h3', { text: '메뉴별' }),
+    ...rows.map((r) => r.el),
+    h('div', { class: 'admin-row' }, save),
     info,
   );
 }

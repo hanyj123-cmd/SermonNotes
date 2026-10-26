@@ -47,7 +47,7 @@ import { attachBibleAudio, buildPrayerMusic, musicIsStale } from './lib/media.mj
 import { fetchBibleBlock, bibleIsCurrent } from './lib/bible-web.mjs';
 import { processRow, CELL_LIMIT } from './lib/process.mjs';
 import { MODES, MODE_LABELS } from './lib/prompt.mjs';
-import { createClaude, DEFAULT_MODEL, DEFAULT_EFFORT, isClaudeModel } from './lib/ai.mjs';
+import { createAiRouter } from './lib/ai-router.mjs';
 import { parseTitle, parseAnyTitle, parseScripture, bookOf, tidyTitle, normalizePreacher, displayTitle } from './lib/title.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -424,10 +424,10 @@ async function main() {
     await exportDaily(await readDaily(sheets, spreadsheetId));
     return;
   }
-  const modelName = [settings.ai_model, process.env.CLAUDE_MODEL].find(isClaudeModel) || DEFAULT_MODEL;
-  const effort = String(settings.ai_effort || process.env.CLAUDE_EFFORT || DEFAULT_EFFORT).trim().toLowerCase();
-  const ai = createClaude(need('ANTHROPIC_API_KEY'), modelName, { effort });
-  console.log(`🤖 Claude 모델: ${ai.model} (effort: ${ai.effort})`);
+  // 메뉴마다 다른 모델을 쓸 수 있습니다 (관리 화면 → AI 모델). 키는 쓰는 모델에 맞는 것만 있으면 됩니다.
+  const router = createAiRouter({ settings, env: process.env, anthropicKey: process.env.ANTHROPIC_API_KEY || '', geminiKey: process.env.GEMINI_API_KEY || '' });
+  console.log('🤖 AI 모델 (메뉴별):');
+  for (const line of router.describe()) console.log(line);
   const maxPerRun = Math.max(1, parseInt(process.env.MAX_NEW_PER_RUN || '5', 10) || 5);
   // 자막이 없는 영상: GEMINI_API_KEY 가 있으면 Gemini 가 영상을 직접 듣고 받아 적고(정리는 Claude), 그다음 Supadata 키가 있으면 Supadata 가 음성을 인식합니다. 둘 다 없으면 no_transcript 로 표시합니다.
   const supadataKey = process.env.SUPADATA_API_KEY || '';
@@ -521,7 +521,7 @@ async function main() {
   for (const row of queue) {
     console.log(`\n▶ [${row.category}] ${row.title} (${row.video_id})`);
     await processRow(row, {
-      ai,
+      ai: router.forMenu(row.category), // 구분(주일·수요·새벽·청년부·사용자 영상)별 모델
       update: (patch) => updateSermonRow(sheets, spreadsheetId, row.rowNumber, patch),
       supadataKey,
       geminiKey,
@@ -544,7 +544,7 @@ async function main() {
 
   // 오늘의 말씀 (오늘·내일)
   try {
-    await syncDaily(sheets, spreadsheetId, ai, youtubeKey);
+    await syncDaily(sheets, spreadsheetId, router.forMenu('daily'), youtubeKey);
   } catch (e) {
     console.error(`❌ 오늘의 말씀 동기화 실패: ${e.message || e}`);
   }
@@ -559,7 +559,7 @@ async function main() {
   // 잠언 묵상 (빠진 장 3개씩, 또는 관리 화면에서 고른 장)
   try {
     const onlyProverbs = String(process.env.ONLY_CATEGORIES || '').toLowerCase().split(/[\s,]+/).includes('proverbs');
-    await syncProverbs(sheets, spreadsheetId, ai, {
+    await syncProverbs(sheets, spreadsheetId, router.forMenu('proverbs'), {
       force: onlyProverbs && String(process.env.DAILY_FORCE || '').toLowerCase() === 'true',
       forceModes: onlyProverbs ? String(process.env.DAILY_MODES || '').split(/[\s,]+/).filter((m) => PROVERB_COLUMNS[m]) : [],
     });

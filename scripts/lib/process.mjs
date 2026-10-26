@@ -1,4 +1,4 @@
-// 영상 한 편을 처리합니다: 설교 내용 확보 → Claude로 4개 모드 정리 → 시트에 결과(또는 실패 사유) 기록
+// 영상 한 편을 처리합니다: 설교 내용 확보(자막, 또는 Gemini 가 영상을 직접 분석) → AI로 4개 모드 정리 → 시트에 결과(또는 실패 사유) 기록
 // 시트·API 호출은 모두 바깥에서 받아 쓰므로, 테스트에서 가짜로 바꿔 끼울 수 있습니다.
 //
 // 모드별로 따로 저장합니다: result_json(설교리뷰+공통 정보) · mode_qt · mode_study · mode_group · bible_json
@@ -74,9 +74,12 @@ export async function processRow(row, deps) {
     resume = readExisting(row);
     for (const m of picked) delete resume[m];
   }
-  const material = await obtain(row, { supadataKey, geminiKey, ...(geminiModel ? { geminiModel } : {}), log: (m) => log.warn(`   ${m}`) });
+  // 영상을 직접 보고 듣는 모델(Gemini)이면 영상 주소를 그대로 넘깁니다. 자막은 영상을 열 수 없을 때를 위한 보조로만 가져옵니다.
+  // (직접 붙여넣은 자막이 있으면 그 글을 우선합니다 — 영상을 못 여는 경우에 사람이 넣어 둔 것이기 때문입니다.)
+  const watches = !!ai.watchesVideo && !!row.video_id && !String(row.transcript_manual || '').trim();
+  const material = await obtain(row, watches ? { log: (m) => log.warn(`   ${m}`) } : { supadataKey, geminiKey, ...(geminiModel ? { geminiModel } : {}), log: (m) => log.warn(`   ${m}`) });
 
-  if (material.kind === 'none') {
+  if (material.kind === 'none' && !watches) {
     await update({
       status: 'no_transcript',
       note: `자막을 가져오지 못했습니다 (${material.problems.join(' / ')}). transcript_manual 칸에 자막을 붙여넣고 status를 redo로 바꾸세요.`.slice(0, 500),
@@ -85,10 +88,10 @@ export async function processRow(row, deps) {
     return 'no_transcript';
   }
 
-  const transcript = material.text;
-  const source = material.source;
+  const transcript = material.kind === 'text' ? material.text : '';
+  const source = watches ? `${ai.model} 영상 직접 분석` : material.source;
   const info = knownInfo(row);
-  log.info(`   ${source} ${transcript.length.toLocaleString()}자`);
+  log.info(watches ? `   ${source}${transcript ? ` (보조 자막 ${transcript.length.toLocaleString()}자)` : ' (자막 없음)'}` : `   ${source} ${transcript.length.toLocaleString()}자`);
 
   // 1) 모드별로 만들기 (이미 있는 모드는 건너뜀)
   const results = { review: resume.review, qt: resume.qt, study: resume.study, group: resume.group };
@@ -97,7 +100,7 @@ export async function processRow(row, deps) {
     if (results[mode]) continue;
     log.info(`   ▷ ${MODE_LABELS[mode]} 정리 중…`);
     try {
-      const out = await ai.generateMode(mode, { category: row.category, title: row.title, publishedAt: info.date, transcript, info });
+      const out = await ai.generateMode(mode, { category: row.category, title: row.title, publishedAt: info.date, transcript, info, ...(watches ? { videoId: row.video_id } : {}) });
       if (mode === 'review') {
         // 영상 제목이나 직접 입력으로 확실히 아는 값은 AI 값보다 우선합니다
         if (info.scripture) out.scripture = [info.scripture];

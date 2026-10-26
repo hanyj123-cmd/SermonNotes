@@ -432,15 +432,24 @@ function knownInfo(info) {
   return lines.length ? `[영상에서 읽은 정보 — 확실한 값이므로 title·scripture·preacher에 그대로 따릅니다]\n${lines.join('\n')}\n` : '';
 }
 
-export function buildUserMessage(mode, { category, title, publishedAt, transcript, info }) {
+export function buildUserMessage(mode, { category, title, publishedAt, transcript, info, video = false }) {
   const label = CATEGORY_LABELS[category] || category;
-  return `다음은 교회 유튜브 영상의 자막입니다. 위 지침에 따라 ${mode === 'review' ? '설교리뷰' : MODE_LABELS[mode]} 모드의 JSON을 만들어 주세요.
-
-[예배 구분] ${label}
+  const modeLabel = mode === 'review' ? '설교리뷰' : MODE_LABELS[mode];
+  const meta = `[예배 구분] ${label}
 [제목 앞부분] ${titleLine({ category, publishedAt })}
 [영상 제목] ${title}
 [게시일] ${publishedAt || '알 수 없음'}
-${knownInfo(info)}
+${knownInfo(info)}`;
+  // 영상을 직접 보는 모델(Gemini): 자막 대신 첨부한 유튜브 영상을 처음부터 끝까지 듣고 정리합니다
+  if (video) {
+    return `첨부한 유튜브 영상은 교회 설교(예배) 영상입니다. 영상의 음성을 처음부터 끝까지 직접 듣고(화면에 나오는 성경 구절·슬라이드·자막도 참고) 위 지침에 따라 ${modeLabel} 모드의 JSON을 만들어 주세요.
+영상에서 실제로 들리고 보이는 내용만 근거로 삼고, 들리지 않거나 확실하지 않은 부분은 지어내지 말고 건너뜁니다. 위의 "자막 처리 원칙"은 영상의 음성에도 똑같이 적용합니다.
+
+${meta}`;
+  }
+  return `다음은 교회 유튜브 영상의 자막입니다. 위 지침에 따라 ${modeLabel} 모드의 JSON을 만들어 주세요.
+
+${meta}
 [자막 시작]
 ${transcript}
 [자막 끝]`;

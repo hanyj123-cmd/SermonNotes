@@ -95,7 +95,7 @@ jobs:
         if: github.event.inputs.bible_check == 'true'
         run: node scripts/bible-check.mjs
 
-      - name: 재생목록 확인 → 자막 수집 → Claude 정리 → Sheets 저장 → JSON 내보내기
+      - name: 재생목록 확인 → 자막 수집 또는 영상 분석 → AI(Claude·Gemini) 정리 → Sheets 저장 → JSON 내보내기
         if: github.event.inputs.bible_check != 'true'
         env:
           ONLY_CATEGORIES: ${{ github.event.inputs.categories || needs.gate.outputs.categories }}

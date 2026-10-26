@@ -1,6 +1,6 @@
 # 말씀결 (sermon-notes) — v9
 
-교회 유튜브 설교 영상의 자막을 Claude AI가 **4가지 방식**으로 정리해 주는 웹앱입니다. 개혁주의(대한예수교장로회 합동·통합) 신학 기준으로 쓰도록 프롬프트가 설계되어 있습니다 (`scripts/lib/prompt.mjs`).
+교회 유튜브 설교 영상을 Claude 또는 Gemini AI가 **4가지 방식**으로 정리해 주는 웹앱입니다. 개혁주의(대한예수교장로회 합동·통합) 신학 기준으로 쓰도록 프롬프트가 설계되어 있습니다 (`scripts/lib/prompt.mjs`).
 
 | 모드 | 내용 |
 |---|---|
@@ -56,7 +56,25 @@
 ## AI 문장 다듬기
 
 - 앱의 모든 기록 칸(오늘의 말씀 · 설교 · 잠언 묵상의 묵상/나눔 칸, 형광펜 메모) 아래에 **AI 문장 다듬기** 버튼이 있습니다. 맞춤법 · 띄어쓰기 · 문맥을 다듬은 제안을 보여 주고, 고쳐 쓴 뒤 **적용하기**를 누르면 그 칸에 바로 들어가 저장됩니다.
-- Apps Script **스크립트 속성에 `ANTHROPIC_API_KEY`** 를 넣어야 동작합니다(GitHub 비밀값과 같은 키를 써도 됩니다). 모델은 관리 화면의 AI 모델을 따릅니다. 로그인한 가족만, 한 사람당 한 시간에 60번까지.
+- Apps Script **스크립트 속성에 고른 모델에 맞는 키**를 넣어야 동작합니다: Claude 모델이면 `ANTHROPIC_API_KEY`, Gemini 모델이면 `GEMINI_API_KEY`(GitHub 비밀값과 같은 키를 써도 됩니다). 모델은 관리 화면의 AI 모델에서 "AI 문장 다듬기" 메뉴에 따로 고른 것을 쓰고, 고르지 않았으면 기본 모델을 따릅니다. 로그인한 가족만, 한 사람당 한 시간에 60번까지.
+
+
+## AI 모델 (메뉴별 Claude · Gemini)
+
+관리 화면 → **AI 모델**에서 메뉴마다 다른 모델과 생각 깊이를 고를 수 있습니다. 모델 이름이 `claude-` 로 시작하면 Claude, `gemini-` 로 시작하면 Gemini 를 씁니다.
+
+| 메뉴 | 쓰는 곳 |
+|---|---|
+| 주일예배 · 수요예배 · 새벽기도 · 청년부예배 · 사용자 영상 | 설교 리뷰 · QT 묵상 · 성경공부 · 소그룹 나눔 |
+| 오늘의 말씀 | 날짜별 QT · 성경공부 · 소그룹 · 퀴즈 |
+| 잠언 묵상 | 장별 말씀 · QT · 성경공부 · 소그룹 · 퀴즈 |
+| AI 문장 다듬기 | 기록 칸 아래 "AI 문장 다듬기" (Apps Script 가 직접 호출, 생각 깊이는 항상 낮게) |
+
+- **기본 모델**은 모든 메뉴에 적용되고, 메뉴에서 "기본 모델과 같게"를 고르면 기본을 따릅니다. 아무것도 고르지 않았으면 `claude-sonnet-5-5` (medium) 입니다.
+- **Gemini 가 유튜브 영상을 직접 봅니다**: 설교 메뉴 5곳에서 Gemini 를 고르면 자막을 받아 오는 대신 **유튜브 영상 주소를 Gemini 에 그대로 넘겨** 영상의 음성(과 화면의 성경 구절·슬라이드)을 듣고 4가지 모드를 정리합니다 (공개·일부 공개 영상). 영상을 열 수 없을 때(비공개 등)만 YouTube 자막이 있으면 자막 글로 대신하고, 둘 다 없으면 그 모드는 실패로 표시됩니다. 시트 `transcript_manual` 칸에 직접 붙여넣은 자막이 있으면 영상 대신 그 글을 씁니다. 완료된 줄의 note 에는 `gemini-… 영상 직접 분석` 으로 남습니다.
+- 오늘의 말씀 · 잠언 묵상은 성경 본문(글)만 쓰므로 Gemini 를 골라도 영상은 쓰지 않습니다.
+- Gemini 를 쓰려면 GitHub Secrets 에 `GEMINI_API_KEY` 가 있어야 합니다. 키가 없는 회사의 모델을 고른 메뉴는 그 메뉴만 "키가 필요합니다"라는 이유와 함께 실패하고, 다른 메뉴는 그대로 돌아갑니다. (영상 직접 분석에는 비용이 듭니다: 영상 길이에 비례하고, 모드마다 영상을 한 번씩 읽습니다.)
+- 이 설정은 시트 `Settings` 탭에 `ai_model` · `ai_effort`(기본)와 `ai_model_<메뉴>` · `ai_effort_<메뉴>`(메뉴별: `sunday` `wednesday` `dawn` `youth` `user` `daily` `proverbs` `polish`) 로 저장됩니다. 코드는 `scripts/lib/ai-router.mjs`(메뉴 → 모델), `ai.mjs`(Claude · 공통), `ai-gemini.mjs`(Gemini) 입니다.
 
 ## 새벽기도 영상 연결 (오늘의 말씀)
 
@@ -103,7 +121,7 @@ Apps Script 웹앱 (관리 · 구글 로그인 · 개인 노트 · 사용자 영
 | Google 서비스 계정 키(JSON) | 시트 읽기/쓰기 |
 | YouTube Data API 키 | 재생목록 · 영상 정보 · 찬양/배경음악 검색 |
 | Claude API 키 | 설교 정리 · 오늘의 말씀 · 잠언 · 문장 다듬기 ([Claude Console](https://platform.claude.com/settings/keys)) |
-| (선택) Gemini API 키 | 자막이 없는 설교 영상을 Gemini 가 직접 듣고 글로 받아 적습니다 (공개 영상만). 받아쓰기까지만 Gemini 이고, 설교 정리는 그대로 Claude 가 합니다. 순서는 직접 붙여넣은 자막 → YouTube 자막 → Gemini → Supadata. Secrets 에 `GEMINI_API_KEY`, (선택) Variables 에 `GEMINI_MODEL`(기본 gemini-3.8-flash) |
+| (선택) Gemini API 키 | ① 관리 화면에서 Gemini 모델을 고른 메뉴가 쓰는 키입니다 (설교는 유튜브 영상을 직접 듣고 정리). ② 자막이 없는 설교 영상을 Gemini 가 듣고 글로 받아 적을 때도 씁니다(Claude 모델 사용 시: 직접 붙여넣은 자막 → YouTube 자막 → Gemini → Supadata). Secrets 에 `GEMINI_API_KEY`, (선택) Variables 에 `GEMINI_MODEL`(받아쓰기용, 기본 gemini-3.8-flash) |
 | (선택) Supadata API 키 | 자막이 없는 영상을 음성 인식으로 글로 옮김 (유료 크레딧). 없으면 그 영상은 `no_transcript` 로 표시됩니다 (Claude 는 유튜브 영상을 직접 들을 수 없습니다) |
 
 성경 본문에는 **API 키가 필요 없습니다** (아래 참고).
@@ -112,7 +130,7 @@ Apps Script 웹앱 (관리 · 구글 로그인 · 개인 노트 · 사용자 영
 
 1. **Google Sheet** 만들기 — 첫 탭 이름 `Playlists`, 1행 `category · playlist_url · max_videos`. `category` 는 `주일예배 / 새벽기도 / 수요예배 / 청년부예배` (또는 `sunday / dawn / wednesday / youth`). 나머지 탭(Sermons · Notes · Settings)은 자동으로 만들어집니다. 주소창의 `/d/`**`여기`**`/edit` 가 `SHEET_ID`.
 2. **Google Cloud**: Google Sheets API + YouTube Data API v3 사용 설정 → API 키(= `YOUTUBE_API_KEY`) → 서비스 계정 만들고 JSON 키 내려받기(= `GOOGLE_SERVICE_ACCOUNT_JSON`) → 서비스 계정 이메일을 시트 **편집자**로 공유.
-3. **GitHub**: 새 저장소에 이 폴더를 올리고(`.env` 제외), Settings → Secrets and variables → Actions 에 `SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `YOUTUBE_API_KEY`, `ANTHROPIC_API_KEY` (선택: `GEMINI_API_KEY`, `SUPADATA_API_KEY`) 등록. 선택 Variables: `CLAUDE_MODEL`(claude-sonnet-5-5), `CLAUDE_EFFORT`(medium), `MAX_NEW_PER_RUN`(5), `RETRY_DAYS`(7), `AUTO_WITHIN_DAYS`(14). 관리 화면에서 고른 모델·생각 깊이가 있으면 그것이 우선입니다.
+3. **GitHub**: 새 저장소에 이 폴더를 올리고(`.env` 제외), Settings → Secrets and variables → Actions 에 `SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `YOUTUBE_API_KEY`, `ANTHROPIC_API_KEY` (선택: `GEMINI_API_KEY`, `SUPADATA_API_KEY`) 등록 (Gemini 모델을 쓰는 메뉴가 없으면 `ANTHROPIC_API_KEY`만, Claude 모델을 쓰는 메뉴가 없으면 `GEMINI_API_KEY`만 있어도 됩니다). 선택 Variables: `CLAUDE_MODEL`(claude-sonnet-5-5), `CLAUDE_EFFORT`(medium), `MAX_NEW_PER_RUN`(5), `RETRY_DAYS`(7), `AUTO_WITHIN_DAYS`(14). 관리 화면에서 고른 모델·생각 깊이가 있으면 그것이 우선입니다.
 4. **Pages**: Settings → Pages → Deploy from a branch → `main` / `/docs`.
 5. **Apps Script**: 시트의 확장 프로그램 → Apps Script 에 `apps-script/Code.gs` 를 붙여넣고, 스크립트 속성에 `ADMIN_PASSWORD`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`(가족 구글 계정, 쉼표로), `GITHUB_TOKEN`·`GITHUB_REPO`(앱에서 "지금 동기화"를 쓰려면) 입력 → 배포 → 웹 앱 주소를 `docs/config.js` 의 `ADMIN_API_URL` 에.
    - **이미 배포한 적이 있다면**: 코드를 바꿔 붙인 뒤 **배포 관리 → 편집 → 새 버전**으로 다시 배포하세요(주소는 그대로). `Notes` 탭에 `fields_json` 칸은 자동으로 추가됩니다.

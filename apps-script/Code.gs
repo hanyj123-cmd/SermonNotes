@@ -721,9 +721,12 @@ function syncRun(body) {
 
 const SETTINGS_SHEET = 'Settings';
 const SETTINGS_HEADERS = ['key', 'value'];
-const MODEL_PATTERN = /^claude-[\w.-]{3,60}$/; // Claude 모델만 (예전 Gemini 설정은 무시하고 기본값을 씁니다)
+const MODEL_PATTERN = /^(claude-[\w.-]{3,60}|gemini-[\w.-]{2,60})$/; // Claude(claude-…) 또는 Gemini(gemini-…) 모델
 const AI_DEFAULT_MODEL = 'claude-sonnet-5-5';
 const AI_EFFORTS = ['low', 'medium', 'high'];
+// 모델을 따로 고를 수 있는 메뉴 (scripts/lib/ai-router.mjs 의 AI_MENUS 와 같은 키). 비어 있으면 기본 모델을 따릅니다.
+const AI_MENU_KEYS = ['sunday', 'wednesday', 'dawn', 'youth', 'user', 'daily', 'proverbs', 'polish'];
+const isGeminiName = function (m) { return /^gemini-/.test(String(m || '')); };
 
 function getSettingsSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -764,14 +767,39 @@ function writeSetting(key, value) {
 const DAWN_DEFAULT_PLAYLIST = 'https://youtube.com/playlist?list=PLexqr1dnrjPzF_IXx_pR1YRKUx13rX7CT&si=sZADQZD6sK25peYz';
 function settingsGet() {
   const m = readSettingsMap();
-  return { ok: true, settings: { ai_model: MODEL_PATTERN.test(m.ai_model || '') ? m.ai_model : '', ai_model_default: AI_DEFAULT_MODEL, ai_effort: AI_EFFORTS.indexOf(m.ai_effort) >= 0 ? m.ai_effort : '', dawn_playlist: m.dawn_playlist || DAWN_DEFAULT_PLAYLIST, dawn_playlist_default: DAWN_DEFAULT_PLAYLIST } };
+  const menus = {};
+  AI_MENU_KEYS.forEach(function (k) {
+    menus[k] = { model: MODEL_PATTERN.test(m['ai_model_' + k] || '') ? m['ai_model_' + k] : '', effort: AI_EFFORTS.indexOf(m['ai_effort_' + k]) >= 0 ? m['ai_effort_' + k] : '' };
+  });
+  return { ok: true, settings: { ai_model: MODEL_PATTERN.test(m.ai_model || '') ? m.ai_model : '', ai_model_default: AI_DEFAULT_MODEL, ai_effort: AI_EFFORTS.indexOf(m.ai_effort) >= 0 ? m.ai_effort : '', ai_menus: menus, dawn_playlist: m.dawn_playlist || DAWN_DEFAULT_PLAYLIST, dawn_playlist_default: DAWN_DEFAULT_PLAYLIST } };
 }
 
 function settingsSet(body) {
   if (body.ai_model !== undefined) {
     const model = String(body.ai_model || '').trim();
-    if (model && !MODEL_PATTERN.test(model)) return { ok: false, error: '모델 이름이 올바르지 않습니다. 예: claude-sonnet-5-5' };
+    if (model && !MODEL_PATTERN.test(model)) return { ok: false, error: '모델 이름이 올바르지 않습니다. 예: claude-sonnet-5-5 또는 gemini-3.8-flash' };
     writeSetting('ai_model', model);
+  }
+  if (body.menus !== undefined && body.menus !== null) {
+    // 메뉴마다 다른 모델 · 생각 깊이 (비우면 기본을 따름). 메뉴 항목은 먼저 전부 확인한 뒤 저장해서, 하나라도 잘못되면 메뉴 설정은 하나도 바꾸지 않습니다.
+    const menus = typeof body.menus === 'object' ? body.menus : {};
+    const writes = [];
+    for (let i = 0; i < AI_MENU_KEYS.length; i++) {
+      const k = AI_MENU_KEYS[i];
+      const v = menus[k];
+      if (!v || typeof v !== 'object') continue;
+      if (v.model !== undefined) {
+        const mm = String(v.model || '').trim();
+        if (mm && !MODEL_PATTERN.test(mm)) return { ok: false, error: '모델 이름이 올바르지 않습니다 (' + k + '). 예: claude-sonnet-5-5 또는 gemini-3.8-flash' };
+        writes.push(['ai_model_' + k, mm]);
+      }
+      if (v.effort !== undefined) {
+        const ee = String(v.effort || '').trim().toLowerCase();
+        if (ee && AI_EFFORTS.indexOf(ee) < 0) return { ok: false, error: '생각 깊이는 low · medium · high 중 하나입니다 (' + k + ').' };
+        writes.push(['ai_effort_' + k, ee]);
+      }
+    }
+    writes.forEach(function (w) { writeSetting(w[0], w[1]); });
   }
   if (body.ai_effort !== undefined) {
     const effort = String(body.ai_effort || '').trim().toLowerCase();
@@ -1589,7 +1617,8 @@ function latestRunSafe() {
   }
 }
 /* ---------- AI 문장 다듬기 (앱의 모든 기록 칸) ---------- */
-// 스크립트 속성 ANTHROPIC_API_KEY 가 있어야 합니다. 모델은 관리 화면의 AI 모델(Settings 탭 ai_model)을 씁니다.
+// 스크립트 속성에 모델에 맞는 키가 있어야 합니다: Claude → ANTHROPIC_API_KEY, Gemini → GEMINI_API_KEY.
+// 모델은 관리 화면의 AI 모델(Settings 탭: AI 문장 다듬기 메뉴에 고른 값, 없으면 기본 ai_model)을 씁니다.
 const POLISH_MAX_CHARS = 4000;
 const POLISH_PER_HOUR = 60;
 const POLISH_SYSTEM = [
@@ -1606,21 +1635,41 @@ function aiPolish(user, body) {
   const text = String(body.text || '').trim();
   if (!text) return { ok: false, error: '다듬을 글을 먼저 적어 주세요.' };
   if (text.length > POLISH_MAX_CHARS) return { ok: false, error: '글이 너무 깁니다 (' + POLISH_MAX_CHARS + '자까지).' };
-  const key = prop('ANTHROPIC_API_KEY');
-  if (!key) return { ok: false, error: 'AI 문장 다듬기를 쓰려면 Apps Script 스크립트 속성에 ANTHROPIC_API_KEY 를 넣어 주세요.' };
+  // 모델: 관리 화면에서 "AI 문장 다듬기" 메뉴에 따로 고른 모델 → 없으면 기본 모델. Gemini 면 GEMINI_API_KEY, Claude 면 ANTHROPIC_API_KEY.
+  const settings = readSettingsMap();
+  const own = MODEL_PATTERN.test(settings.ai_model_polish || '') ? settings.ai_model_polish : '';
+  const model = own || (MODEL_PATTERN.test(settings.ai_model || '') ? settings.ai_model : AI_DEFAULT_MODEL);
+  const gemini = isGeminiName(model);
+  const key = prop(gemini ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY');
+  if (!key) return { ok: false, error: 'AI 문장 다듬기를 쓰려면 Apps Script 스크립트 속성에 ' + (gemini ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY') + ' 를 넣어 주세요.' };
   const cache = CacheService.getScriptCache();
   const ck = 'polish:' + sha256(user.email || user.sub || '').slice(0, 16) + ':' + Utilities.formatDate(new Date(), 'America/Toronto', 'yyyyMMddHH');
   const used = Number(cache.get(ck) || 0);
   if (used >= POLISH_PER_HOUR) return { ok: false, error: '잠시 뒤에 다시 시도해 주세요 (한 시간에 ' + POLISH_PER_HOUR + '번까지).' };
   cache.put(ck, String(used + 1), 3600);
-  const settings = readSettingsMap();
-  const model = MODEL_PATTERN.test(settings.ai_model || '') ? settings.ai_model : AI_DEFAULT_MODEL;
   const where = String(body.context || '').slice(0, 80);
+  const userText = (where ? '[어디에 쓰는 글] ' + where + '\n\n' : '') + '[다듬을 글]\n' + text;
+  const reply = gemini ? polishCallGemini(model, key, userText) : polishCallClaude(model, key, userText);
+  if (!reply.ok) return reply;
+  let out = null;
+  try {
+    const raw = reply.raw;
+    out = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+  } catch (err) {
+    out = null;
+  }
+  const polished = out && typeof out.text === 'string' ? out.text.trim() : '';
+  if (!polished) return { ok: false, error: 'AI가 다듬은 글을 돌려주지 않았어요. 다시 시도해 주세요.' };
+  const changes = (Array.isArray(out.changes) ? out.changes : []).map(function (c) { return String(c || '').slice(0, 200); }).filter(Boolean).slice(0, 5);
+  return { ok: true, text: polished.slice(0, Math.round(POLISH_MAX_CHARS * 1.5)), changes: changes };
+}
+/** Claude 로 다듬기: { ok:true, raw: 응답 글 } 또는 { ok:false, error } */
+function polishCallClaude(model, key, userText) {
   const payload = {
     model: model,
     max_tokens: 16000,
     system: POLISH_SYSTEM,
-    messages: [{ role: 'user', content: (where ? '[어디에 쓰는 글] ' + where + '\n\n' : '') + '[다듬을 글]\n' + text }],
+    messages: [{ role: 'user', content: userText }],
     output_config: { effort: 'low' }, // 짧은 글 다듬기는 깊게 생각할 필요가 없어 빠르고 저렴하게
   };
   const res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
@@ -1631,18 +1680,36 @@ function aiPolish(user, body) {
   if (code === 401) return { ok: false, error: 'Claude API 키가 올바르지 않습니다. 스크립트 속성 ANTHROPIC_API_KEY 를 확인해 주세요.' };
   if (code !== 200 && /credit balance/i.test(res.getContentText() || '')) return { ok: false, error: 'Claude API 크레딧이 모두 소진되었어요. 다음 달 크레딧이 들어오면 다시 쓸 수 있어요.' };
   if (code !== 200) return { ok: false, error: 'AI 응답 오류 (' + code + '). 잠시 뒤 다시 시도해 주세요.' };
-  let out = null;
   try {
     const data = JSON.parse(res.getContentText());
-    const raw = (data.content || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text || ''; }).join('');
-    out = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+    return { ok: true, raw: (data.content || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text || ''; }).join('') };
   } catch (err) {
-    out = null;
+    return { ok: true, raw: '' };
   }
-  const polished = out && typeof out.text === 'string' ? out.text.trim() : '';
-  if (!polished) return { ok: false, error: 'AI가 다듬은 글을 돌려주지 않았어요. 다시 시도해 주세요.' };
-  const changes = (Array.isArray(out.changes) ? out.changes : []).map(function (c) { return String(c || '').slice(0, 200); }).filter(Boolean).slice(0, 5);
-  return { ok: true, text: polished.slice(0, Math.round(POLISH_MAX_CHARS * 1.5)), changes: changes };
+}
+/** Gemini 로 다듬기: 짧은 글이라 생각 깊이는 가장 낮게 */
+function polishCallGemini(model, key, userText) {
+  const payload = {
+    systemInstruction: { parts: [{ text: POLISH_SYSTEM }] },
+    contents: [{ role: 'user', parts: [{ text: userText }] }],
+    generationConfig: { maxOutputTokens: 16000, responseMimeType: 'application/json', thinkingConfig: { thinkingLevel: 'low' } },
+  };
+  const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent', {
+    method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true,
+    headers: { 'x-goog-api-key': key },
+  });
+  const code = res.getResponseCode();
+  const bodyText = res.getContentText() || '';
+  if (code === 401 || (code === 400 && /api[ _]key/i.test(bodyText))) return { ok: false, error: 'Gemini API 키가 올바르지 않습니다. 스크립트 속성 GEMINI_API_KEY 를 확인해 주세요.' };
+  if (code === 404) return { ok: false, error: 'Gemini 모델 이름을 찾을 수 없습니다 (' + model + '). 관리 화면에서 모델을 다시 골라 주세요.' };
+  if (code !== 200) return { ok: false, error: 'AI 응답 오류 (' + code + '). 잠시 뒤 다시 시도해 주세요.' };
+  try {
+    const data = JSON.parse(bodyText);
+    const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
+    return { ok: true, raw: parts.filter(function (p) { return p && !p.thought; }).map(function (p) { return p.text || ''; }).join('') };
+  } catch (err) {
+    return { ok: true, raw: '' };
+  }
 }
 
 /* ---------- 잠언 묵상 진행 상황 (관리) · 퀴즈 채점 ---------- */

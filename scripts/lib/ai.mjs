@@ -7,8 +7,12 @@ import { mixQuiz } from './quizmix.mjs';
 export const DEFAULT_MODEL = 'claude-sonnet-5-5';
 export const DEFAULT_EFFORT = 'medium';
 export const EFFORTS = ['low', 'medium', 'high'];
-/** 관리 화면·환경변수에서 고른 모델 이름이 Claude 모델일 때만 씁니다 (예전 Gemini 설정은 무시) */
+/** Claude 모델 이름 (claude- 로 시작) */
 export const isClaudeModel = (m) => /^claude-[\w.-]{3,60}$/.test(String(m || '').trim());
+/** Gemini 모델 이름 (예: gemini-3.8-flash) */
+export const isGeminiModel = (m) => /^gemini-[\w.-]{2,60}$/.test(String(m || '').trim());
+/** 관리 화면에서 고를 수 있는 모델 이름: Claude 또는 Gemini */
+export const isAiModel = (m) => isClaudeModel(m) || isGeminiModel(m);
 const MAX_TRANSCRIPT_CHARS = 150_000;
 const MAX_ATTEMPTS = 3;
 // 새로 만든 퀴즈가 최소한 이만큼은 있어야 저장합니다 (정해진 개수보다 조금 여유를 둡니다)
@@ -353,7 +357,78 @@ const FIX_OPTIONS_SYSTEM = `당신은 성경 퀴즈의 객관식 보기를 다�
 5. 보기 개수는 그대로 둡니다.
 출력: {"items": [{"i": 받은 번호, "options": ["보기1", "보기2", "보기3", "보기4"]}]}`;
 
-const JSON_ONLY = '\n\n출력 형식: 설명이나 코드 블록(```) 없이, 위에서 정한 JSON 객체 하나만 출력합니다.';
+export const JSON_ONLY = '\n\n출력 형식: 설명이나 코드 블록(```) 없이, 위에서 정한 JSON 객체 하나만 출력합니다.';
+
+/**
+ * 모델 회사(Claude · Gemini)와 상관없이 같은 방식으로 정리 결과를 만드는 공용 엔진입니다.
+ * call(system, userText, parse, media) 만 회사마다 다르게 만들어 넣습니다.
+ *   media = { videoId, textFallback } — 영상을 직접 보는 모델(Gemini)에게만 넘어갑니다.
+ */
+export function buildEngine({ call, model, effort, provider = 'claude', watchesVideo = false }) {
+  /** 객관식 정답이 가장 긴 보기인 문제가 많으면, 그 문제들의 오답 보기만 AI 에게 다시 쓰게 합니다 (정답 글은 그대로) */
+  async function balanceOptions(raw) {
+    const quiz = raw && typeof raw.quiz === 'object' ? raw.quiz : raw;
+    const mc = Array.isArray(quiz?.multiple_choice) ? quiz.multiple_choice : [];
+    const bad = mc.map((q, i) => ({ q, i })).filter(({ q }) => correctIsLongest(q));
+    if (mc.length < 8 || bad.length <= Math.floor(mc.length * LONGEST_TARGET)) return raw;
+    console.log(`   ⚖️  객관식 ${mc.length}문제 중 ${bad.length}문제가 정답이 가장 긴 보기라 오답 보기를 다시 씁니다…`);
+    try {
+      const items = bad.map(({ q, i }) => ({ i, question: asString(q.question), options: asArray(q.options), answer_index: Number(q.answer_index) }));
+      const out = await call(FIX_OPTIONS_SYSTEM, JSON.stringify({ items }, null, 1), (t) => extractJson(t));
+      for (const it of Array.isArray(out?.items) ? out.items : []) {
+        const q = mc[Number(it?.i)];
+        if (!q) continue;
+        const opts = asArray(it.options);
+        const idx = Number(q.answer_index);
+        const old = asArray(q.options);
+        if (opts.length !== old.length || opts[idx] !== old[idx]) continue; // 정답이 바뀌었으면 쓰지 않음
+        q.options = opts;
+      }
+      console.log(`   ⚖️  다시 쓴 뒤: ${mc.filter(correctIsLongest).length}/${mc.length}`);
+    } catch (e) {
+      console.warn(`   ⚖️  보기 다시 쓰기 실패: ${String(e?.message || e).slice(0, 160)}`);
+    }
+    return raw;
+  }
+
+  return {
+    model,
+    effort,
+    provider,
+    /** true 이면 설교 정리 때 영상 주소(videoId)를 넘겨 모델이 영상을 직접 보고 듣게 합니다 */
+    watchesVideo,
+
+    /**
+     * 설교 한 편의 한 모드(review | qt | study | group)를 만듭니다.
+     * videoId 가 있고 이 모델이 영상을 볼 수 있으면 영상을 직접 분석하고, 영상을 열 수 없을 때만 transcript(자막)로 대신합니다.
+     */
+    generateMode(mode, { category, title, publishedAt, transcript = '', info, videoId = '' }) {
+      if (!MODES.includes(mode)) throw new Error(`알 수 없는 모드: ${mode}`);
+      const clipped = transcript.length > MAX_TRANSCRIPT_CHARS ? transcript.slice(0, MAX_TRANSCRIPT_CHARS) : transcript;
+      const textMsg = clipped ? buildUserMessage(mode, { category, title, publishedAt, transcript: clipped, info }) : '';
+      const direct = watchesVideo && videoId;
+      if (!direct && !textMsg) return Promise.reject(new Error('정리할 설교 내용(자막)이 없습니다'));
+      const userText = direct ? buildUserMessage(mode, { category, title, publishedAt, info, video: true }) : textMsg;
+      const parse = async (text) => normalizeMode(mode, mode === 'study' ? await balanceOptions(extractJson(text)) : extractJson(text));
+      return call(systemPromptFor(mode), userText, parse, direct ? { videoId, textFallback: textMsg } : null);
+    },
+
+    /** 오늘의 말씀 한 모드(qt | study | group | quiz)를 만듭니다. text = 그날 본문 전문 */
+    generateDaily(mode, { date, refs, text }) {
+      if (!DAILY_MODES.includes(mode)) throw new Error(`알 수 없는 말씀 읽기 모드: ${mode}`);
+      return call(systemPromptForDaily(mode), buildDailyMessage({ date, refs, text }), async (t) => normalizeDailyMode(mode, mode === 'quiz' ? await balanceOptions(extractJson(t)) : extractJson(t)));
+    },
+
+    generateProverb(mode, { chapter, text }) {
+      if (!PROVERB_MODES.includes(mode)) throw new Error(`알 수 없는 잠언 모드: ${mode}`);
+      return call(systemPromptForProverb(mode), buildProverbMessage({ chapter, text }), async (t) => normalizeProverbMode(mode, mode === 'quiz' ? await balanceOptions(extractJson(t)) : extractJson(t)));
+    },
+  };
+}
+
+/** 재시도할 만한 일시적 오류인지에 따른 대기 시간(ms) */
+export const retryDelay = (status, attempt) => (RETRYABLE_STATUS.has(status) ? 8000 * attempt : 1000);
+export const MAX_CALL_ATTEMPTS = MAX_ATTEMPTS;
 
 // options.client / options.sleep 은 테스트에서 가짜로 바꿔 끼우기 위한 것입니다.
 export function createClaude(apiKey, model = DEFAULT_MODEL, options = {}) {
@@ -383,58 +458,11 @@ export function createClaude(apiKey, model = DEFAULT_MODEL, options = {}) {
         if (/credit balance/i.test(String(e?.message || ''))) break; // 크레딧 소진
         if (attempt === MAX_ATTEMPTS) break;
         // 일시적 오류(429/5xx/529 과부하)는 잠시 기다렸다 재시도, 그 외(깨진 JSON 등)는 바로 재시도
-        await wait(RETRYABLE_STATUS.has(e?.status) ? 8000 * attempt : 1000);
+        await wait(retryDelay(e?.status, attempt));
       }
     }
     throw lastError;
   }
 
-  /** 객관식 정답이 가장 긴 보기인 문제가 많으면, 그 문제들의 오답 보기만 Claude 에게 다시 쓰게 합니다 (정답 글은 그대로) */
-  async function balanceOptions(raw) {
-    const quiz = raw && typeof raw.quiz === 'object' ? raw.quiz : raw;
-    const mc = Array.isArray(quiz?.multiple_choice) ? quiz.multiple_choice : [];
-    const bad = mc.map((q, i) => ({ q, i })).filter(({ q }) => correctIsLongest(q));
-    if (mc.length < 8 || bad.length <= Math.floor(mc.length * LONGEST_TARGET)) return raw;
-    console.log(`   ⚖️  객관식 ${mc.length}문제 중 ${bad.length}문제가 정답이 가장 긴 보기라 오답 보기를 다시 씁니다…`);
-    try {
-      const items = bad.map(({ q, i }) => ({ i, question: asString(q.question), options: asArray(q.options), answer_index: Number(q.answer_index) }));
-      const out = await call(FIX_OPTIONS_SYSTEM, JSON.stringify({ items }, null, 1), (t) => extractJson(t));
-      for (const it of Array.isArray(out?.items) ? out.items : []) {
-        const q = mc[Number(it?.i)];
-        if (!q) continue;
-        const opts = asArray(it.options);
-        const idx = Number(q.answer_index);
-        const old = asArray(q.options);
-        if (opts.length !== old.length || opts[idx] !== old[idx]) continue; // 정답이 바뀌었으면 쓰지 않음
-        q.options = opts;
-      }
-      console.log(`   ⚖️  다시 쓴 뒤: ${mc.filter(correctIsLongest).length}/${mc.length}`);
-    } catch (e) {
-      console.warn(`   ⚖️  보기 다시 쓰기 실패: ${String(e?.message || e).slice(0, 160)}`);
-    }
-    return raw;
-  }
-
-  return {
-    model,
-    effort,
-
-    /** 설교 한 편의 한 모드(review | qt | study | group)를 만듭니다. */
-    generateMode(mode, { category, title, publishedAt, transcript, info }) {
-      if (!MODES.includes(mode)) throw new Error(`알 수 없는 모드: ${mode}`);
-      const clipped = transcript.length > MAX_TRANSCRIPT_CHARS ? transcript.slice(0, MAX_TRANSCRIPT_CHARS) : transcript;
-      return call(systemPromptFor(mode), buildUserMessage(mode, { category, title, publishedAt, transcript: clipped, info }), async (text) => normalizeMode(mode, mode === 'study' ? await balanceOptions(extractJson(text)) : extractJson(text)));
-    },
-
-    /** 오늘의 말씀 한 모드(qt | study | group | quiz)를 만듭니다. text = 그날 본문 전문 */
-    generateDaily(mode, { date, refs, text }) {
-      if (!DAILY_MODES.includes(mode)) throw new Error(`알 수 없는 말씀 읽기 모드: ${mode}`);
-      return call(systemPromptForDaily(mode), buildDailyMessage({ date, refs, text }), async (t) => normalizeDailyMode(mode, mode === 'quiz' ? await balanceOptions(extractJson(t)) : extractJson(t)));
-    },
-
-    generateProverb(mode, { chapter, text }) {
-      if (!PROVERB_MODES.includes(mode)) throw new Error(`알 수 없는 잠언 모드: ${mode}`);
-      return call(systemPromptForProverb(mode), buildProverbMessage({ chapter, text }), async (t) => normalizeProverbMode(mode, mode === 'quiz' ? await balanceOptions(extractJson(t)) : extractJson(t)));
-    },
-  };
+  return buildEngine({ call, model, effort, provider: 'claude', watchesVideo: false });
 }

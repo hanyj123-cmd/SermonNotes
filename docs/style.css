@@ -308,6 +308,13 @@ ol.q li > span { display: block; }
 .admin-sync h2, .admin-add h2, .point > h2 { font-size: 1.2rem; margin: 0 0 10px; font-family: var(--serif); }
 .admin-fields { display: grid; grid-template-columns: 8.5em 1fr 6.5em; gap: 8px; align-items: center; }
 .admin-fields-2 { grid-template-columns: 1fr 6.5em; }
+.admin-model-box h3 { font-size: 1rem; margin: 16px 0 6px; font-family: var(--serif); }
+.admin-model-row { margin: 10px 0 14px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.admin-model-row strong { display: block; margin-bottom: 6px; }
+.admin-model-row .admin-fields { grid-template-columns: 1fr 11em; }
+.admin-model-row .search[hidden] { display: none; }
+.admin-model-row > .search { width: 100%; margin-top: 6px; }
+.admin-model-row .meta { margin: 4px 0 0; }
 .admin-row { display: flex; gap: 8px 12px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
 .admin-row label { align-self: center; }
 .admin-row .search { width: auto; min-width: 6.5em; }
@@ -385,7 +392,7 @@ ol.q li > span { display: block; }
   .detail-head h1 { font-size: 1.55rem; }
   .point { padding-left: 14px; }
   .mode-tab { padding: 9px 11px; flex: 1 1 auto; font-size: 1rem; }
-  .admin-fields, .admin-fields-2, .form-grid { grid-template-columns: 1fr; }
+  .admin-fields, .admin-fields-2, .admin-model-row .admin-fields, .form-grid { grid-template-columns: 1fr; }
   .admin-cat, .admin-max { width: 100%; }
 }
 
