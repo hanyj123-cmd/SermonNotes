@@ -1,7 +1,26 @@
 {
- "updated": "2026-11-01T16:59:42.042Z",
- "count": 58,
+ "updated": "2026-11-02T01:40:49.401Z",
+ "count": 61,
  "sermons": [
+  {
+   "id": "zJ6nGV9rVTc",
+   "category": "sunday",
+   "title": "주일예배 - 성례를 통한 은혜 (갈라이다서 3:26-29)",
+   "date": "2026-11-01",
+   "url": "https://www.youtube.com/watch?v=zJ6nGV9rVTc",
+   "preacher": "전대혁 목사",
+   "scripture": "갈라디아서 3:26-29",
+   "book": "갈라디아서",
+   "bookIdx": 48,
+   "summary_short": "성례는 우리가 율법이나 행위가 아니라 오직 예수 그리스도를 믿음으로 하나님의 자녀가 되었음을 확인하고 확증하는 은혜의 방편입니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
   {
    "id": "PoDJIgOoLvo",
    "category": "sunday",
@@ -1099,6 +1118,43 @@
     "group"
    ],
    "complete": true
+  },
+  {
+   "id": "yrqsLt-vprA",
+   "category": "sunday",
+   "title": "주일예배 - 믿음으로 모세는",
+   "date": "2026-03-15",
+   "url": "https://www.youtube.com/watch?v=yrqsLt-vprA",
+   "preacher": "전대혁 목사",
+   "scripture": "히 11:24-26",
+   "book": "히브리서",
+   "bookIdx": 58,
+   "summary_short": "믿음으로 산다는 것은 세속적인 낙을 버리고 그리스도를 위하여 하나님의 백성과 함께 고난받는 것을 더 큰 재물로 여기며 상 주심을 바라보는 것입니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
+  {
+   "id": "oM_voO6668A",
+   "category": "sunday",
+   "title": "주일예배 - 믿음으로 모세의 부모는",
+   "date": "2026-03-08",
+   "url": "https://www.youtube.com/watch?v=oM_voO6668A",
+   "preacher": "전대혁 목사",
+   "scripture": "히 11:23",
+   "book": "히브리서",
+   "bookIdx": 58,
+   "summary_short": "모세의 부모가 보인 믿음은 세상의 위협 속에서도 하나님의 계획을 확신하며 거룩한 가치관을 지켜낸 순종의 모본입니다.",
+   "modes": [
+    "review",
+    "study",
+    "group"
+   ],
+   "complete": false
   }
  ]
 }
