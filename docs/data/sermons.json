@@ -1,7 +1,26 @@
 {
- "updated": "2026-11-08T16:56:42.216Z",
- "count": 61,
+ "updated": "2026-11-08T22:02:32.580Z",
+ "count": 62,
  "sermons": [
+  {
+   "id": "jSFNyU1uC4A",
+   "category": "sunday",
+   "title": "주일예배 - 하나님 앞에 부요한 자가 되십시요",
+   "date": "2026-11-08",
+   "url": "https://www.youtube.com/watch?v=jSFNyU1uC4A",
+   "preacher": "송민호 목사",
+   "scripture": "누가복음 12:13-21",
+   "book": "누가복음",
+   "bookIdx": 42,
+   "summary_short": "이 땅에 소망을 두고 자신만을 위해 재물을 쌓는 어리석은 삶을 돌이켜, 오직 하나님께 부요하며 은혜를 나누는 삶을 살아야 합니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
   {
    "id": "zJ6nGV9rVTc",
    "category": "sunday",
