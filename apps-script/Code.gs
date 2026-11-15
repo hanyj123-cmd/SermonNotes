@@ -2127,6 +2127,7 @@ function gameBoard(user) {
 // "지금 동기화" 버튼과 같은 방식으로 GitHub 에 실행을 요청합니다. (GitHub 쪽 예약은 예비용으로 남아 있습니다)
 //   오늘의 말씀 (다음 날 분량) : 매일 06:00
 //   새벽기도 영상 연결         : 매일 07:15, 08:00 (07:15 에 이미 찾았으면 08:00 은 재생목록을 다시 읽지 않고 금방 끝납니다)
+//   주일예배                   : 매주 일요일 18:00 재생목록을 다시 읽어 새 영상 정리, 21:00 한 번 더 (이미 정리했으면 금방 끝납니다)
 // 처음 한 번만: Apps Script 편집기 위쪽 함수 목록에서 setupAutoSync 를 고르고 [실행] → 권한 허용.
 // 매일 새벽 1시쯤 planAutoSync 가 그날의 정확한 시각(±1분)에 실행 예약을 걸어 둡니다.
 // 끄려면 stopAutoSync 를 실행하세요.
@@ -2136,8 +2137,10 @@ const AUTO_JOBS = [
   { fn: 'autoSyncDaily', hour: 6, minute: 0 },
   { fn: 'autoSyncDawn', hour: 7, minute: 15 },
   { fn: 'autoSyncDawn', hour: 8, minute: 0 },
+  { fn: 'autoSyncSunday', hour: 18, minute: 0, sunday: true },
+  { fn: 'autoSyncSunday', hour: 21, minute: 0, sunday: true },
 ];
-const AUTO_HANDLERS = ['planAutoSync', 'autoSyncDaily', 'autoSyncDawn'];
+const AUTO_HANDLERS = ['planAutoSync', 'autoSyncDaily', 'autoSyncDawn', 'autoSyncSunday'];
 
 /** 토론토 날짜 ymd(yyyy-MM-dd)의 hh:mm 을 실제 시각(Date)으로 바꿉니다 (서머타임 반영) */
 function torontoAt(ymd, hour, minute) {
@@ -2172,13 +2175,15 @@ function stopAutoSync() {
   Logger.log('자동 동기화를 껐습니다.');
 }
 
-/** 매일 새벽: 오늘(토론토)의 06:00 · 07:15 · 08:00 실행을 정확한 시각으로 예약합니다 */
+/** 매일 새벽: 오늘(토론토)의 06:00 · 07:15 · 08:00 (일요일은 18:00 · 21:00 도) 실행을 정확한 시각으로 예약합니다 */
 function planAutoSync() {
   deleteAutoTriggers(true);
   const now = new Date();
   const ymd = Utilities.formatDate(now, AUTO_TZ, 'yyyy-MM-dd');
   const planned = [];
+  const isSunday = Utilities.formatDate(torontoAt(ymd, 12, 0), AUTO_TZ, 'u') === '7'; // u: 1=월 … 7=일
   AUTO_JOBS.forEach(function (job) {
+    if (job.sunday && !isSunday) return;
     const when = torontoAt(ymd, job.hour, job.minute);
     if (when.getTime() <= now.getTime() + 60000) return; // 이미 지난 시각은 건너뜀
     ScriptApp.newTrigger(job.fn).timeBased().at(when).create();
@@ -2201,3 +2206,12 @@ function autoDispatch(categories) {
 function autoSyncDaily() { autoDispatch('daily'); }
 // 새벽기도 영상: 재생목록에서 오늘 영상을 찾아 연결합니다
 function autoSyncDawn() { autoDispatch('dawn_video'); }
+// 주일예배: 재생목록을 다시 읽어 새로 올라온 주일 설교를 정리합니다 (설교 퀴즈 객관식 20문제 포함)
+function autoSyncSunday() {
+  try {
+    dispatchSync(5, 'sunday', false, {});
+  } catch (err) {
+    Utilities.sleep(60000);
+    dispatchSync(5, 'sunday', false, {});
+  }
+}

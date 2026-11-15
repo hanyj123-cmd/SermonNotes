@@ -15,8 +15,10 @@ export const isGeminiModel = (m) => /^gemini-[\w.-]{2,60}$/.test(String(m || '')
 export const isAiModel = (m) => isClaudeModel(m) || isGeminiModel(m);
 const MAX_TRANSCRIPT_CHARS = 150_000;
 const MAX_ATTEMPTS = 3;
-// 새로 만든 퀴즈가 최소한 이만큼은 있어야 저장합니다 (정해진 개수보다 조금 여유를 둡니다)
-const QUIZ_MIN = { multiple_choice: 17, fill_blank: 4, word_answer: 4 };
+// 새로 만든 설교 퀴즈가 최소한 이만큼은 있어야 저장합니다 (객관식 20문제에서 조금 여유를 둡니다)
+const QUIZ_MIN = { multiple_choice: 17 };
+// 설교 퀴즈는 객관식만 저장합니다 (빈칸·단답식·주관식은 만들지 않음)
+const SERMON_QUIZ_MAX = { mc: 20, fb: 0, wa: 0, sa: 0 };
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504, 529]);
 const MAX_TOKENS = 128_000; // 생각(thinking) + 답 전체 한도 (모델 최대). 본문이 여러 곳인 날의 긴 성경공부도 잘리지 않게
 
@@ -159,7 +161,7 @@ export function normalizeQuiz(q = {}, max = { mc: 20, fb: 5, wa: 5, sa: 5 }) {
 }
 
 export function normalizeStudy(raw, { requireQuiz = true } = {}) {
-  const { multiple_choice: mc, fill_blank: fb, word_answer: wa, short_answer: sa } = normalizeQuiz(raw.quiz || {});
+  const { multiple_choice: mc, fill_blank: fb, word_answer: wa, short_answer: sa } = normalizeQuiz(raw.quiz || {}, SERMON_QUIZ_MAX);
   const out = {
     opening_prayer: asString(raw.opening_prayer),
     songs: songItems(raw.songs),
@@ -179,7 +181,7 @@ export function normalizeStudy(raw, { requireQuiz = true } = {}) {
     closing_prayer: asString(raw.closing_prayer),
   };
   need(out.deep_dive.length, '신학 딥다이브(deep_dive)가 비어 있습니다');
-  if (requireQuiz) need(mc.length >= QUIZ_MIN.multiple_choice && fb.length >= QUIZ_MIN.fill_blank && wa.length >= QUIZ_MIN.word_answer && sa.length >= 3, `퀴즈가 부족합니다 (객관식 ${mc.length}, 빈칸 ${fb.length}, 단답식 ${wa.length}, 주관식 ${sa.length})`);
+  if (requireQuiz) need(mc.length >= QUIZ_MIN.multiple_choice, `퀴즈가 부족합니다 (객관식 ${mc.length})`);
   need(out.opening_prayer && out.closing_prayer, '기도문이 비어 있습니다');
   return out;
 }
@@ -347,14 +349,32 @@ export function correctIsLongest(q) {
   const len = options.map((o) => o.length);
   return len[idx] === Math.max(...len) && len.filter((n) => n === len[idx]).length === 1;
 }
-const LONGEST_TARGET = 0.3; // 다듬은 뒤 이 비율 이하가 목표 (저장 기준은 65%)
-const FIX_OPTIONS_SYSTEM = `당신은 성경 퀴즈의 객관식 보기를 다듬는 편집자입니다. 받은 문제들은 정답 보기가 가장 길어서 정답이 티가 납니다.
+/**
+ * 보기 길이로 정답이 드러나는지: 정답이 혼자 가장 길거나 가장 짧고, 바로 옆 길이의 보기와 차이가 뚜렷하면
+ * 'long' | 'short', 아니면 '' (길이가 비슷해서 길이만 보고는 정답을 알 수 없음)
+ */
+export function lengthTell(q) {
+  const options = asArray(q?.options);
+  const idx = Number(q?.answer_index);
+  if (options.length < 3 || !Number.isInteger(idx) || idx < 0 || idx >= options.length) return '';
+  const len = options.map((o) => [...o].length);
+  const c = len[idx];
+  const others = len.filter((_, i) => i !== idx);
+  const gap = (a, b) => a - b >= Math.max(2, Math.round(b * 0.1));
+  if (others.every((n) => n < c) && gap(c, Math.max(...others))) return 'long';
+  if (others.every((n) => n > c) && gap(Math.min(...others), c)) return 'short';
+  return '';
+}
+const TELL_TARGET = 0.25; // 길이로 티 나는 문제가 이 비율 이하가 되게 다듬습니다 (20문제면 5개 이하)
+const BALANCE_ROUNDS = 2;
+const FIX_OPTIONS_SYSTEM = `당신은 성경·설교 퀴즈의 객관식 보기를 다듬는 편집자입니다. 받은 문제들은 정답 보기만 유독 길거나(tell: "long") 유독 짧아서(tell: "short") 길이만 보고도 정답을 찍을 수 있습니다.
 규칙:
 1. 정답 보기(answer_index 자리)는 한 글자도 바꾸지 않고 같은 자리에 그대로 둡니다.
-2. 오답 보기만 다시 씁니다. 정답과 같은 정도의 수식어·이유·근거를 붙여 정답과 비슷하거나 더 길게 씁니다.
-3. 받은 문제의 절반 정도는 모든 오답을 정답보다 확실히 길게 써서 정답이 가장 짧은 보기가 되게 하고, 나머지는 오답 중 적어도 하나가 정답보다 확실히 길게 합니다.
-4. 오답은 여전히 본문과 맞지 않는 분명히 틀린 내용이어야 하고, 정답과 뜻이 겹치면 안 됩니다. 그럴듯하지만 틀린 오답이 좋습니다.
-5. 보기 개수는 그대로 둡니다.
+2. 오답 보기만 다시 씁니다. 모든 오답의 글자 수를 정답 글자 수(target_length)의 85%~120% 안으로 맞춥니다.
+3. 정답이 네 보기 중 가장 길거나 가장 짧은 보기가 되지 않게 합니다: 오답 중 적어도 하나는 정답보다 조금 길게, 적어도 하나는 정답보다 조금 짧게 씁니다.
+4. 문체·말끝·구체성을 정답과 맞춥니다. 정답이 이유나 수식어를 담고 있으면 오답에도 같은 정도의 이유·수식어를 붙이고, 정답이 짧고 단정하면 오답도 짧고 단정하게 줄입니다. 오답에만 "항상/절대/오직" 같은 극단적인 말을 붙이지 않습니다.
+5. 오답은 여전히 문제와 맞지 않는 분명히 틀린 내용이어야 하고 정답과 뜻이 겹치면 안 됩니다. 원래 오답의 뜻(어디가 틀렸는지)은 살리고 길이와 문체만 맞추는 것이 좋습니다.
+6. 보기 개수는 그대로 둡니다.
 출력: {"items": [{"i": 받은 번호, "options": ["보기1", "보기2", "보기3", "보기4"]}]}`;
 
 export const JSON_ONLY = '\n\n출력 형식: 설명이나 코드 블록(```) 없이, 위에서 정한 JSON 객체 하나만 출력합니다.';
@@ -365,28 +385,38 @@ export const JSON_ONLY = '\n\n출력 형식: 설명이나 코드 블록(```) 없
  *   media = { videoId, textFallback } — 영상을 직접 보는 모델(Gemini)에게만 넘어갑니다.
  */
 export function buildEngine({ call, model, effort, provider = 'claude', watchesVideo = false }) {
-  /** 객관식 정답이 가장 긴 보기인 문제가 많으면, 그 문제들의 오답 보기만 AI 에게 다시 쓰게 합니다 (정답 글은 그대로) */
+  /** 보기 길이로 정답이 티 나는 문제(정답만 유독 길거나 짧음)가 많으면, 그 문제들의 오답 보기만 AI 에게 다시 쓰게 합니다 (정답 글은 그대로) */
   async function balanceOptions(raw) {
     const quiz = raw && typeof raw.quiz === 'object' ? raw.quiz : raw;
     const mc = Array.isArray(quiz?.multiple_choice) ? quiz.multiple_choice : [];
-    const bad = mc.map((q, i) => ({ q, i })).filter(({ q }) => correctIsLongest(q));
-    if (mc.length < 8 || bad.length <= Math.floor(mc.length * LONGEST_TARGET)) return raw;
-    console.log(`   ⚖️  객관식 ${mc.length}문제 중 ${bad.length}문제가 정답이 가장 긴 보기라 오답 보기를 다시 씁니다…`);
-    try {
-      const items = bad.map(({ q, i }) => ({ i, question: asString(q.question), options: asArray(q.options), answer_index: Number(q.answer_index) }));
-      const out = await call(FIX_OPTIONS_SYSTEM, JSON.stringify({ items }, null, 1), (t) => extractJson(t));
-      for (const it of Array.isArray(out?.items) ? out.items : []) {
-        const q = mc[Number(it?.i)];
-        if (!q) continue;
-        const opts = asArray(it.options);
-        const idx = Number(q.answer_index);
-        const old = asArray(q.options);
-        if (opts.length !== old.length || opts[idx] !== old[idx]) continue; // 정답이 바뀌었으면 쓰지 않음
-        q.options = opts;
+    if (mc.length < 8) return raw;
+    const limit = Math.floor(mc.length * TELL_TARGET);
+    for (let round = 1; round <= BALANCE_ROUNDS; round++) {
+      const bad = mc.map((q, i) => ({ q, i, tell: lengthTell(q) })).filter((x) => x.tell);
+      if (bad.length <= limit) break;
+      console.log(`   ⚖️  객관식 ${mc.length}문제 중 ${bad.length}문제가 보기 길이로 정답이 드러나서 오답 보기를 다시 씁니다 (${round}차)…`);
+      try {
+        const items = bad.map(({ q, i, tell }) => {
+          const options = asArray(q.options);
+          const idx = Number(q.answer_index);
+          return { i, tell, question: asString(q.question), options, answer_index: idx, target_length: [...options[idx]].length };
+        });
+        const out = await call(FIX_OPTIONS_SYSTEM, JSON.stringify({ items }, null, 1), (t) => extractJson(t));
+        for (const it of Array.isArray(out?.items) ? out.items : []) {
+          const q = mc[Number(it?.i)];
+          if (!q || !lengthTell(q)) continue;
+          const opts = asArray(it.options);
+          const idx = Number(q.answer_index);
+          const old = asArray(q.options);
+          if (opts.length !== old.length || opts[idx] !== old[idx]) continue; // 정답이 바뀌었으면 쓰지 않음
+          if (lengthTell({ options: opts, answer_index: idx })) continue; // 여전히 티 나면 쓰지 않음
+          q.options = opts;
+        }
+        console.log(`   ⚖️  다시 쓴 뒤: ${mc.filter((q) => lengthTell(q)).length}/${mc.length}`);
+      } catch (e) {
+        console.warn(`   ⚖️  보기 다시 쓰기 실패: ${String(e?.message || e).slice(0, 160)}`);
+        break;
       }
-      console.log(`   ⚖️  다시 쓴 뒤: ${mc.filter(correctIsLongest).length}/${mc.length}`);
-    } catch (e) {
-      console.warn(`   ⚖️  보기 다시 쓰기 실패: ${String(e?.message || e).slice(0, 160)}`);
     }
     return raw;
   }

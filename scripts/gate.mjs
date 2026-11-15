@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // 자동(예약) 실행이 "정해진 토론토 시각"일 때만, 그 시각에 맞는 구분만 동기화하도록 판단합니다.
-//   주일예배    : 매주 일요일 밤 22:00
+//   주일예배    : 매주 일요일 오후 18:00 (재생목록을 다시 읽어 새 영상 정리), 못 했으면 21:00 에 한 번 더
 //   오늘의 말씀 : 매일 아침 06:00 (다음 날 분량의 QT·성경공부·소그룹·퀴즈를 하루 전에 미리 만듭니다)
 //   새벽기도 영상: 매일 07:15 재생목록에서 오늘 영상을 찾아 연결, 못 찾으면 08:00 에 다시 (AI 정리 없이 링크만)
 // ※ GitHub 예약은 몇 시간씩 늦거나 아예 빠지는 일이 잦아서, 정시 실행은 Apps Script 시간 트리거(Code.gs 의 setupAutoSync)가
@@ -16,7 +16,8 @@ export const WINDOW_MINUTES = 59; // 정해진 시각부터 이 시간(분) 안�
 
 // day: 0=일 … 6=토, null=매일. minutes = 하루 중 분(0~1439)
 export const RULES = [
-  { category: 'sunday', day: 0, minutes: 22 * 60, label: '주일예배 (일요일 22:00)' },
+  { category: 'sunday', day: 0, minutes: 18 * 60, label: '주일예배 (일요일 18:00)' },
+  { category: 'sunday', day: 0, minutes: 21 * 60, label: '주일예배 다시 확인 (일요일 21:00, 18:00에 못 했을 때)' },
   { category: 'daily', day: null, minutes: 6 * 60, label: '오늘의 말씀 (매일 06:00, 다음 날 분량)' },
   { category: 'dawn_video', day: null, minutes: 7 * 60 + 15, window: 40, label: '새벽기도 영상 연결 (매일 07:15)' },
   { category: 'dawn_video', day: null, minutes: 8 * 60, window: 35, label: '새벽기도 영상 다시 확인 (매일 08:00, 07:15에 못 찾았을 때)' },

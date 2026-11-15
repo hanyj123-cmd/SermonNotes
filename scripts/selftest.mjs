@@ -7,9 +7,9 @@ import fs from 'node:fs/promises';
 import { parseTitle, parseScripture, preacherName, bookOf, tidyTitle, normalizePreacher, displayTitle } from './lib/title.mjs';
 import { koReference, parseNumberedLines, parseNumberedFlow, parseBskorea, parseBibleGateway, fetchBibleBlock, bibleIsCurrent, bibleSignature, bskoreaUrl, bibleGatewayUrl, BIBLE_SOURCES } from './lib/bible-web.mjs';
 import { normalizePassages, toUsfm } from './lib/bible-books.mjs';
-import { extractJson, normalizeReview, normalizeQt, normalizeStudy, normalizeGroup, readResponseText, blankKey, normalizeDailyQt, normalizeDailyStudy, normalizeDailyQuiz } from './lib/ai.mjs';
+import { extractJson, normalizeReview, normalizeQt, normalizeStudy, normalizeGroup, readResponseText, blankKey, normalizeDailyQt, normalizeDailyStudy, normalizeDailyQuiz, normalizeQuiz, lengthTell } from './lib/ai.mjs';
 import { mixQuiz, optionsOrderFree } from './lib/quizmix.mjs';
-import { QUIZ_COUNTS, QUIZ_LEVEL_COUNTS, systemPromptForDaily, buildDailyMessage } from './lib/prompt.mjs';
+import { QUIZ_COUNTS, QUIZ_LEVEL_COUNTS, SERMON_QUIZ_PLAN, systemPromptForDaily, buildDailyMessage } from './lib/prompt.mjs';
 import { MODES, systemPromptFor, buildUserMessage } from './lib/prompt.mjs';
 import { buildQueue } from './lib/queue.mjs';
 import { guessFromTitle, parseAnyTitle } from './lib/title.mjs';
@@ -177,9 +177,12 @@ await t('QT 묵상: 찬양 종류 CCM 통일, 필수 항목 검사', () => {
   assert.throws(() => normalizeQt({ ...rawQt(), questions: [] }), /질문/);
   assert.throws(() => normalizeQt({ ...rawQt(), opening_prayer: '' }), /기도/);
 });
-await t('성경공부: 퀴즈 객관식 20 · 빈칸 5 · 단답식 5 · 주관식 5, 정답 번호가 잘못된 객관식은 걸러냄', () => {
+await t('성경공부(설교): 퀴즈는 객관식 20문제만 — AI 가 빈칸·단답식·주관식을 보내도 저장하지 않음, 정답 번호가 잘못된 객관식은 걸러냄', () => {
   const s = normalizeStudy(rawStudy());
-  assert.deepEqual([s.quiz.multiple_choice.length, s.quiz.fill_blank.length, s.quiz.word_answer.length, s.quiz.short_answer.length], [20, 5, 5, 5]);
+  assert.deepEqual([s.quiz.multiple_choice.length, s.quiz.fill_blank.length, s.quiz.word_answer.length, s.quiz.short_answer.length], [20, 0, 0, 0]);
+  const onlyMc = rawStudy();
+  onlyMc.quiz = { multiple_choice: mcq(20) };
+  assert.equal(normalizeStudy(onlyMc).quiz.multiple_choice.length, 20);
   const bad = rawStudy();
   bad.quiz.multiple_choice = mcq(20).map((m, i) => (i < 5 ? { ...m, answer_index: 9 } : m));
   assert.throws(() => normalizeStudy(bad), /퀴즈가 부족/);
@@ -189,24 +192,25 @@ await t('QT 묵상 질문: 길잡이·예시 답안이 붙은 새 형식과 글�
   assert.deepEqual(q.questions[0], { question: '무엇을 내려놓을까요?', guide: '12:1을 다시 읽어 보세요', example: '저는…' });
   assert.deepEqual(q.questions[1], { question: '옛 질문', guide: '', example: '' });
 });
-await t('퀴즈 개수: 객관식 20(5·8·7) · 빈칸 5(2·2·1) · 단답식 5(2·2·1) · 주관식 5, 프롬프트에 헷갈리는 보기·키워드 규칙', () => {
-  assert.deepEqual(QUIZ_COUNTS, { multiple_choice: 20, fill_blank: 5, word_answer: 5, short_answer: 5 });
-  for (const k of ['multiple_choice', 'fill_blank', 'word_answer']) assert.equal(Object.values(QUIZ_LEVEL_COUNTS[k]).reduce((a, b) => a + b, 0), QUIZ_COUNTS[k]);
-  assert.deepEqual(QUIZ_LEVEL_COUNTS, { multiple_choice: { 쉬움: 5, 중간: 8, 어려움: 7 }, fill_blank: { 쉬움: 2, 중간: 2, 어려움: 1 }, word_answer: { 쉬움: 2, 중간: 2, 어려움: 1 } });
-  assert.match(systemPromptFor('study'), /쉬움 5개, 중간 8개, 어려움 7개/);
-  assert.match(systemPromptFor('study'), /단답식/);
+await t('설교 퀴즈: 객관식 20(쉬움 5·중간 9·어려움 6)만, 핵심 대지·적용 포인트 배분, 보기 길이 규칙', () => {
+  assert.deepEqual(QUIZ_COUNTS, { multiple_choice: 20 });
+  assert.equal(Object.values(QUIZ_LEVEL_COUNTS.multiple_choice).reduce((a, b) => a + b, 0), QUIZ_COUNTS.multiple_choice);
+  assert.equal(Object.values(SERMON_QUIZ_PLAN).reduce((a, b) => a + b, 0), QUIZ_COUNTS.multiple_choice);
   const p = systemPromptFor('study');
-  assert.match(p, /오답 보기 3개는 모두 그럴듯/);
-  assert.match(p, /짧은 단어 하나/);
-  assert.match(p, /채점하지 않/);
+  assert.match(p, /쉬움 5개, 중간 9개, 어려움 6개/);
+  assert.match(p, /객관식 20문제만/);
+  assert.match(p, /핵심 대지 10문제 안팎/);
+  assert.match(p, /적용 포인트 6문제 안팎/);
+  assert.match(p, /오답 3개는 모두 그럴듯/);
+  assert.match(p, /30%를 넘지 않게/);
+  assert.match(p, /가장 짧은 보기인 문제도 5개 이하/);
+  assert.doesNotMatch(p, /"fill_blank": \[|"short_answer": \[|"word_answer": \[/);
   assert.match(systemPromptFor('qt'), /guide\(생각의 길잡이\)/);
   assert.match(systemPromptFor('group'), /guide\(생각의 길잡이\)/);
 });
 await t('빈칸: 정답 키워드·다른 표기(accept)·띄어쓰기 무시 비교', () => {
-  const raw = rawStudy();
-  raw.quiz.fill_blank = [{ question: '____ 안에서', answer: '하나님 나라', accept: ['천국', '  '], explanation: '' }, ...sa(4)];
-  const s = normalizeStudy(raw);
-  assert.deepEqual(s.quiz.fill_blank.find((x) => x.answer === '하나님 나라').accept, ['천국']); // 문제 순서는 섞임
+  const q = normalizeQuiz({ fill_blank: [{ question: '____ 안에서', answer: '하나님 나라', accept: ['천국', '  '], explanation: '' }] });
+  assert.deepEqual(q.fill_blank.find((x) => x.answer === '하나님 나라').accept, ['천국']);
   assert.equal(blankKey('하나님 나라'), blankKey('하나님나라'));
   assert.equal(blankKey(' "칭의." '), '칭의');
   assert.equal(blankKey('Grace'), blankKey('grace'));
@@ -214,11 +218,11 @@ await t('빈칸: 정답 키워드·다른 표기(accept)·띄어쓰기 무시 �
 await t('객관식 난이도 표시(쉬움·중간·어려움)를 받아 둠', () => {
   const raw = rawStudy();
   raw.quiz.multiple_choice = mcq(20).map((m, i) => ({ ...m, level: ['쉬움', '중간', '어려움', 'hard?', ''][i % 5] }));
-  raw.quiz.fill_blank = sa(5).map((m, i) => ({ ...m, level: ['쉬움', '쉬움', '중간', '중간', '어려움'][i] }));
   const s = normalizeStudy(raw);
   const cnt = (list) => list.reduce((o, m) => ((o[m.level] = (o[m.level] || 0) + 1), o), {}); // 순서는 섞이므로 개수만 비교
   assert.deepEqual(cnt(s.quiz.multiple_choice), { 쉬움: 4, 중간: 4, 어려움: 4, '': 8 });
-  assert.deepEqual(cnt(s.quiz.fill_blank), { 쉬움: 2, 중간: 2, 어려움: 1 });
+  const d = normalizeQuiz({ word_answer: sa(5).map((m, i) => ({ ...m, level: ['쉬움', '쉬움', '중간', '중간', '어려움'][i] })) });
+  assert.deepEqual(cnt(d.word_answer), { 쉬움: 2, 중간: 2, 어려움: 1 });
 });
 await t('퀴즈 섞기: 문제·난이도 순서가 섞이고, 정답은 보기를 따라 움직임', () => {
   const lv = ['쉬움', '쉬움', '쉬움', '중간', '중간', '중간', '중간', '중간', '중간', '중간', '어려움', '어려움', '어려움', '어려움', '어려움'];
@@ -257,9 +261,16 @@ await t('객관식: 정답이 거의 매번 가장 긴 보기면 다시 만들�
   raw.quiz.multiple_choice = raw.quiz.multiple_choice.map((m, i) => (i % 2 ? { ...m, options: ['이것이 훨씬 길고 자세한 오답입니다', '짧다요', '조금 짧다', '정답'], answer_index: 3 } : m));
   assert.doesNotThrow(() => normalizeStudy(raw));
 });
+await t('보기 길이 검사(lengthTell): 정답만 유독 길거나 짧으면 티 남, 비슷하면 괜찮음', () => {
+  assert.equal(lengthTell({ options: ['짧은 오답', '정답은 훨씬 더 길고 자세한 설명', '또 다른 오답', '오답 하나'], answer_index: 1 }), 'long');
+  assert.equal(lengthTell({ options: ['꽤 길게 쓴 오답 보기 하나', '정답', '이것도 길게 쓴 오답 보기', '마찬가지로 긴 오답 보기'], answer_index: 1 }), 'short');
+  assert.equal(lengthTell({ options: ['은혜로 받은 구원', '믿음으로 받는 구원', '행위로 얻는 구원', '율법으로 얻는 의'], answer_index: 1 }), '');
+  assert.equal(lengthTell({ options: ['가나다라마', '가나다라마바', '가나다라', '가나다라마바사'], answer_index: 1 }), ''); // 중간 길이
+  assert.equal(lengthTell({ options: ['a', 'b'], answer_index: 5 }), '');
+});
 await t('퀴즈 프롬프트: 순서는 앱이 섞고, 정답이 가장 긴 보기가 되지 않게 안내', () => {
-  for (const [p, n] of [[systemPromptFor('study'), 6], [systemPromptForDaily('quiz'), 4]]) {
-    assert.match(p, new RegExp(`가장 긴 문제는 ${n}개 이하`));
+  for (const [p, n] of [[systemPromptFor('study'), 5], [systemPromptForDaily('quiz'), 4]]) {
+    assert.match(p, new RegExp(`가장 긴 (보기인 )?문제는 ${n}개 이하`));
     assert.match(p, /앱이 .*섞/);
     assert.doesNotMatch(p, /쉬운 것에서 어려운 것/);
   }
@@ -340,10 +351,13 @@ await t('수요예배·새벽기도는 예약 없음', () => {
   assert.deepEqual(dueCategories(at('2026-10-08T10:03:00Z')), ['daily']); // 오늘의 말씀 06:00
   assert.deepEqual(dueCategories(at('2026-10-09T15:02:00Z')), []); // 옛 새벽기도 시각
 });
-await t('주일예배: 일요일 22:00 (UTC로는 월요일 02:00/03:00)', () => {
-  assert.deepEqual(dueCategories(at('2026-10-05T02:05:00Z')), ['sunday']); // 일 22:05 EDT
-  assert.deepEqual(dueCategories(at('2026-12-07T03:05:00Z')), ['sunday']); // 일 22:05 EST
-  assert.deepEqual(dueCategories(at('2026-10-05T03:05:00Z')), []);
+await t('주일예배: 일요일 18:00, 못 했으면 21:00 다시 (여름/겨울)', () => {
+  assert.deepEqual(dueCategories(at('2026-10-04T22:05:00Z')), ['sunday']); // 일 18:05 EDT
+  assert.deepEqual(dueCategories(at('2026-12-06T23:05:00Z')), ['sunday']); // 일 18:05 EST
+  assert.deepEqual(dueCategories(at('2026-10-05T01:05:00Z')), ['sunday']); // 일 21:05 EDT
+  assert.deepEqual(dueCategories(at('2026-12-07T02:05:00Z')), ['sunday']); // 일 21:05 EST
+  assert.deepEqual(dueCategories(at('2026-10-05T03:05:00Z')), []); // 일 23:05
+  assert.deepEqual(dueCategories(at('2026-10-03T22:05:00Z')), []); // 토 18:05 — 주일 아님
 });
 await t('오늘의 말씀: 매일 06:00 (여름/겨울) — 다음 날 분량', () => {
   assert.deepEqual(dueCategories(at('2026-10-09T10:02:00Z')), ['daily']);
@@ -370,7 +384,11 @@ await t('예약: 울린 cron 의 "정해진 시각"으로 판단 (늦게 시작�
   assert.deepEqual(scheduledCategories('0 11 * * *', at('2026-12-09T11:05:00Z')), ['daily']); // 겨울 06:00
   assert.deepEqual(scheduledCategories('0 11 * * *', at('2026-10-09T11:05:00Z')), []); // 여름 07:00 — 해당 없음
   assert.equal(scheduledCategories('', at('2026-10-09T12:25:00Z')), null);
-  assert.deepEqual(decide('schedule', at('2026-10-12T02:10:00Z'), '0 2 * * 1'), { run: true, categories: 'sunday' });
+  assert.deepEqual(decide('schedule', at('2026-10-11T22:10:00Z'), '0 22 * * 0'), { run: true, categories: 'sunday' }); // 여름 18:00
+  assert.deepEqual(decide('schedule', at('2026-12-13T23:40:00Z'), '0 23 * * 0'), { run: true, categories: 'sunday' }); // 겨울 18:00, 40분 늦게
+  assert.deepEqual(decide('schedule', at('2026-10-11T23:10:00Z'), '0 23 * * 0'), { run: false, categories: '' }); // 여름 19:00 — 해당 없음
+  assert.deepEqual(decide('schedule', at('2026-10-12T01:10:00Z'), '0 1 * * 1'), { run: true, categories: 'sunday' }); // 여름 21:00 다시 확인
+  assert.deepEqual(decide('schedule', at('2026-12-14T02:10:00Z'), '0 2 * * 1'), { run: true, categories: 'sunday' }); // 겨울 21:00 다시 확인
 });
 
 /* ===== 오늘의 말씀 ===== */
