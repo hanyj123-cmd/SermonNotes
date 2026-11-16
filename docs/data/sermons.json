@@ -1,7 +1,26 @@
 {
- "updated": "2026-11-16T13:57:04.215Z",
- "count": 62,
+ "updated": "2026-11-16T15:43:46.964Z",
+ "count": 63,
  "sermons": [
+  {
+   "id": "u5J-9SXIwEA",
+   "category": "sunday",
+   "title": "주일예배 - 신실함이 진짜 능력",
+   "date": "2026-11-15",
+   "url": "https://www.youtube.com/watch?v=u5J-9SXIwEA",
+   "preacher": "전대혁 목사",
+   "scripture": "요한계시록 3:7-13",
+   "book": "요한계시록",
+   "bookIdx": 66,
+   "summary_short": "작은 능력을 가졌어도 고난 속에서 끝까지 말씀을 지키고 주님의 이름을 배반하지 않는 신실함이 주님께서 가장 크게 칭찬하시는 진짜 능력입니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
   {
    "id": "jSFNyU1uC4A",
    "category": "sunday",
