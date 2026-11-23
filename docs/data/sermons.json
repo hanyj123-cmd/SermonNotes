@@ -1,7 +1,26 @@
 {
- "updated": "2026-11-22T18:12:48.314Z",
- "count": 63,
+ "updated": "2026-11-23T03:43:20.564Z",
+ "count": 64,
  "sermons": [
+  {
+   "id": "d3DinvvAmAU",
+   "category": "sunday",
+   "title": "주일예배 - 영적 허세, 부족함이 없다는 착각",
+   "date": "2026-11-22",
+   "url": "https://www.youtube.com/watch?v=d3DinvvAmAU",
+   "preacher": "전대혁 목사",
+   "scripture": "계 3:14-22",
+   "book": "요한계시록",
+   "bookIdx": 66,
+   "summary_short": "‘부족한 것이 없다’는 영적 허세는 주님을 토하고 싶게 만드는 착각이지만, 사랑으로 책망하시며 문을 두드리시는 주님께 있는 모습 그대로 마음을 열 때 참된 영적 풍성함이 회복됩니다.",
+   "modes": [
+    "review",
+    "qt",
+    "study",
+    "group"
+   ],
+   "complete": true
+  },
   {
    "id": "u5J-9SXIwEA",
    "category": "sunday",
